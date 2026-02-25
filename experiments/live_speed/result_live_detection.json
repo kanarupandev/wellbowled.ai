@@ -1,0 +1,44 @@
+{
+  "video": "whatsapp_nets_session.mp4",
+  "fps": 29.989794430675026,
+  "duration": 68.59,
+  "model": "gemini-3-flash-preview",
+  "poll_interval": 3,
+  "ground_truth_frames": [
+    203,
+    565,
+    1127,
+    1770
+  ],
+  "ground_truth_timestamps": [
+    6.768969372873116,
+    18.83974234321828,
+    37.57945065629558,
+    59.02007778317939
+  ],
+  "detections": [
+    {
+      "time": 1.0,
+      "window": [
+        0,
+        3
+      ]
+    },
+    {
+      "time": 7.0,
+      "window": [
+        6,
+        9
+      ]
+    },
+    {
+      "time": 37.0,
+      "window": [
+        36,
+        39
+      ]
+    }
+  ],
+  "total_tokens": 77521,
+  "elapsed": 152.6
+}
