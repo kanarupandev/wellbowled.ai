@@ -1,0 +1,197 @@
+{
+  "model": "gemini-3-pro-preview",
+  "results": {
+    "gt_delivery_1_6.8s.mp4": {
+      "speeds": [
+        102,
+        105,
+        96,
+        95,
+        95
+      ],
+      "types": [
+        "medium",
+        "medium",
+        "medium-slow",
+        "medium-slow",
+        "medium-slow"
+      ],
+      "runs": [
+        {
+          "speed_kph": 102,
+          "type": "medium",
+          "confidence": "medium",
+          "reasoning": "The bowler has a short run-up but a quick arm action, generating enough pace on the shorter backyard pitch to likely just enter the medium category."
+        },
+        {
+          "speed_kph": 105,
+          "type": "medium",
+          "confidence": "medium",
+          "reasoning": "The bowler uses an athletic overarm action with a flat trajectory which, despite the short run-up, suggests a speed consistent with amateur medium pace."
+        },
+        {
+          "speed_kph": 96,
+          "type": "medium-slow",
+          "confidence": "medium",
+          "reasoning": "The bowler uses a short run-up with a slingy arm action, generating a flat trajectory typical of backyard pace bowling, likely just under 100kph."
+        },
+        {
+          "speed_kph": 95,
+          "type": "medium-slow",
+          "confidence": "medium",
+          "reasoning": "The bowler uses a short run-up and arm-dominant action typical of backyard cricket, generating pace consistent with the medium-slow range on a shorter pitch."
+        },
+        {
+          "speed_kph": 95,
+          "type": "medium-slow",
+          "confidence": "medium",
+          "reasoning": "The bowler uses a short, casual run-up and an upright delivery action with moderate arm speed, typical of recreational backyard cricket, placing the pace in the medium-slow bracket."
+        }
+      ]
+    },
+    "gt_delivery_2_18.8s.mp4": {
+      "speeds": [
+        94,
+        94,
+        97,
+        105,
+        92
+      ],
+      "types": [
+        "medium-slow",
+        "medium-slow",
+        "medium-slow",
+        "medium",
+        "medium-slow"
+      ],
+      "runs": [
+        {
+          "speed_kph": 94,
+          "type": "medium-slow",
+          "confidence": "medium",
+          "reasoning": "The bowler uses a short run-up and casual footwear which limits momentum, but the arm speed and flat trajectory suggest a pace delivery in the high 90s range."
+        },
+        {
+          "speed_kph": 94,
+          "type": "medium-slow",
+          "confidence": "medium",
+          "reasoning": "The bowler has a casual, jogging run-up and stops immediately after delivery with minimal follow-through, indicating the speed is generated solely by arm action rather than body momentum."
+        },
+        {
+          "speed_kph": 97,
+          "type": "medium-slow",
+          "confidence": "medium",
+          "reasoning": "The short run-up and estimated 15-16m backyard pitch distance, combined with the ball's flight time, suggest a recreational pace just under 100kph."
+        },
+        {
+          "speed_kph": 105,
+          "type": "medium",
+          "confidence": "medium",
+          "reasoning": "The bowler displays a rhythmic run-up and high arm action generating moderate momentum typical of amateur medium pace, though velocity is likely limited by the grass surface and lack of spikes."
+        },
+        {
+          "speed_kph": 92,
+          "type": "medium-slow",
+          "confidence": "medium",
+          "reasoning": "The bowler uses a short run-up and a slingy round-arm action on a shorter backyard pitch, generating moderate pace that skids through but lacks the velocity of regulation medium bowling."
+        }
+      ]
+    },
+    "gt_delivery_3_37.6s.mp4": {
+      "speeds": [
+        98,
+        105,
+        94,
+        98,
+        96
+      ],
+      "types": [
+        "medium-slow",
+        "medium",
+        "medium-slow",
+        "medium-slow",
+        "medium-slow"
+      ],
+      "runs": [
+        {
+          "speed_kph": 98,
+          "type": "medium-slow",
+          "confidence": "medium",
+          "reasoning": "Short run-up and arm-dominant action generate a flat delivery, estimated in the high 90s given the reduced pitch length."
+        },
+        {
+          "speed_kph": 105,
+          "type": "medium",
+          "confidence": "medium",
+          "reasoning": "The bowler has an athletic, slingy action with good arm speed, likely generating pace just over 100kph despite the limited run-up and backyard setting."
+        },
+        {
+          "speed_kph": 94,
+          "type": "medium-slow",
+          "confidence": "medium",
+          "reasoning": "The bowler uses a short run-up with decent arm speed and mechanics, likely generating pace in the 90-100kph range given the backyard distance."
+        },
+        {
+          "speed_kph": 98,
+          "type": "medium-slow",
+          "confidence": "medium",
+          "reasoning": "The bowler uses a slingy, round-arm action with a short run-up which generates decent velocity, but the backyard context and shorter pitch length suggest the actual speed is likely in the high 90s rather than professional medium pace."
+        },
+        {
+          "speed_kph": 96,
+          "type": "medium-slow",
+          "confidence": "medium",
+          "reasoning": "The bowler uses a short, casual run-up with moderate arm speed on a shorter-than-regulation pitch, resulting in a delivery that travels flat but lacks the velocity of professional medium pace."
+        }
+      ]
+    },
+    "gt_delivery_4_59.0s.mp4": {
+      "speeds": [
+        96,
+        96,
+        92,
+        105,
+        102
+      ],
+      "types": [
+        "medium-slow",
+        "medium-slow",
+        "medium-slow",
+        "medium",
+        "medium"
+      ],
+      "runs": [
+        {
+          "speed_kph": 96,
+          "type": "medium-slow",
+          "confidence": "medium",
+          "reasoning": "Short run-up and moderate arm speed in a backyard setting suggest a pace typical of amateur bowling."
+        },
+        {
+          "speed_kph": 96,
+          "type": "medium-slow",
+          "confidence": "medium",
+          "reasoning": "The bowler's casual run-up and side-on action generate moderate arm speed, typical of recreational pace bowling on a shorter pitch."
+        },
+        {
+          "speed_kph": 92,
+          "type": "medium-slow",
+          "confidence": "medium",
+          "reasoning": "The bowler is wearing slides/socks which limits ground force, and the relaxed arm action indicates a recreational medium-slow pace."
+        },
+        {
+          "speed_kph": 105,
+          "type": "medium",
+          "confidence": "medium",
+          "reasoning": "The bowler displays a rhythmic run-up and clean arm action with a flat trajectory, suggesting a speed just above 100kph despite the casual backyard setting."
+        },
+        {
+          "speed_kph": 102,
+          "type": "medium",
+          "confidence": "medium",
+          "reasoning": "The bowler demonstrates a clean arm action and flat trajectory typical of amateur medium pace, likely achieving low-100s kph despite the restricted backyard run-up."
+        }
+      ]
+    }
+  }
+}

@@ -2,8 +2,7 @@
 Wrist Velocity Analysis via MediaPipe
 =======================================
 Tracks bowler's wrist landmark velocity through the delivery to
-estimate release speed. Wrist velocity at release correlates with
-ball speed (biomechanics research).
+estimate release speed. Uses MediaPipe Tasks API (v0.10+).
 
 Usage:
   python speed_mediapipe.py [--clip-dir DIR]
@@ -19,8 +18,9 @@ import mediapipe as mp
 import numpy as np
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(SCRIPT_DIR, "../../resources/pose_landmarker_heavy.task")
 
-# MediaPipe Pose landmarks
+# PoseLandmark indices
 RIGHT_WRIST = 16
 LEFT_WRIST = 15
 RIGHT_SHOULDER = 12
@@ -30,12 +30,17 @@ LEFT_ELBOW = 13
 
 
 def analyze_clip(clip_path):
-    """Track wrist velocity through delivery clip."""
-    mp_pose = mp.solutions.pose
-    pose = mp_pose.Pose(
-        static_image_mode=False,
-        model_complexity=2,
-        min_detection_confidence=0.5,
+    """Track wrist velocity through delivery clip using MediaPipe Tasks API."""
+    BaseOptions = mp.tasks.BaseOptions
+    PoseLandmarker = mp.tasks.vision.PoseLandmarker
+    PoseLandmarkerOptions = mp.tasks.vision.PoseLandmarkerOptions
+    RunningMode = mp.tasks.vision.RunningMode
+
+    options = PoseLandmarkerOptions(
+        base_options=BaseOptions(model_asset_path=MODEL_PATH),
+        running_mode=RunningMode.VIDEO,
+        num_poses=1,
+        min_pose_detection_confidence=0.5,
         min_tracking_confidence=0.5,
     )
 
@@ -47,39 +52,41 @@ def analyze_clip(clip_path):
     frames_data = []
     frame_idx = 0
 
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
+    with PoseLandmarker.create_from_options(options) as landmarker:
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
 
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        result = pose.process(rgb)
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+            timestamp_ms = int(frame_idx * 1000 / fps)
 
-        entry = {"frame": frame_idx, "time": frame_idx / fps}
+            result = landmarker.detect_for_video(mp_image, timestamp_ms)
 
-        if result.pose_landmarks:
-            lm = result.pose_landmarks.landmark
+            entry = {"frame": frame_idx, "time": frame_idx / fps}
 
-            for name, idx in [("right_wrist", RIGHT_WRIST), ("left_wrist", LEFT_WRIST),
-                              ("right_shoulder", RIGHT_SHOULDER), ("left_shoulder", LEFT_SHOULDER),
-                              ("right_elbow", RIGHT_ELBOW), ("left_elbow", LEFT_ELBOW)]:
-                l = lm[idx]
-                entry[name] = {
-                    "x": l.x * width, "y": l.y * height,
-                    "z": l.z, "visibility": l.visibility,
-                }
+            if result.pose_landmarks and len(result.pose_landmarks) > 0:
+                lm = result.pose_landmarks[0]
 
-        frames_data.append(entry)
-        frame_idx += 1
+                for name, idx in [("right_wrist", RIGHT_WRIST), ("left_wrist", LEFT_WRIST),
+                                  ("right_shoulder", RIGHT_SHOULDER), ("left_shoulder", LEFT_SHOULDER),
+                                  ("right_elbow", RIGHT_ELBOW), ("left_elbow", LEFT_ELBOW)]:
+                    l = lm[idx]
+                    entry[name] = {
+                        "x": l.x * width, "y": l.y * height,
+                        "z": l.z, "visibility": l.visibility,
+                    }
+
+            frames_data.append(entry)
+            frame_idx += 1
 
     cap.release()
-    pose.close()
-
     return frames_data, fps, frame_idx
 
 
 def compute_wrist_velocity(frames_data, fps, side="right"):
-    """Compute wrist velocity (pixels/frame) and find peak."""
+    """Compute wrist velocity (pixels/sec) and find peak."""
     wrist_key = f"{side}_wrist"
     velocities = []
 
@@ -94,10 +101,10 @@ def compute_wrist_velocity(frames_data, fps, side="right"):
             vel_px_per_sec = vel_px * fps
             velocities.append({
                 "frame": frames_data[i]["frame"],
-                "time": frames_data[i]["time"],
-                "velocity_px_frame": vel_px,
-                "velocity_px_sec": vel_px_per_sec,
-                "visibility": curr["visibility"],
+                "time": round(frames_data[i]["time"], 3),
+                "velocity_px_frame": round(vel_px, 1),
+                "velocity_px_sec": round(vel_px_per_sec, 0),
+                "visibility": round(curr["visibility"], 2),
             })
 
     return velocities
@@ -111,11 +118,9 @@ def estimate_arm_angle(frame_data, side="right"):
 
     if not all([shoulder, elbow, wrist]):
         return None
-
     if any(p.get("visibility", 0) < 0.3 for p in [shoulder, elbow, wrist]):
         return None
 
-    # Vectors
     v1 = (shoulder["x"] - elbow["x"], shoulder["y"] - elbow["y"])
     v2 = (wrist["x"] - elbow["x"], wrist["y"] - elbow["y"])
 
@@ -141,6 +146,7 @@ def main():
         return
 
     print(f"MediaPipe Pose wrist velocity analysis")
+    print(f"Model: {MODEL_PATH}")
     print(f"Clips: {len(clips)}")
     print()
 
@@ -153,7 +159,9 @@ def main():
         frames_data, fps, total_frames = analyze_clip(clip_path)
         print(f"  Frames: {total_frames}, FPS: {fps:.0f}")
 
-        # Check both wrists — bowler might be right or left arm
+        best_side = None
+        best_peak = 0
+
         for side in ["right", "left"]:
             velocities = compute_wrist_velocity(frames_data, fps, side)
 
@@ -162,47 +170,53 @@ def main():
                 avg_vel = sum(v["velocity_px_sec"] for v in velocities) / len(velocities)
 
                 print(f"  {side.capitalize()} wrist:")
-                print(f"    Tracked in {len(velocities)}/{total_frames} frames")
-                print(f"    Peak velocity: {peak['velocity_px_sec']:.0f} px/s at {peak['time']:.2f}s "
-                      f"(frame {peak['frame']})")
-                print(f"    Average velocity: {avg_vel:.0f} px/s")
+                print(f"    Tracked: {len(velocities)}/{total_frames} frames")
+                print(f"    Peak: {peak['velocity_px_sec']:.0f} px/s at {peak['time']:.2f}s (frame {peak['frame']})")
+                print(f"    Average: {avg_vel:.0f} px/s")
 
-                # Show velocity profile around peak
+                if peak["velocity_px_sec"] > best_peak:
+                    best_peak = peak["velocity_px_sec"]
+                    best_side = side
+
+                # Profile around peak
                 peak_frame = peak["frame"]
                 nearby = [v for v in velocities if abs(v["frame"] - peak_frame) <= 5]
                 profile = [(v["frame"], f"{v['velocity_px_sec']:.0f}") for v in nearby]
-                print(f"    Profile around peak: {profile}")
+                print(f"    Profile: {profile}")
             else:
                 print(f"  {side.capitalize()} wrist: insufficient visibility")
 
-        # Arm angles at each frame
+        # Arm angles
         angles = []
         for fd in frames_data:
             for side in ["right", "left"]:
                 angle = estimate_arm_angle(fd, side)
                 if angle is not None:
-                    angles.append({"frame": fd["frame"], "time": fd["time"],
-                                   "side": side, "angle": angle})
+                    angles.append({"frame": fd["frame"], "time": round(fd["time"], 3),
+                                   "side": side, "angle": round(angle, 1)})
 
         if angles:
-            # Find frame where arm is most extended (closest to 180°)
             most_extended = max(angles, key=lambda a: a["angle"])
-            print(f"  Most extended arm: {most_extended['side']} at frame {most_extended['frame']} "
-                  f"({most_extended['time']:.2f}s), angle={most_extended['angle']:.0f}°")
+            print(f"  Most extended: {most_extended['side']} arm at frame {most_extended['frame']} "
+                  f"({most_extended['time']:.2f}s), angle={most_extended['angle']:.0f}deg")
+
+        if best_side:
+            print(f"  Bowling arm: likely {best_side} (highest peak velocity)")
 
         all_results[clip_name] = {
             "total_frames": total_frames,
             "fps": fps,
-            "right_wrist_velocities": compute_wrist_velocity(frames_data, fps, "right"),
-            "left_wrist_velocities": compute_wrist_velocity(frames_data, fps, "left"),
-            "arm_angles": angles,
+            "bowling_arm": best_side,
+            "peak_wrist_velocity_px_sec": best_peak,
+            "right_velocities": compute_wrist_velocity(frames_data, fps, "right"),
+            "left_velocities": compute_wrist_velocity(frames_data, fps, "left"),
         }
         print()
 
     # Save
     result_path = os.path.join(SCRIPT_DIR, "result_speed_mediapipe.json")
     with open(result_path, "w") as f:
-        json.dump({"results": all_results}, f, indent=2)
+        json.dump({"model": MODEL_PATH, "results": all_results}, f, indent=2)
     print(f"Saved: {result_path}")
 
 
