@@ -1,0 +1,63 @@
+{
+  "video": "3_sec_1_delivery_nets.mp4",
+  "fps": 30.0,
+  "frames": 111,
+  "ground_truth_frames": [
+    30
+  ],
+  "ground_truth_ts": [
+    1.0
+  ],
+  "config": "A",
+  "config_name": "Baseline (temp=0.1)",
+  "temperature": 0.1,
+  "thinking": "MINIMAL",
+  "runs": 3,
+  "model": "gemini-3-flash-preview",
+  "mode": "Inline",
+  "downscale": null,
+  "results": [
+    {
+      "run": 1,
+      "timestamps": [
+        0.9
+      ],
+      "confirmed": 1,
+      "tokens": {
+        "prompt": 696,
+        "output": 40,
+        "thought": 0,
+        "total": 736
+      },
+      "latency": 4.25
+    },
+    {
+      "run": 2,
+      "timestamps": [
+        0.8
+      ],
+      "confirmed": 1,
+      "tokens": {
+        "prompt": 696,
+        "output": 40,
+        "thought": 0,
+        "total": 736
+      },
+      "latency": 4.0
+    },
+    {
+      "run": 3,
+      "timestamps": [
+        0.8
+      ],
+      "confirmed": 1,
+      "tokens": {
+        "prompt": 696,
+        "output": 40,
+        "thought": 0,
+        "total": 736
+      },
+      "latency": 3.65
+    }
+  ]
+}

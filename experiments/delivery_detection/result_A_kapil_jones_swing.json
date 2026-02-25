@@ -1,0 +1,98 @@
+{
+  "video": "kapil_jones_swing.mp4",
+  "fps": 25.0,
+  "frames": 515,
+  "ground_truth_frames": [
+    80,
+    364
+  ],
+  "ground_truth_ts": [
+    3.2,
+    14.56
+  ],
+  "config": "A",
+  "config_name": "Baseline (temp=0.1)",
+  "temperature": 0.1,
+  "thinking": "MINIMAL",
+  "runs": 5,
+  "model": "gemini-3-flash-preview",
+  "mode": "Inline",
+  "downscale": null,
+  "results": [
+    {
+      "run": 1,
+      "timestamps": [
+        2.4,
+        14.6
+      ],
+      "confirmed": 2,
+      "tokens": {
+        "prompt": 2195,
+        "output": 48,
+        "thought": 0,
+        "total": 2243
+      },
+      "latency": 6.14
+    },
+    {
+      "run": 2,
+      "timestamps": [
+        2.4,
+        14.6
+      ],
+      "confirmed": 2,
+      "tokens": {
+        "prompt": 2195,
+        "output": 48,
+        "thought": 0,
+        "total": 2243
+      },
+      "latency": 6.36
+    },
+    {
+      "run": 3,
+      "timestamps": [
+        2.4,
+        14.6
+      ],
+      "confirmed": 2,
+      "tokens": {
+        "prompt": 2195,
+        "output": 48,
+        "thought": 0,
+        "total": 2243
+      },
+      "latency": 4.82
+    },
+    {
+      "run": 4,
+      "timestamps": [
+        2.4,
+        14.6
+      ],
+      "confirmed": 2,
+      "tokens": {
+        "prompt": 2195,
+        "output": 48,
+        "thought": 0,
+        "total": 2243
+      },
+      "latency": 5.29
+    },
+    {
+      "run": 5,
+      "timestamps": [
+        2.6,
+        14.8
+      ],
+      "confirmed": 2,
+      "tokens": {
+        "prompt": 2195,
+        "output": 48,
+        "thought": 0,
+        "total": 2243
+      },
+      "latency": 4.82
+    }
+  ]
+}

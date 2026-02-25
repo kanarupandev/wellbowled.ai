@@ -1,0 +1,87 @@
+{
+  "video": "kapil_jones_swing.mp4",
+  "fps": 25.0,
+  "frames": 515,
+  "ground_truth_frames": [
+    80,
+    364
+  ],
+  "ground_truth_ts": [
+    3.2,
+    14.56
+  ],
+  "thinking_level": "MINIMAL",
+  "runs": 5,
+  "model": "gemini-3-flash-preview",
+  "mode": "Inline",
+  "results": [
+    {
+      "run": 1,
+      "timestamps": [
+        3.1,
+        14.4
+      ],
+      "confirmed": 2,
+      "summary": "",
+      "tokens": {
+        "prompt": 2196,
+        "output": 48,
+        "thought": 0,
+        "total": 2743
+      },
+      "latency": 11.25
+    },
+    {
+      "run": 2,
+      "error": "504 Deadline expired before operation could complete."
+    },
+    {
+      "run": 3,
+      "timestamps": [
+        3.2,
+        15.1
+      ],
+      "confirmed": 2,
+      "summary": "",
+      "tokens": {
+        "prompt": 2196,
+        "output": 48,
+        "thought": 0,
+        "total": 2758
+      },
+      "latency": 9.04
+    },
+    {
+      "run": 4,
+      "timestamps": [
+        3.2,
+        14.4
+      ],
+      "confirmed": 2,
+      "summary": "",
+      "tokens": {
+        "prompt": 2196,
+        "output": 34,
+        "thought": 0,
+        "total": 2725
+      },
+      "latency": 7.33
+    },
+    {
+      "run": 5,
+      "timestamps": [
+        3.0,
+        14.5
+      ],
+      "confirmed": 2,
+      "summary": "",
+      "tokens": {
+        "prompt": 2196,
+        "output": 48,
+        "thought": 0,
+        "total": 3293
+      },
+      "latency": 10.03
+    }
+  ]
+}

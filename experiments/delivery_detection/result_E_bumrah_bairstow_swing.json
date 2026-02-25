@@ -1,0 +1,91 @@
+{
+  "video": "bumrah_bairstow_swing.mp4",
+  "fps": 30.0,
+  "frames": 602,
+  "ground_truth_frames": [
+    145,
+    239,
+    293,
+    328,
+    366,
+    449,
+    516
+  ],
+  "ground_truth_ts": [
+    4.833333333333333,
+    7.966666666666667,
+    9.766666666666667,
+    10.933333333333334,
+    12.2,
+    14.966666666666667,
+    17.2
+  ],
+  "config": "E",
+  "config_name": "Default Thinking",
+  "temperature": 0.1,
+  "thinking": null,
+  "runs": 3,
+  "model": "gemini-3-flash-preview",
+  "mode": "Inline",
+  "downscale": null,
+  "results": [
+    {
+      "run": 1,
+      "timestamps": [
+        4.5,
+        7.8,
+        10.5,
+        14.5,
+        17.2
+      ],
+      "confirmed": 5,
+      "tokens": {
+        "prompt": 2158,
+        "output": 67,
+        "thought": 8107,
+        "total": 10332
+      },
+      "latency": 50.42
+    },
+    {
+      "run": 2,
+      "timestamps": [
+        4.8,
+        8.2,
+        9.6,
+        10.8,
+        11.9,
+        12.9,
+        15.0,
+        16.8
+      ],
+      "confirmed": 8,
+      "tokens": {
+        "prompt": 2158,
+        "output": 87,
+        "thought": 1064,
+        "total": 3309
+      },
+      "latency": 13.23
+    },
+    {
+      "run": 3,
+      "timestamps": [
+        4.5,
+        8.0,
+        10.0,
+        12.0,
+        15.0,
+        17.0
+      ],
+      "confirmed": 6,
+      "tokens": {
+        "prompt": 2158,
+        "output": 74,
+        "thought": 1475,
+        "total": 3707
+      },
+      "latency": 12.84
+    }
+  ]
+}

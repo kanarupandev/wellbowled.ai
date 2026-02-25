@@ -1,0 +1,91 @@
+{
+  "video": "umran_malik_150kph.mp4",
+  "fps": 60.0,
+  "frames": 523,
+  "ground_truth_frames": [
+    281
+  ],
+  "ground_truth_ts": [
+    4.683333333333334
+  ],
+  "config": "E",
+  "config_name": "Default Thinking",
+  "temperature": 0.1,
+  "thinking": null,
+  "runs": 5,
+  "model": "gemini-3-flash-preview",
+  "mode": "Inline",
+  "downscale": null,
+  "results": [
+    {
+      "run": 1,
+      "timestamps": [
+        4.5
+      ],
+      "confirmed": 1,
+      "tokens": {
+        "prompt": 1149,
+        "output": 40,
+        "thought": 1713,
+        "total": 2902
+      },
+      "latency": 15.11
+    },
+    {
+      "run": 2,
+      "timestamps": [
+        4.5
+      ],
+      "confirmed": 1,
+      "tokens": {
+        "prompt": 1149,
+        "output": 40,
+        "thought": 404,
+        "total": 1593
+      },
+      "latency": 8.5
+    },
+    {
+      "run": 3,
+      "timestamps": [
+        5.1
+      ],
+      "confirmed": 1,
+      "tokens": {
+        "prompt": 1149,
+        "output": 40,
+        "thought": 371,
+        "total": 1560
+      },
+      "latency": 7.19
+    },
+    {
+      "run": 4,
+      "timestamps": [
+        5.1
+      ],
+      "confirmed": 1,
+      "tokens": {
+        "prompt": 1149,
+        "output": 28,
+        "thought": 579,
+        "total": 1756
+      },
+      "latency": 8.02
+    },
+    {
+      "run": 5,
+      "timestamps": [
+        4.5
+      ],
+      "confirmed": 1,
+      "tokens": {
+        "prompt": 1149,
+        "output": 40,
+        "thought": 447,
+        "total": 1636
+      },
+      "latency": 7.26
+    }
+  ]
+}

@@ -1,0 +1,115 @@
+{
+  "video": "bumrah_bairstow_swing.mp4",
+  "fps": 30.0,
+  "frames": 602,
+  "ground_truth_frames": [
+    145,
+    239,
+    293,
+    328,
+    366,
+    449,
+    516
+  ],
+  "ground_truth_ts": [
+    4.833333333333333,
+    7.966666666666667,
+    9.766666666666667,
+    10.933333333333334,
+    12.2,
+    14.966666666666667,
+    17.2
+  ],
+  "thinking_level": "MINIMAL",
+  "runs": 5,
+  "model": "gemini-3-flash-preview",
+  "mode": "Inline",
+  "results": [
+    {
+      "run": 1,
+      "timestamps": [
+        4.5,
+        7.7,
+        9.4,
+        11.4,
+        14.4,
+        16.7
+      ],
+      "confirmed": 6,
+      "summary": "",
+      "tokens": {
+        "prompt": 2159,
+        "output": 73,
+        "thought": 0,
+        "total": 6962
+      },
+      "latency": 36.5
+    },
+    {
+      "run": 2,
+      "error": "504 Deadline expired before operation could complete."
+    },
+    {
+      "run": 3,
+      "timestamps": [
+        4.5,
+        7.8,
+        9.2,
+        10.5,
+        11.8,
+        14.5,
+        16.8
+      ],
+      "confirmed": 7,
+      "summary": "",
+      "tokens": {
+        "prompt": 2159,
+        "output": 80,
+        "thought": 0,
+        "total": 3950
+      },
+      "latency": 14.23
+    },
+    {
+      "run": 4,
+      "timestamps": [
+        4.5,
+        7.8,
+        9.5,
+        11.5,
+        14.5,
+        16.8
+      ],
+      "confirmed": 6,
+      "summary": "",
+      "tokens": {
+        "prompt": 2159,
+        "output": 56,
+        "thought": 0,
+        "total": 3442
+      },
+      "latency": 15.4
+    },
+    {
+      "run": 5,
+      "timestamps": [
+        4.5,
+        7.8,
+        8.9,
+        10.1,
+        11.3,
+        14.4,
+        16.4
+      ],
+      "confirmed": 7,
+      "summary": "",
+      "tokens": {
+        "prompt": 2159,
+        "output": 80,
+        "thought": 0,
+        "total": 3504
+      },
+      "latency": 12.4
+    }
+  ]
+}

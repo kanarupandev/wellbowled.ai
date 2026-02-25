@@ -1,0 +1,150 @@
+{
+  "config": {
+    "model": "gemini-3-flash-preview",
+    "runs": 5,
+    "temp": 0.1,
+    "prompt": "Watch the entire video carefully. Track the bowler's state throughout:\n\nSTATES:\n- IDLE: Standing, walking, or preparing \u2014 not actively bowling\n- RUN_UP: Moving toward the crease with clear intent to bowl\n- DELIVERY: Bowling arm swings over and ball is released (or would be released in shadow bowling)\n- FOLLOW_THROUGH: Post-release deceleration and body rotation\n\nDETECTION RULES:\n- A delivery = the transition from RUN_UP \u2192 DELIVERY\n- The release_ts = the exact moment the ball leaves the hand (arm at highest vertical point, fingers opening)\n- If shadow bowling (no ball): release_ts = the moment the arm reaches peak height where release WOULD occur\n\nSTEP 1: Watch the full video. Count how many delivery actions you see. State the count.\nSTEP 2: For each delivery, identify the precise release timestamp in seconds.\n\nPHANTOM DETECTION:\n- If someone runs up but does NOT rotate the bowling arm over the head, it is NOT a delivery\n- Mark as phantom ONLY if the run-up pattern was clearly detected but no arm rotation followed\n\nIMPORTANT:\n- Timestamps must be as precise as possible (to 0.1s)\n- Confidence reflects how clearly visible the release point is\n- Report what you SEE, not what you assume\n\nOutput JSON:\n{\"scan_summary\": \"description of what you see\", \"candidates_considered\": N, \"confirmed_deliveries\": N, \"phantom_deliveries\": N, \"deliveries\": [{\"id\": 1, \"release_ts\": float, \"confidence\": float}]}"
+  },
+  "results": [
+    {
+      "run": 1,
+      "release_ts": 1.4,
+      "confidence": 0.95,
+      "confirmed_deliveries": 1,
+      "phantom_deliveries": 0,
+      "scan_summary": "The video captures a single cricket delivery performed by a bowler on a concrete pitch. The bowler executes a short run-up followed by a standard overarm delivery.",
+      "tokens": {
+        "prompt": 699,
+        "output": 121,
+        "thought": 653,
+        "total": 1473
+      },
+      "latency_s": 8.8,
+      "full_response": {
+        "scan_summary": "The video captures a single cricket delivery performed by a bowler on a concrete pitch. The bowler executes a short run-up followed by a standard overarm delivery.",
+        "candidates_considered": 1,
+        "confirmed_deliveries": 1,
+        "phantom_deliveries": 0,
+        "deliveries": [
+          {
+            "id": 1,
+            "release_ts": 1.4,
+            "confidence": 0.95
+          }
+        ]
+      }
+    },
+    {
+      "run": 2,
+      "release_ts": 1.3,
+      "confidence": 0.9,
+      "confirmed_deliveries": 1,
+      "phantom_deliveries": 0,
+      "scan_summary": "The video captures a single cricket delivery performed on a concrete surface. A bowler in a dark shirt and green pants completes a short run-up and delivers the ball towards a person standing in a red shirt.",
+      "tokens": {
+        "prompt": 699,
+        "output": 129,
+        "thought": 639,
+        "total": 1467
+      },
+      "latency_s": 7.89,
+      "full_response": {
+        "scan_summary": "The video captures a single cricket delivery performed on a concrete surface. A bowler in a dark shirt and green pants completes a short run-up and delivers the ball towards a person standing in a red shirt.",
+        "candidates_considered": 1,
+        "confirmed_deliveries": 1,
+        "phantom_deliveries": 0,
+        "deliveries": [
+          {
+            "id": 1,
+            "release_ts": 1.3,
+            "confidence": 0.9
+          }
+        ]
+      }
+    },
+    {
+      "run": 3,
+      "release_ts": 1.4,
+      "confidence": 0.9,
+      "confirmed_deliveries": 1,
+      "phantom_deliveries": 0,
+      "scan_summary": "The video captures a single cricket delivery performed by a bowler in a dark shirt and green pants on a concrete pitch. The bowler completes a short run-up and delivers the ball towards a person standing at the other end.",
+      "tokens": {
+        "prompt": 699,
+        "output": 132,
+        "thought": 867,
+        "total": 1698
+      },
+      "latency_s": 9.33,
+      "full_response": {
+        "scan_summary": "The video captures a single cricket delivery performed by a bowler in a dark shirt and green pants on a concrete pitch. The bowler completes a short run-up and delivers the ball towards a person standing at the other end.",
+        "candidates_considered": 1,
+        "confirmed_deliveries": 1,
+        "phantom_deliveries": 0,
+        "deliveries": [
+          {
+            "id": 1,
+            "release_ts": 1.4,
+            "confidence": 0.9
+          }
+        ]
+      }
+    },
+    {
+      "run": 4,
+      "release_ts": 1.4,
+      "confidence": 0.95,
+      "confirmed_deliveries": 1,
+      "phantom_deliveries": 0,
+      "scan_summary": "The video captures a single cricket delivery performed by a bowler on a concrete pitch. The bowler completes a short run-up and a full arm rotation to release the ball.",
+      "tokens": {
+        "prompt": 699,
+        "output": 123,
+        "thought": 724,
+        "total": 1546
+      },
+      "latency_s": 9.74,
+      "full_response": {
+        "scan_summary": "The video captures a single cricket delivery performed by a bowler on a concrete pitch. The bowler completes a short run-up and a full arm rotation to release the ball.",
+        "candidates_considered": 1,
+        "confirmed_deliveries": 1,
+        "phantom_deliveries": 0,
+        "deliveries": [
+          {
+            "id": 1,
+            "release_ts": 1.4,
+            "confidence": 0.95
+          }
+        ]
+      }
+    },
+    {
+      "run": 5,
+      "release_ts": 1.4,
+      "confidence": 0.95,
+      "confirmed_deliveries": 1,
+      "phantom_deliveries": 0,
+      "scan_summary": "The video captures a single cricket delivery performed by a bowler in a dark shirt and green pants on a concrete surface, with another individual standing nearby.",
+      "tokens": {
+        "prompt": 699,
+        "output": 118,
+        "thought": 944,
+        "total": 1761
+      },
+      "latency_s": 9.7,
+      "full_response": {
+        "scan_summary": "The video captures a single cricket delivery performed by a bowler in a dark shirt and green pants on a concrete surface, with another individual standing nearby.",
+        "candidates_considered": 1,
+        "confirmed_deliveries": 1,
+        "phantom_deliveries": 0,
+        "deliveries": [
+          {
+            "id": 1,
+            "release_ts": 1.4,
+            "confidence": 0.95
+          }
+        ]
+      }
+    }
+  ]
+}

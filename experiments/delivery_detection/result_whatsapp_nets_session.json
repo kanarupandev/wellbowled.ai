@@ -1,0 +1,113 @@
+{
+  "video": "whatsapp_nets_session.mp4",
+  "fps": 29.989794430675026,
+  "frames": 2057,
+  "ground_truth_frames": [
+    203,
+    565,
+    1127,
+    1770
+  ],
+  "ground_truth_ts": [
+    6.768969372873116,
+    18.83974234321828,
+    37.57945065629558,
+    59.02007778317939
+  ],
+  "thinking_level": "MINIMAL",
+  "runs": 5,
+  "model": "gemini-3-flash-preview",
+  "mode": "File API",
+  "results": [
+    {
+      "run": 1,
+      "timestamps": [
+        6.7,
+        18.8,
+        37.6,
+        58.9
+      ],
+      "confirmed": 4,
+      "summary": "",
+      "tokens": {
+        "prompt": 6471,
+        "output": 61,
+        "thought": 0,
+        "total": 7145
+      },
+      "latency": 7.7
+    },
+    {
+      "run": 2,
+      "timestamps": [
+        7.2,
+        19.2,
+        37.8,
+        59.2
+      ],
+      "confirmed": 4,
+      "summary": "",
+      "tokens": {
+        "prompt": 6471,
+        "output": 61,
+        "thought": 0,
+        "total": 7214
+      },
+      "latency": 7.56
+    },
+    {
+      "run": 3,
+      "timestamps": [
+        6.7,
+        19.3,
+        37.6,
+        58.9
+      ],
+      "confirmed": 4,
+      "summary": "",
+      "tokens": {
+        "prompt": 6471,
+        "output": 46,
+        "thought": 0,
+        "total": 7511
+      },
+      "latency": 9.76
+    },
+    {
+      "run": 4,
+      "timestamps": [
+        6.7,
+        18.8,
+        37.5,
+        58.8
+      ],
+      "confirmed": 4,
+      "summary": "",
+      "tokens": {
+        "prompt": 6471,
+        "output": 61,
+        "thought": 0,
+        "total": 7118
+      },
+      "latency": 6.49
+    },
+    {
+      "run": 5,
+      "timestamps": [
+        6.7,
+        18.9,
+        37.5,
+        59.0
+      ],
+      "confirmed": 4,
+      "summary": "",
+      "tokens": {
+        "prompt": 6471,
+        "output": 61,
+        "thought": 0,
+        "total": 7897
+      },
+      "latency": 11.49
+    }
+  ]
+}

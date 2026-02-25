@@ -1,0 +1,35 @@
+{
+  "video": "3_sec_1_delivery_nets.mp4",
+  "fps": 30.0,
+  "frames": 111,
+  "ground_truth_frames": [
+    30
+  ],
+  "ground_truth_ts": [
+    1.0
+  ],
+  "thinking_level": "MINIMAL",
+  "runs": 1,
+  "model": "gemini-3-flash-preview",
+  "results": [
+    {
+      "run": 1,
+      "timestamps": [
+        1.1
+      ],
+      "confidences": [
+        0.95
+      ],
+      "confirmed": 1,
+      "phantoms": 0,
+      "summary": "The video shows a bowler performing a single delivery on a concrete surface. The bowler starts with a short run-up, executes a full arm rotation, and releases the ball towards the batter. The release point is clearly visible as the arm reaches its peak vertical position.",
+      "tokens": {
+        "prompt": 699,
+        "output": 148,
+        "thought": 0,
+        "total": 847
+      },
+      "latency": 4.8
+    }
+  ]
+}

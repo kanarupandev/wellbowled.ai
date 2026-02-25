@@ -1,0 +1,63 @@
+{
+  "video": "3_sec_1_delivery_nets.mp4",
+  "fps": 30.0,
+  "frames": 111,
+  "ground_truth_frames": [
+    30
+  ],
+  "ground_truth_ts": [
+    1.0
+  ],
+  "config": "D",
+  "config_name": "Downscale 480p + Schema + Metadata",
+  "temperature": 0.1,
+  "thinking": "MINIMAL",
+  "runs": 3,
+  "model": "gemini-3-flash-preview",
+  "mode": "Inline",
+  "downscale": 480,
+  "results": [
+    {
+      "run": 1,
+      "timestamps": [
+        1.4
+      ],
+      "confirmed": 1,
+      "tokens": {
+        "prompt": 602,
+        "output": 32,
+        "thought": 0,
+        "total": 634
+      },
+      "latency": 4.76
+    },
+    {
+      "run": 2,
+      "timestamps": [
+        1.4
+      ],
+      "confirmed": 1,
+      "tokens": {
+        "prompt": 602,
+        "output": 32,
+        "thought": 0,
+        "total": 634
+      },
+      "latency": 4.13
+    },
+    {
+      "run": 3,
+      "timestamps": [
+        1.4
+      ],
+      "confirmed": 1,
+      "tokens": {
+        "prompt": 602,
+        "output": 32,
+        "thought": 0,
+        "total": 634
+      },
+      "latency": 3.76
+    }
+  ]
+}

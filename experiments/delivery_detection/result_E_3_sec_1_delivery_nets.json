@@ -1,0 +1,53 @@
+{
+  "video": "3_sec_1_delivery_nets.mp4",
+  "fps": 30.0,
+  "frames": 111,
+  "ground_truth_frames": [
+    30
+  ],
+  "ground_truth_ts": [
+    1.0
+  ],
+  "config": "E",
+  "config_name": "Default Thinking",
+  "temperature": 0.1,
+  "thinking": null,
+  "runs": 3,
+  "model": "gemini-3-flash-preview",
+  "mode": "Inline",
+  "downscale": null,
+  "results": [
+    {
+      "run": 1,
+      "timestamps": [
+        1.2
+      ],
+      "confirmed": 1,
+      "tokens": {
+        "prompt": 696,
+        "output": 28,
+        "thought": 766,
+        "total": 1490
+      },
+      "latency": 8.66
+    },
+    {
+      "run": 2,
+      "error": "The read operation timed out"
+    },
+    {
+      "run": 3,
+      "timestamps": [
+        1.1
+      ],
+      "confirmed": 1,
+      "tokens": {
+        "prompt": 696,
+        "output": 28,
+        "thought": 1210,
+        "total": 1934
+      },
+      "latency": 13.51
+    }
+  ]
+}
