@@ -21,6 +21,7 @@
 | # | Directory | Purpose | Status |
 |---|-----------|---------|--------|
 | 1 | `delivery_detection/` | Scout prompt accuracy, thinkingLevel optimization, MediaPipe ground truth | Phase 2 |
+| 1a | `live_speed/` | Live API feasibility, speed estimation (Gemini Pro, YOLO, MediaPipe) | Complete |
 | 2 | `deep_analysis/` | Expert biomechanical analysis prompts | Parked |
 | 3 | `live_feedback/` | Multimodal Live API streaming | Planned |
 | 4 | `legality_assessment/` | Elbow extension observation prompts | Planned |

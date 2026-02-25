@@ -39,6 +39,16 @@ Config E: temp=0.1, default thinking, simple prompt, File API >5MB, no downscali
 **Do**: Record → live detection with count → auto-clip → post-session analysis cards
 **Don't**: Real-time overlay, precise speed, legality, broadcast video
 
+## Live API Status (R11)
+
+**Not viable.** gemini-3-flash-preview does not support Live API. Only native-audio models do, which respond via audio not text. Tested Feb 2026.
+
+**New trigger approach**: MediaPipe wrist velocity spike on-device as delivery trigger. Proven: peak velocity clearly marks release in all 4 test clips. Instant, free, no API call.
+
+## Speed Status (R12)
+
+Gemini Pro: 96-99 kph, ±3 kph cross-delivery, type classification reliable. YOLO not viable at 30fps. Show ranges not precise numbers.
+
 ## Fallback (Option C)
 
 If Live API unreliable: skip live, upload full video → detect all deliveries → clip → analyze. Strava for bowling.

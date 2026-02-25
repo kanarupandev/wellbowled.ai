@@ -73,6 +73,26 @@ Key findings:
 - Adding constraints (schema, metadata, thinking limits) hurts — model performs best with simple task + free reasoning
 - Broadcast montage with rapid scene cuts remains fundamentally hard (3/7 best case)
 
+### R11: Live API Feasibility
+**Status**: VERIFIED (NOT VIABLE) | **Ref**: `experiments/live_speed/results.md`
+- gemini-3-flash-preview does NOT support Live API
+- Only `gemini-2.5-flash-native-audio` models available — respond via audio, not text
+- Polling with generateContent at 3s intervals: 2/4 deliveries detected + 1 phantom
+- **Verdict**: Live API not ready for text-based video event detection
+
+### R12: Speed Estimation
+**Status**: VERIFIED | **Ref**: `experiments/live_speed/results.md`
+- **Gemini 3 Pro**: 96-99 kph avg, ±3 kph cross-delivery consistency, type classification reliable
+- **YOLO (COCO, 30fps)**: Cannot detect cricket ball — needs 240fps + fine-tuning
+- **MediaPipe wrist velocity**: Peak 1016-1967 px/s at release, identifies bowling arm, useful proxy
+- **Best for hackathon**: Gemini Pro classification on 2.5s clips ("medium pace ~95-100 kph")
+
+### R13: MediaPipe as Delivery Trigger
+**Status**: PROMISING | **Ref**: `experiments/live_speed/results.md`
+- Wrist velocity spike clearly marks release point in all 4 clips
+- Can replace Live API as on-device delivery trigger
+- Also identifies bowling arm (right/left) and arm extension angle
+
 ---
 
 ## Open Research Questions
@@ -84,16 +104,22 @@ Bumrah montage (7 deliveries, rapid cuts): best result 3/7 at 0.2s threshold. Co
 Is Pro meaningfully better than Flash for biomechanical phase analysis? Cost difference is ~4x. Needs experiment.
 
 ### Q3: Bowling type classification accuracy
-Can Gemini reliably distinguish fast/medium/spin from video alone? Needed for speed estimation tier 1.
+~~Can Gemini reliably distinguish fast/medium/spin from video alone?~~ **ANSWERED by R12**: Yes, type classification (fast/medium/spin) is reliable. Absolute speed ±10 kph.
 
 ### Q4: Multi-pass detection
 Coarse pass to find delivery windows, fine pass (zoomed to 1-sec window) for precise timestamp. Follows from R10 trend that focused analysis improves precision.
 
 ### Q5: Multimodal Live API for real-time detection
-What are the actual capabilities and limitations of Gemini's streaming API for live bowling detection?
+~~What are the actual capabilities and limitations?~~ **ANSWERED by R11**: Not viable. Only audio-native models. Use MediaPipe on-device trigger instead.
 
 ### Q6: Available cricket/bowling datasets, models, and tools
 What existing resources can we leverage? → See `research/cricket_resources.md`
+
+### Q7: YOLO fine-tuned on cricket ball + 240fps
+Can iPhone 240fps + cricket-specific YOLO give ±5-10 kph accuracy? Dataset available (1068 images, Kaggle).
+
+### Q8: MediaPipe wrist velocity → speed regression
+Can we build a regression model mapping wrist pixel velocity to ball speed using Gemini estimates as labels?
 
 ---
 
