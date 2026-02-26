@@ -2,41 +2,108 @@
 
 ## What is this?
 
-An expert buddy for cricket bowlers. Not a coach — a research partner that uses video and pose data to help bowlers understand and experiment with their action.
+An **expert mate** for cricket bowlers. Not a coach — a knowledgeable buddy who watches you bowl, calls out your count and pace, challenges you with targets, and gives you a session report when you're done.
 
 Built for the **Gemini Live Hackathon 2026**.
 
+## The Use Case: "Bowl. Hear Your Mate."
+
+You're at nets or in the backyard. You set your phone on a tripod. You press Start. You bowl.
+
+### Flow 1: LIVE — Audio Mate (during session)
+
+```
+You bowl
+    ↓
+Phone detects delivery (MediaPipe wrist spike + Live API confirmation)
+    ↓
+Mate speaks to you:
+    "Three. Medium pace. Nice rhythm."
+    ↓
+You hear it, pick up next ball, keep bowling
+```
+
+No screen. No buttons. No stopping. Just bowl and listen.
+
+### Flow 2: CHALLENGE MODE (the engagement loop)
+
+```
+Mate speaks: "Try a yorker on off stump."
+    ↓
+You bowl
+    ↓
+Mate evaluates: "That was full, but drifting leg side.
+                  Close though — 2 out of 3 so far."
+    ↓
+Mate speaks: "Now try a good length, 4th stump."
+```
+
+Simulates match pressure. Adaptive targets based on what you've been bowling. Tracks success rate per delivery type. The mate you wish was always at nets.
+
+### Flow 3: POST-SESSION — Delivery Cards (after session)
+
+```
+Session ends
+    ↓
+App auto-clips each delivery (5s window)
+    ↓
+Gemini Pro analyzes each clip
+    ↓
+Delivery card: pace band, length, line, key observation
+Session summary: count, pace trend, challenge mode score
+```
+
+45 min of raw video → 36 bite-sized clips you'll actually watch.
+
+## What It Detects
+
+| Attribute | Method | Accuracy | Status |
+|-----------|--------|----------|--------|
+| Delivery count | MediaPipe wrist spike + Gemini | High | Proven (4/4 nets) |
+| Pace band | Gemini Pro on clip | ±3 kph cross-delivery | Proven |
+| Length (yorker/full/good/short) | Gemini on clip (visual) | ~75-85% estimated | To validate |
+| Line (off/middle/leg) | Gemini on clip (visual) | ~60-70% estimated | To validate |
+| Type (seam/spin) | Gemini on clip (action) | ~80%+ estimated | To validate |
+| Pitch map (zone-based) | Accumulated Gemini classifications | Approximate zones | To build |
+
+## What It Doesn't Do
+
+- Precise speed ("127.4 kph") — unreliable, erodes trust. Shows ranges.
+- Legality assessment — 2D video can't measure 15° elbow extension
+- Broadcast video analysis — scene cuts break detection
+- Real-time video overlay — latency kills it
+
 ## Stack
 
-- **Engine**: Gemini 3 Flash (Multimodal Live API)
-- **Vision**: MediaPipe Pose (client-side) + Gemini reasoning (server-side)
+- **Live feedback**: Gemini Live API (`gemini-2.5-flash-native-audio`) — audio response (hypothesis, validating)
+- **Post-session analysis**: Gemini 3 Pro (`gemini-3-pro-preview`) via generateContent
+- **On-device detection**: MediaPipe Pose (wrist velocity spike as delivery trigger)
 - **iOS client**: Swift, camera capture + pose overlay
-- **Backend**: Python, prompt engine + Gemini API
+- **Config**: Config E — temp=0.1, default thinking, simple prompt, File API >5MB
 
-## Three Modes
+## Competitive Landscape
 
-| Mode | Purpose | Latency |
-|------|---------|---------|
-| **Detection** | Identify when a delivery starts/ends | Ultra-low |
-| **Live Analysis** | Real-time phase slicing + conversational feedback | Low |
-| **Deep-Dive** | Post-session biomechanical signature + benchmarking | Async |
-
-## The 6 Phases
-
-Run-up → Back Foot Contact (BFC) → Front Foot Contact (FFC) → Release → Follow-through
-
-Target: phase detection delta < 0.2s (achieved via dual-track MediaPipe timestamps + Gemini semantics).
+| Tool | Approach | Our Differentiation |
+|------|----------|-------------------|
+| **FullTrack AI** | Single iPhone behind stumps, ball tracking, pitch maps. 3M+ users. Peer-reviewed (ICC >0.96). | They track the ball pixel-by-pixel. We understand the bowling semantically. They give you data. We give you a mate who talks to you. |
+| **PitchVision** | 2 cameras + laptop + activation sensor. Professional coaching. | Hardware kit. We're phone-only. |
+| **CricVision** | Cloud-based ball tracking + analysis. | Similar approach but no live audio feedback. |
+| **Catapult** | Wearable GPS/inertial sensors. IPL teams. | Hardware. Different market (professional workload management). |
 
 ## Repo Structure
 
 ```
 wellbowled.ai/
-├── docs/           # You are here
-├── backend/        # Python — Gemini API, prompt engine
-├── ios/            # Swift — MediaPipe + camera
-└── prompts/        # System prompts (Detection, Live, Deep-Dive)
+├── docs/              # Architecture, prompts, process
+├── experiments/       # Detection, speed, live API experiments
+├── research/          # Research index, cricket resources
+└── codex/             # Codex agent research (parallel)
 ```
 
-## Setup
+## Key Research (R1-R13)
 
-_TBD — will be filled as components are built._
+See `research/README.md` for full index. Highlights:
+- **R9**: Config E is best (6/7 PASS at mixed thresholds)
+- **R11**: Audio Live API is the path (hypothesis, not yet validated e2e)
+- **R12**: Gemini Pro speed: ±3 kph cross-delivery, type classification reliable
+- **R13**: MediaPipe wrist velocity spike: proven delivery trigger

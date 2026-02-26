@@ -4,7 +4,7 @@
 
 ## Verdict
 
-Delivery detection on uploaded clips **works** (6/7 PASS, 0.04-0.22s precision, ~$0.001/call). Real-time live detection is untested but feasible at lower precision (~1s). Hybrid approach: live for triggers, async for precision.
+Delivery detection on uploaded clips **works** (6/7 PASS at mixed thresholds: 0.2s broadcast / 0.3s nets, 0.04-0.22s precision, ~$0.001/call). Real-time live detection is untested but feasible at lower precision (~1s). Hybrid approach: live for triggers, async for precision.
 
 ## Pipeline
 
@@ -12,9 +12,11 @@ Delivery detection on uploaded clips **works** (6/7 PASS, 0.04-0.22s precision, 
 LIVE                                POST-SESSION
 ────                                ────────────
 Phone records (60/240fps)
-Live API (~1fps) ─── "delivery!" ──► Mark timestamp (±1s)
-Show count to bowler                 Clip 5s window [-3s, +2s]
-Session ends                         generateContent per clip → analysis card
+Live API (native-audio)              Mark timestamp (±1s)
+  ──► SPEAKS to bowler:              Clip 5s window [-3s, +2s]
+  "Delivery! That's 6 today,        generateContent per clip
+   medium pace"                      → analysis card
+MediaPipe on-device (complement)
 ```
 
 **Why ±1s is fine**: 5-second clip window guarantees release point is captured. Precise timestamp refined by generateContent (proven 0.04-0.22s).
@@ -41,9 +43,11 @@ Config E: temp=0.1, default thinking, simple prompt, File API >5MB, no downscali
 
 ## Live API Status (R11)
 
-**Not viable.** gemini-3-flash-preview does not support Live API. Only native-audio models do, which respond via audio not text. Tested Feb 2026.
+**Audio is the way forward (hypothesis — not yet validated).** Native-audio models (`gemini-2.5-flash-native-audio`) respond via audio — which is ideal for a bowler mid-session who can't look at their phone. The model watches the video stream and speaks feedback aloud: delivery count, pace band, observations.
 
-**New trigger approach**: MediaPipe wrist velocity spike on-device as delivery trigger. Proven: peak velocity clearly marks release in all 4 test clips. Instant, free, no API call.
+What's tested: `generateContent` polling detected 2/4 deliveries + 1 phantom (Feb 2026). What's NOT tested yet: end-to-end native-audio Live API streaming video → receiving spoken delivery feedback. This is the next experiment.
+
+MediaPipe wrist velocity spike remains useful as an on-device complement: instant, free, works offline. Proven: peak velocity clearly marks release in all 4 test clips.
 
 ## Speed Status (R12)
 

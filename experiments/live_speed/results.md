@@ -2,7 +2,7 @@
 
 ## Live API Finding
 
-**Gemini 3 Flash does NOT support Live API.** Only `gemini-2.5-flash-native-audio` models do, and they respond via audio (not text). Unsuitable for text-based video event detection.
+**Gemini 3 Flash does NOT support Live API.** Only `gemini-2.5-flash-native-audio` models do, and they respond via audio. **Audio is actually the ideal UX** — bowlers can't look at their phone mid-session. The model should speak feedback aloud: "Delivery! That's your sixth, medium pace."
 
 **Workaround**: Polling with `generateContent` at 3s intervals. Detected 2/4 deliveries + 1 phantom. Misses deliveries that fall between polling windows.
 
@@ -14,7 +14,7 @@
 | D4 | 59.02 | — | — | MISS |
 | Phantom | — | 1.0 | — | FALSE |
 
-**Implication for app**: Live API is not ready for our use case. Use on-device detection (MediaPipe wrist velocity spike) as trigger, or full-video analysis post-session.
+**Implication for app**: Native-audio Live API is the path forward. Audio response is the ideal coaching UX — hands-free, eyes on the game. MediaPipe wrist velocity spike complements as on-device backup (instant, free, works offline).
 
 ## Speed Estimation
 

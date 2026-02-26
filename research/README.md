@@ -74,11 +74,13 @@ Key findings:
 - Broadcast montage with rapid scene cuts remains fundamentally hard (3/7 best case)
 
 ### R11: Live API Feasibility
-**Status**: VERIFIED (NOT VIABLE) | **Ref**: `experiments/live_speed/results.md`
+**Status**: HYPOTHESIS — AUDIO IS THE PATH (not yet validated end-to-end) | **Ref**: `experiments/live_speed/results.md`
 - gemini-3-flash-preview does NOT support Live API
-- Only `gemini-2.5-flash-native-audio` models available — respond via audio, not text
-- Polling with generateContent at 3s intervals: 2/4 deliveries detected + 1 phantom
-- **Verdict**: Live API not ready for text-based video event detection
+- Native-audio models (`gemini-2.5-flash-native-audio`) respond via audio — ideal UX for bowlers mid-session (hands-free)
+- Audio response = feature, not limitation
+- **Tested**: Polling with generateContent: 2/4 deliveries detected + 1 phantom
+- **Not tested**: End-to-end native-audio Live API streaming video → spoken delivery feedback
+- **Next step**: Build and run native-audio experiment to validate the hypothesis
 
 ### R12: Speed Estimation
 **Status**: VERIFIED | **Ref**: `experiments/live_speed/results.md`
@@ -92,6 +94,37 @@ Key findings:
 - Wrist velocity spike clearly marks release point in all 4 clips
 - Can replace Live API as on-device delivery trigger
 - Also identifies bowling arm (right/left) and arm extension angle
+
+### R14: Delivery Type Detection (Line, Length, Type)
+**Status**: FEASIBLE (UNTESTED) | **Ref**: `docs/session_onboarding.md`
+- **Length** (yorker/full/good/short/bouncer): HIGH feasibility from Gemini visual classification (~75-85%). Ball pitch location relative to batter + batter footwork response are strong visual cues.
+- **Line** (off/middle/leg/wide): MEDIUM feasibility (~60-70%). Requires depth perception from 2D; camera angle behind stumps is critical.
+- **Type** (seam/spin): HIGH feasibility (~80%+). Bowler's action, arm speed, wrist position are visually distinct.
+- **Swing direction**: LOW feasibility (~50-65%). Subtle lateral movement hard to detect without trajectory data.
+- **Key insight**: Gemini understands bowling semantically (not geometrically). It can classify "short outside off" from visual context but cannot give precise x,y pitch coordinates.
+- **Zone-based pitch maps**: Accumulate categorical classifications across a spell → approximate zone map. Honest, achievable, valuable for coaching.
+- **Precise pitch maps**: Need dedicated ball tracking (YOLO/TrackNet + homography calibration from stumps). FullTrack AI does this.
+
+### R15: Competitive Landscape
+**Status**: RESEARCHED | **Ref**: `docs/session_onboarding.md`
+- **FullTrack AI**: Single iPhone behind stumps. Homography calibration from stump positions (known 20.12m pitch). Ball tracking via proprietary ML. Peer-reviewed: ICC >0.96 for line/length, speed overestimates by ~2.6-2.8 kph for pace. 3M+ users. $10/mo.
+- **PitchVision**: 2 cameras + laptop + activation sensor. Professional coaching kit.
+- **CricVision**: Cloud-based AI ball tracking, 3D trajectory. Single camera.
+- **SPEEDUP Cricket**: CV-based 3D trajectory from single device. Speed + throw angle.
+- **Ludimos**: IPL teams use. AI extracts line/length/speed/deviation from training video.
+- **NV Play Vision AI**: Auto-coding ball position, pitch map coordinates from stationary cameras.
+- **Catapult**: Wearable inertial sensors, 1000+ data points/sec. Auto-detects bowling deliveries.
+- **Hawk-Eye**: 6+ cameras at 340fps. 2.6mm accuracy. Broadcast-only.
+- **Our angle**: Nobody does live audio feedback. FullTrack gives you data; we give you a mate who talks.
+
+### R16: Ball Tracking State of the Art (Single Mobile Camera)
+**Status**: RESEARCHED | **Ref**: `research/cricket_resources.md`
+- At 140 kph, ball crosses 20m in ~0.5s. At 30fps = ~15 frames (marginal). 60fps = ~30 frames (adequate). 240fps = ~120 frames (excellent).
+- **TrackNet V3/V4**: Best accuracy for small fast objects. 97.5% tracking, IoU 0.91. NOT mobile-friendly.
+- **YOLOv8**: 99.18% mAP50 with transfer learning on cricket data. ~85 FPS on iPhone via CoreML. Mobile-viable.
+- **YOLO26** (Sept 2025): Purpose-built for edge/low-power. CoreML + TFLite export.
+- **3D from single camera**: Homography from stumps (known 20.12m pitch geometry). FullTrack's approach.
+- **Practical architecture**: YOLO on-device for real-time detection + Kalman filter for trajectory through occlusions + homography for real-world coordinates.
 
 ---
 
@@ -110,7 +143,7 @@ Is Pro meaningfully better than Flash for biomechanical phase analysis? Cost dif
 Coarse pass to find delivery windows, fine pass (zoomed to 1-sec window) for precise timestamp. Follows from R10 trend that focused analysis improves precision.
 
 ### Q5: Multimodal Live API for real-time detection
-~~What are the actual capabilities and limitations?~~ **ANSWERED by R11**: Not viable. Only audio-native models. Use MediaPipe on-device trigger instead.
+~~What are the actual capabilities and limitations?~~ **REFRAMED by R11**: Audio response IS the right UX. Native-audio models are the path forward for live coaching feedback. Bowler can't look at phone — spoken feedback is ideal.
 
 ### Q6: Available cricket/bowling datasets, models, and tools
 What existing resources can we leverage? → See `research/cricket_resources.md`
@@ -120,6 +153,18 @@ Can iPhone 240fps + cricket-specific YOLO give ±5-10 kph accuracy? Dataset avai
 
 ### Q8: MediaPipe wrist velocity → speed regression
 Can we build a regression model mapping wrist pixel velocity to ball speed using Gemini estimates as labels?
+
+### Q9: Gemini delivery type classification accuracy
+Can Gemini reliably classify length (yorker/full/good/short) and line (off/middle/leg) from behind-stumps 2.5s clips? Estimated 75-85% for length, 60-70% for line. Needs experiment with labeled test clips.
+
+### Q10: Challenge mode — spoken target + verification loop
+Can the Live API audio model speak a target ("bowl a yorker on off stump"), then evaluate the next delivery against that target from the video? This is the core engagement loop. Needs end-to-end Live API experiment.
+
+### Q11: Zone-based pitch map from accumulated Gemini classifications
+Can we build a useful pitch map by accumulating Gemini's categorical line/length classifications per delivery? No pixel tracking needed — just zone buckets. Needs UI experiment.
+
+### Q12: FullTrack-style ball tracking layer
+Should we add a dedicated YOLO ball tracking layer (fine-tuned on cricket ball dataset, 1068 images) for precise pitch maps? Or is Gemini zone-based classification sufficient for our "expert mate" positioning? This is a build-vs-differentiate decision.
 
 ---
 
