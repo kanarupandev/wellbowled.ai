@@ -104,3 +104,23 @@ Track incoming parallel commits and maintain understanding of evolving project s
 
 ### Outcome
 Commit-tracking process is now documented and active.
+
+## 2026-02-26 (Codex hackathon winning-submission research)
+
+### Task intent
+Research official 2026 Gemini hackathon expectations and produce a winning-submission playbook with criteria, demo expectations, and modern UX guidance.
+
+### Work completed
+1. Web-researched official Gemini 3 Hackathon rules and weighted judging criteria.
+2. Gathered Devpost judging process and video best-practice guidance.
+3. Mapped findings to a practical submission playbook for your project.
+4. Created dedicated `codex/submission` directory with actionable docs.
+
+### New artifacts
+- `submission/2026_gemini_hackathon_winning_playbook.md`
+- `submission/2026_demo_blueprint_3min.md`
+- `submission/2026_submission_scorecard.md`
+- `submission/2026_sources.md`
+
+### Outcome
+A judge-aligned submission strategy is documented and ready for review/execution.
