@@ -9,14 +9,13 @@ Delivery detection on uploaded clips **works** (6/7 PASS at mixed thresholds: 0.
 ## Pipeline
 
 ```
-LIVE                                POST-SESSION
-────                                ────────────
-Phone records (60/240fps)
-Live API (native-audio)              Mark timestamp (±1s)
-  ──► SPEAKS to bowler:              Clip 5s window [-3s, +2s]
-  "Delivery! That's 6 today,        generateContent per clip
-   medium pace"                      → analysis card
-MediaPipe on-device (complement)
+LIVE (on-device)                    CONVERSATION              POST-SESSION
+────────────────                    ────────────              ────────────
+Phone records (60fps)               Bowler: "How was that?"   Clip 5s window
+MediaPipe detects delivery            ↓                       generateContent
+  → wrist velocity spike           Live API audio response:   → analysis card
+iOS TTS: "3. Medium pace."         "Good length, seam up,
+  → zero latency, local             bit wide of off"
 ```
 
 **Why ±1s is fine**: 5-second clip window guarantees release point is captured. Precise timestamp refined by generateContent (proven 0.04-0.22s).
@@ -41,13 +40,17 @@ Config E: temp=0.1, default thinking, simple prompt, File API >5MB, no downscali
 **Do**: Record → live detection with count → auto-clip → post-session analysis cards
 **Don't**: Real-time overlay, precise speed, legality, broadcast video
 
-## Live API Status (R11)
+## Live API Status (R11 + R17)
 
-**Audio is the way forward (hypothesis — not yet validated).** Native-audio models (`gemini-2.5-flash-native-audio`) respond via audio — which is ideal for a bowler mid-session who can't look at their phone. The model watches the video stream and speaks feedback aloud: delivery count, pace band, observations.
+**Validated: Live API is conversational, not monitoring.** Native-audio model connects, understands cricket context ("Right, I'm watching. Let's see what the bowlers have got."), but does NOT proactively call out deliveries from video frames. It waits for user speech (VAD turn-taking).
 
-What's tested: `generateContent` polling detected 2/4 deliveries + 1 phantom (Feb 2026). What's NOT tested yet: end-to-end native-audio Live API streaming video → receiving spoken delivery feedback. This is the next experiment.
+**Revised architecture**:
+- **Detection + count**: MediaPipe on-device (wrist velocity spike) — instant, proven 4/4
+- **Pace + count announcement**: iOS TTS (AVSpeechSynthesizer) — zero latency, local
+- **Conversation**: Live API — bowler asks "How was that?", mate answers with audio based on video context
+- **Post-session analysis**: generateContent (Gemini Pro) on auto-clipped deliveries
 
-MediaPipe wrist velocity spike remains useful as an on-device complement: instant, free, works offline. Proven: peak velocity clearly marks release in all 4 test clips.
+This is actually better: the core loop (detect → announce) has zero API dependency. The Live API does what it's best at — voice conversation with video understanding.
 
 ## Speed Status (R12)
 

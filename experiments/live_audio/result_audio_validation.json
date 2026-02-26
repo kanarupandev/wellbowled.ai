@@ -1,0 +1,20 @@
+{
+  "video": "whatsapp_nets_session.mp4",
+  "model": "models/gemini-2.5-flash-native-audio-preview-12-2025",
+  "elapsed_s": 90.8,
+  "audio_duration_s": 1.0,
+  "audio_chunks": 1,
+  "transcript_segments": 2,
+  "transcript_texts": [
+    "Ready when",
+    " you are!"
+  ],
+  "full_transcript": "Ready when you are!",
+  "events": [],
+  "ground_truth": [
+    6.77,
+    18.83,
+    37.57,
+    59.0
+  ]
+}

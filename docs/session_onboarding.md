@@ -100,10 +100,17 @@ wellbowled.ai/
 └── codex/             # Codex agent research (parallel)
 ```
 
-## Key Research (R1-R13)
+## Previous Demo
+
+Gemini 3 hackathon (Feb 2026): https://www.youtube.com/watch?v=Gpif-vPtYTc
+
+## Key Research (R1-R16)
 
 See `research/README.md` for full index. Highlights:
 - **R9**: Config E is best (6/7 PASS at mixed thresholds)
 - **R11**: Audio Live API is the path (hypothesis, not yet validated e2e)
 - **R12**: Gemini Pro speed: ±3 kph cross-delivery, type classification reliable
 - **R13**: MediaPipe wrist velocity spike: proven delivery trigger
+- **R14**: Delivery type detection feasible (length ~75-85%, line ~60-70%)
+- **R15**: Competitive landscape — nobody does live audio feedback
+- **R16**: Ball tracking SOTA — YOLOv8 viable on mobile via CoreML

@@ -74,13 +74,22 @@ Key findings:
 - Broadcast montage with rapid scene cuts remains fundamentally hard (3/7 best case)
 
 ### R11: Live API Feasibility
-**Status**: HYPOTHESIS — AUDIO IS THE PATH (not yet validated end-to-end) | **Ref**: `experiments/live_speed/results.md`
-- gemini-3-flash-preview does NOT support Live API
-- Native-audio models (`gemini-2.5-flash-native-audio`) respond via audio — ideal UX for bowlers mid-session (hands-free)
-- Audio response = feature, not limitation
-- **Tested**: Polling with generateContent: 2/4 deliveries detected + 1 phantom
-- **Not tested**: End-to-end native-audio Live API streaming video → spoken delivery feedback
-- **Next step**: Build and run native-audio experiment to validate the hypothesis
+**Status**: VALIDATED — CONVERSATIONAL, NOT MONITORING | **Ref**: `experiments/live_audio/results.md`
+- Native-audio model connects, understands cricket context, speaks naturally as "mate"
+- But does NOT proactively call out deliveries from video frames
+- Model uses VAD turn-taking — waits for user speech before responding
+- Tried: realtime video frames, text nudges, audio silence, inline images — all silent after initial greeting
+- **Conclusion**: Live API is for **conversation** (bowler asks, mate answers), not **monitoring** (watch and narrate)
+
+### R17: Audio Live API Validation Experiment
+**Status**: VERIFIED | **Ref**: `experiments/live_audio/results.md`
+- Model: `gemini-2.5-flash-native-audio-preview-12-2025`, AUDIO response, Zephyr voice
+- Connection: 0.4-0.7s. Session stability: 90s with compression, no timeout
+- Initial response: "Right, I'm watching. Let's see what the bowlers have got." — great mate energy
+- Thinking: "Commencing Nets Observation... tracking each bowling delivery" — understands the task
+- **But**: 0 deliveries called across 71 video frames (68s of video, 4 ground truth deliveries)
+- TEXT mode not supported: "Cannot extract voices from a non-audio request"
+- **Revised architecture**: MediaPipe detection + iOS TTS for core loop; Live API for voice conversation about what it saw
 
 ### R12: Speed Estimation
 **Status**: VERIFIED | **Ref**: `experiments/live_speed/results.md`
