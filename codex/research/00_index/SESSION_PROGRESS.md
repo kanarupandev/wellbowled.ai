@@ -73,3 +73,19 @@ Produce a deeply researched, concrete Gemini Live API configuration for hackatho
 
 ### Outcome
 Hackathon-ready Live API config is defined with explicit constraints, parameter choices, and fallback ladder.
+
+## 2026-02-26 (Codex flowchart + UX documentation)
+
+### Task intent
+Document the revised hackathon system flowchart with UX best-practice emphasis and anti-idle interaction design.
+
+### Work completed
+1. Added end-to-end Mermaid flowchart from live feedback to deep analysis, chat seek/jump, and DNA match.
+2. Added explicit ownership split: Gemini labels semantics, MediaPipe renders measurements/overlays.
+3. Added anti-idle UX rules and a suggested deep-analysis JSON contract.
+
+### New artifact
+- `03_recommendations/hackathon_flowchart_ux_2026-02-26.md`
+
+### Outcome
+Flowchart and UX behavior are now documented for review and implementation planning.

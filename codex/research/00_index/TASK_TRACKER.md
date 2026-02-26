@@ -19,6 +19,7 @@ Research closeout from existing artifacts with explicit scope, verified metrics,
 | T6 | Claim-to-source governance | Done | `04_sources/results_claim_manifest.md` | Keep updated with every new claim |
 | T7 | Scope note + final closeout package | Done | `00_index/SCOPE_AND_CLOSEOUT_NOTE.md`, closeout memo | Handoff to Claude/user |
 | T8 | Deep Live API hackathon configuration research | Done | `03_recommendations/live_api_hackathon_config_2026-02-26.md` | Implement config in app session setup |
+| T9 | UX-first flowchart + interaction model | Done | `03_recommendations/hackathon_flowchart_ux_2026-02-26.md` | Review and finalize UI wireframes |
 
 ## Completion statement
 All research possible from current repo artifacts has been completed and documented. Remaining unknowns are explicitly marked as requiring new experiments/data.
