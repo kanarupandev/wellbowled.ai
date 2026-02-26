@@ -124,3 +124,21 @@ Research official 2026 Gemini hackathon expectations and produce a winning-submi
 
 ### Outcome
 A judge-aligned submission strategy is documented and ready for review/execution.
+
+## 2026-02-26 (Codex previous-demo review request)
+
+### Task intent
+Review previous YouTube hackathon demo and capture what worked vs what to improve in a dedicated doc.
+
+### Constraint encountered
+Direct YouTube access was blocked in this environment (DNS/network), and transcript mirrors did not return indexed content for the provided URL.
+
+### Work completed
+1. Created dedicated review document with explicit access limitation.
+2. Added judge-aligned scoring framework and improvement plan ready for timestamped finalization.
+
+### New artifact
+- `submission/previous_demo_review_2026-02-26.md`
+
+### Next step
+Finalize with evidence after receiving transcript, timestamps, or local video file.
