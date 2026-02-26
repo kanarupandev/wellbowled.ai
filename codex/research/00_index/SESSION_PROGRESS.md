@@ -57,3 +57,19 @@ Finish research package end-to-end, include explicit scope note, and finalize ha
 
 ### Session outcome
 Research is closed for the current evidence set. Remaining open questions are explicitly marked as requiring fresh experimentation.
+
+## 2026-02-26 (Codex Live API config deep dive)
+
+### Task intent
+Produce a deeply researched, concrete Gemini Live API configuration for hackathon usage only.
+
+### Work completed
+1. Researched current official Live API docs for modality rules, VAD, media resolution, session limits, session resumption, and model/version notes.
+2. Converted constraints into a concrete session config with fallback strategy.
+3. Documented a demo-safe operating profile (stream rate, local clipping, reconnect behavior).
+
+### New artifact
+- `03_recommendations/live_api_hackathon_config_2026-02-26.md`
+
+### Outcome
+Hackathon-ready Live API config is defined with explicit constraints, parameter choices, and fallback ladder.

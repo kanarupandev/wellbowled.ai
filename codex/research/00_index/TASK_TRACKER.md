@@ -18,6 +18,7 @@ Research closeout from existing artifacts with explicit scope, verified metrics,
 | T5 | Define next executable sprint | Done | Continuation memo (two-pass montage spec) | Execute experiment in next build cycle |
 | T6 | Claim-to-source governance | Done | `04_sources/results_claim_manifest.md` | Keep updated with every new claim |
 | T7 | Scope note + final closeout package | Done | `00_index/SCOPE_AND_CLOSEOUT_NOTE.md`, closeout memo | Handoff to Claude/user |
+| T8 | Deep Live API hackathon configuration research | Done | `03_recommendations/live_api_hackathon_config_2026-02-26.md` | Implement config in app session setup |
 
 ## Completion statement
 All research possible from current repo artifacts has been completed and documented. Remaining unknowns are explicitly marked as requiring new experiments/data.
