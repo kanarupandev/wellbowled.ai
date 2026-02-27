@@ -40,7 +40,7 @@ Tidy the code you're about to touch. Structural changes separate from behavioral
 Failing test from verified findings. **Red.** Minimum code to pass. **Green.** Refactor. **Red → Green again.** Code is a translation of what you already proved.
 
 ### 8. IMPLEMENT
-One thing at a time. Small commits. Readable by a stranger. No dead code, no commented-out code, no TODOs without tickets. If it's getting complex, go back to step 5. → **Sync docs.**
+One thing at a time. Small commits. Readable by a stranger. No dead code, no commented-out code, no TODOs without a GitHub issue or `research/README.md` open question (Q1-Qn). If it's getting complex, go back to step 5. → **Sync docs.**
 
 ### 9. VERIFY AGAIN
 Full test suite. Manual check against spec. If it doesn't match, fix it now.
@@ -73,7 +73,7 @@ Never write integration code from API docs alone. Prove it works first.
 
 - **Subject**: what changed.
 - **Body**: why it changed, what was verified, what it connects to.
-- **Read log before starting work.** Understand what was done and why before adding to it.
+- **Read log before starting work.** `git log --oneline -15` for general context, `git log --oneline -10 -- <path>` when working on a specific area. Understand what was done and why before adding to it.
 - Small commits. Each one self-contained and honest.
 
 ---
@@ -84,6 +84,14 @@ Never write integration code from API docs alone. Prove it works first.
 - Docs must never contradict each other. If updating one creates a conflict, fix both immediately.
 - Stale docs are worse than no docs. If it's not current, it's a lie.
 - Docs describe **what is**. Git log describes **how we got here**.
+
+**Minimum doc sync per step:**
+- UNDERSTAND: what the requirement is, what's unclear
+- RESEARCH: hypothesis, prior art found, constraints identified
+- EXPERIMENT: exact command/script, exact output, pass/fail
+- VERIFY: VERIFIED or DISPROVED + evidence (link to result file)
+- PLAN: approach, scope, what's deferred
+- IMPLEMENT: what changed, why, what was tested
 
 ---
 
