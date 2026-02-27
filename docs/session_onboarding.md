@@ -15,15 +15,20 @@ You're at nets or in the backyard. You set your phone on a tripod. You press Sta
 ```
 You bowl
     ↓
-Phone detects delivery (MediaPipe wrist spike + Live API confirmation)
+MediaPipe detects delivery (wrist velocity spike, on-device, instant)
     ↓
-Mate speaks to you:
-    "Three. Medium pace. Nice rhythm."
+iOS TTS speaks: "Three. Medium pace."  ← zero latency, no network
     ↓
-You hear it, pick up next ball, keep bowling
+You ask: "How was that?"
+    ↓
+Live API hears you + sees video context
+    ↓
+Mate speaks: "Good length, nice seam position, bit wide of off."
+    ↓
+You pick up next ball, keep bowling
 ```
 
-No screen. No buttons. No stopping. Just bowl and listen.
+No screen. No buttons. No stopping. Detection + count is instant and local. Conversation is natural — ask when you want.
 
 ### Flow 2: CHALLENGE MODE (the engagement loop)
 
@@ -75,9 +80,11 @@ Session summary: count, pace trend, challenge mode score
 
 ## Stack
 
-- **Live feedback**: Gemini Live API (`gemini-2.5-flash-native-audio`) — audio response (hypothesis, validating)
+- **Delivery detection**: MediaPipe Pose on-device (wrist velocity spike) — instant, proven 4/4
+- **Count + pace announcement**: iOS TTS (AVSpeechSynthesizer) — zero latency, local
+- **Voice conversation**: Gemini Live API (`gemini-2.5-flash-native-audio`) — AUDIO mode, bowler asks → mate answers (R17 validated)
+- **Challenge mode evaluation**: Gemini on clip (generateContent) — delivery type + success assessment
 - **Post-session analysis**: Gemini 3 Pro (`gemini-3-pro-preview`) via generateContent
-- **On-device detection**: MediaPipe Pose (wrist velocity spike as delivery trigger)
 - **iOS client**: Swift, camera capture + pose overlay
 - **Config**: Config E — temp=0.1, default thinking, simple prompt, File API >5MB
 
@@ -108,7 +115,7 @@ Gemini 3 hackathon (Feb 2026): https://www.youtube.com/watch?v=Gpif-vPtYTc
 
 See `research/README.md` for full index. Highlights:
 - **R9**: Config E is best (6/7 PASS at mixed thresholds)
-- **R11**: Audio Live API is the path (hypothesis, not yet validated e2e)
+- **R11+R17**: Live API is conversational, not monitoring — revised to MediaPipe detection + iOS TTS + Live API conversation
 - **R12**: Gemini Pro speed: ±3 kph cross-delivery, type classification reliable
 - **R13**: MediaPipe wrist velocity spike: proven delivery trigger
 - **R14**: Delivery type detection feasible (length ~75-85%, line ~60-70%)
