@@ -142,3 +142,21 @@ Direct YouTube access was blocked in this environment (DNS/network), and transcr
 
 ### Next step
 Finalize with evidence after receiving transcript, timestamps, or local video file.
+
+## 2026-02-26 (Codex netball1/netball2 analysis)
+
+### Task intent
+Analyze two provided Downloads videos (`netball1.mp4`, `netball2.mp4`) for bowling action and speed estimate.
+
+### Work completed
+1. Loaded both videos from Downloads.
+2. Ran local MediaPipe pose analysis for arm side, release timing, run-up characteristics, and arm extension.
+3. Generated coarse speed estimates using a pose-velocity proxy calibration.
+4. Wrote JSON + markdown report under codex/submission.
+
+### New artifacts
+- `submission/netball_analysis_2026-02-26.json`
+- `submission/netball_action_speed_analysis_2026-02-26.md`
+
+### Outcome
+Both clips appear right-arm actions with near-full arm extension and medium-slow coarse speed band (~90-105 kph proxy).

@@ -1,0 +1,84 @@
+{
+  "generated_at": "2026-02-26",
+  "method": "mediapipe_pose_proxy",
+  "calibration": {
+    "slope": 0.0007551638127492379,
+    "intercept": 96.7385876585863,
+    "points": [
+      [
+        1967,
+        98.6
+      ],
+      [
+        1388,
+        96.4
+      ],
+      [
+        1016,
+        98.2
+      ],
+      [
+        1516,
+        98.2
+      ]
+    ]
+  },
+  "videos": [
+    {
+      "video": "netball1.mp4",
+      "fps": 29.8,
+      "frames": 150,
+      "resolution": [
+        480,
+        848
+      ],
+      "bowling_arm": "right",
+      "release_time_s": 2.55,
+      "runup_start_s": 0.067,
+      "runup_duration_s": 2.483,
+      "peak_wrist_velocity_px_s": 1107.3,
+      "peak_visibility": 0.54,
+      "max_arm_extension_deg_near_release": 178.6,
+      "estimated_speed_kph": 97.6,
+      "estimated_speed_band": "medium-slow",
+      "speed_confidence": "medium",
+      "action_notes": [
+        "Likely right-arm delivery action",
+        "Longer run-up",
+        "Arm reaches near-full extension at release"
+      ],
+      "limitations": [
+        "Absolute speed from pose is camera-dependent and low-confidence without calibration",
+        "No ball-tracking/radar ground truth used"
+      ]
+    },
+    {
+      "video": "netball2.mp4",
+      "fps": 30.0,
+      "frames": 104,
+      "resolution": [
+        480,
+        848
+      ],
+      "bowling_arm": "right",
+      "release_time_s": 1.167,
+      "runup_start_s": 0.3,
+      "runup_duration_s": 0.867,
+      "peak_wrist_velocity_px_s": 1618.7,
+      "peak_visibility": 0.6,
+      "max_arm_extension_deg_near_release": 173.9,
+      "estimated_speed_kph": 98.0,
+      "estimated_speed_band": "medium-slow",
+      "speed_confidence": "medium",
+      "action_notes": [
+        "Likely right-arm delivery action",
+        "Compact run-up",
+        "Arm reaches near-full extension at release"
+      ],
+      "limitations": [
+        "Absolute speed from pose is camera-dependent and low-confidence without calibration",
+        "No ball-tracking/radar ground truth used"
+      ]
+    }
+  ]
+}
