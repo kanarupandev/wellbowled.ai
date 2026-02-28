@@ -29,10 +29,10 @@ from google import genai
 from google.genai import types
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.join(SCRIPT_DIR, "../..")
-ENV_PATH = os.path.join(PROJECT_ROOT, ".env")
+sys.path.insert(0, os.path.join(SCRIPT_DIR, ".."))
+from shared_config import LIVE_AUDIO_MODEL as MODEL, load_api_key
 
-MODEL = "models/gemini-2.5-flash-native-audio-preview-12-2025"
+PROJECT_ROOT = os.path.join(SCRIPT_DIR, "../..")
 DEFAULT_VIDEO = os.path.join(PROJECT_ROOT, "resources/samples/whatsapp_nets_session.mp4")
 OUTPUT_DIR = SCRIPT_DIR
 
@@ -50,16 +50,6 @@ Only speak when you spot a delivery."""
 GT_DELIVERIES = {
     "whatsapp_nets_session.mp4": [6.77, 18.83, 37.57, 59.00],
 }
-
-
-def load_api_key():
-    if os.path.exists(ENV_PATH):
-        with open(ENV_PATH) as f:
-            for line in f:
-                line = line.strip()
-                if line.startswith("GEMINI_API_KEY="):
-                    return line.split("=", 1)[1]
-    return os.environ.get("GEMINI_API_KEY")
 
 
 def frame_to_jpeg_blob(frame, max_dim=1024, quality=70):

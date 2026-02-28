@@ -54,7 +54,7 @@ This is actually better: the core loop (detect → announce) has zero API depend
 
 ## Speed Status (R12) — Exploratory, Uncalibrated
 
-Gemini Pro: 96-99 kph avg (4 clips, same bowler, no radar ground truth). Per-run ±10 kph, cross-delivery ±3 kph. Type classification (medium/slow/quick) is reliable. YOLO not viable at 30fps. Show pace bands, not kph numbers.
+Gemini Pro: 96-99 kph avg (4 clips, same bowler, **no radar ground truth**). Per-run ±10 kph spread, cross-delivery ±3 kph spread — but **uncalibrated** (no radar reference). Type classification (medium/slow/quick) is feasible but unvalidated. YOLO not viable at 30fps. Show pace bands, not kph numbers. Treat all speed numbers as rough classification only until radar ground truth is available.
 
 ## Fallback (Option C)
 

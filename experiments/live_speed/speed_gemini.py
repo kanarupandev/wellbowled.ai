@@ -18,8 +18,9 @@ import time
 import urllib.request
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-ENV_PATH = os.path.join(SCRIPT_DIR, "../../.env")
-MODEL = "gemini-3-pro-preview"
+import sys
+sys.path.insert(0, os.path.join(SCRIPT_DIR, ".."))
+from shared_config import COACH_MODEL as MODEL, load_api_key
 
 SPEED_PROMPT = """Analyze this cricket bowling delivery clip and estimate the bowling speed.
 
@@ -39,15 +40,6 @@ RESPOND with ONLY this JSON:
 
 Speed must be a single number (your best estimate). Confidence: low/medium/high.
 Type: fast (>130), medium (100-130), medium-slow (80-100), spin (<80)."""
-
-
-def load_api_key():
-    if os.path.exists(ENV_PATH):
-        with open(ENV_PATH) as f:
-            for line in f:
-                if line.startswith("GEMINI_API_KEY="):
-                    return line.strip().split("=", 1)[1]
-    return os.environ.get("GEMINI_API_KEY")
 
 
 def call_gemini(api_key, video_b64):

@@ -116,7 +116,7 @@ Gemini 3 hackathon (Feb 2026): https://www.youtube.com/watch?v=Gpif-vPtYTc
 See `research/README.md` for full index. Highlights:
 - **R9**: Config E is best (6/7 PASS at mixed thresholds)
 - **R11+R17**: Live API is conversational, not monitoring — revised to MediaPipe detection + iOS TTS + Live API conversation
-- **R12**: Gemini Pro speed: ±3 kph cross-delivery, type classification reliable
+- **R12**: Gemini Pro speed: exploratory, uncalibrated (no radar ground truth). Type classification feasible
 - **R13**: MediaPipe wrist velocity spike: proven delivery trigger
 - **R14**: Delivery type detection feasible (length ~75-85%, line ~60-70%)
 - **R15**: Competitive landscape — nobody does live audio feedback

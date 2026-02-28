@@ -2,19 +2,24 @@
 
 ## iOS App (separate repo: `wellBowled/ios/wellBowled/`, not in this repo)
 
+> Files below are **external/unverified in this repo**. Source of truth: `wellBowled` repo, branch `main`.
+> Last verified commit: `c12fc89` (Step 1 + full pipeline wiring).
+
 | # | File | Purpose | Status |
 |---|------|---------|--------|
-| 1 | `GeminiLiveService.swift` | WebSocket wire protocol for Gemini Live API | Step 1 done |
-| 2 | `AudioSessionManager.swift` | AVAudioSession + AVAudioEngine 24kHz PCM playback | Step 1 done |
-| 3 | `SessionViewModel.swift` | Wires CameraService → Live API (video + audio) | Step 1 done |
-| 4 | `HomeView.swift` | API key prompt + session entry | Step 1 done |
-| 5 | `LiveSessionView.swift` | Camera preview + transcript + connection status | Step 1 done |
-| 6 | `WBConfig.swift` | Central config: API keys, thresholds, mate persona | Step 1 done |
-| 7 | `CameraService.swift` | AVCaptureSession with video + audio outputs | Step 1 done |
-| 8 | `Protocols.swift` | VoiceMateService, DeliveryDetecting, CameraProviding | Step 1 done |
-| 9 | `DeliveryDetector.swift` | MediaPipe wrist velocity detection | Step 2.2 (guarded) |
-| 10 | `WristVelocityTracker.swift` | Pure spike detection algorithm | Step 2.2 |
-| 11 | `TTSService.swift` | iOS TTS for count + pace announcements | Step 2.2 |
+| 1 | `GeminiLiveService.swift` | WebSocket wire protocol for Gemini Live API | external/unverified |
+| 2 | `AudioSessionManager.swift` | AVAudioSession + AVAudioEngine 24kHz PCM playback | external/unverified |
+| 3 | `SessionViewModel.swift` | Full pipeline: camera → detection + Live API → analysis | external/unverified |
+| 4 | `HomeView.swift` | API key prompt + session entry | external/unverified |
+| 5 | `LiveSessionView.swift` | Camera preview + transcript + session controls | external/unverified |
+| 6 | `WBConfig.swift` | Central config: API keys, thresholds, mate persona | external/unverified |
+| 7 | `CameraService.swift` | AVCaptureSession with video + audio + recording outputs | external/unverified |
+| 8 | `Protocols.swift` | VoiceMateService, DeliveryDetecting, CameraProviding | external/unverified |
+| 9 | `DeliveryDetector.swift` | MediaPipe wrist velocity detection | external/unverified |
+| 10 | `WristVelocityTracker.swift` | Pure spike detection algorithm | external/unverified |
+| 11 | `TTSService.swift` | iOS TTS for count announcements | external/unverified |
+| 12 | `ClipExtractor.swift` | AVAssetExportSession clip extraction | external/unverified |
+| 13 | `GeminiAnalysisService.swift` | REST generateContent for delivery analysis | external/unverified |
 
 ## docs/
 

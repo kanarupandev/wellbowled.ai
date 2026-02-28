@@ -29,7 +29,7 @@
 
 **Cross-delivery consistency**: All 4 deliveries estimated at 96-99 kph (same bowler). Spread across deliveries is only 3 kph — the model is consistent at the delivery level even if individual runs vary by 10-13 kph.
 
-**Verdict**: Type classification (medium/medium-slow) is reliable. Absolute speed ±10 kph. Cross-delivery spread ±3 kph. Not within ±2 kph per-run consistency target, but strong enough for coaching ("you're bowling medium pace, ~95-100 kph range").
+**Verdict**: Type classification (medium/medium-slow) is consistent. Absolute speed ±10 kph per-run. Cross-delivery spread ±3 kph. Not within ±2 kph per-run consistency target. **Caveat: no radar ground truth — all speed numbers are uncalibrated.** Suitable for rough pace bands ("medium pace"), not precise kph claims.
 
 ### YOLO (YOLOv8n, COCO pretrained) — Not viable at 30fps
 

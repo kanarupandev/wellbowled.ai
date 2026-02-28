@@ -19,8 +19,8 @@ import tempfile
 import base64
 import urllib.request
 
-# SDK used ONLY for File API upload/delete (REST API for inference)
-import google.generativeai as genai
+# google.genai SDK for File API upload/delete (REST API for inference)
+from google import genai
 
 from configs import CONFIGS, prompt_with_metadata
 
@@ -70,14 +70,23 @@ def downscale_video(video_path, target_height):
     return tmp_path
 
 
-def upload_video(video_path):
-    uploaded = genai.upload_file(video_path, mime_type="video/mp4")
+_genai_client = None
+
+def _get_client(api_key):
+    global _genai_client
+    if _genai_client is None:
+        _genai_client = genai.Client(api_key=api_key)
+    return _genai_client
+
+def upload_video(video_path, api_key):
+    client = _get_client(api_key)
+    uploaded = client.files.upload(file=video_path, config={"mime_type": "video/mp4"})
     start = time.time()
     while uploaded.state.name == "PROCESSING":
         if time.time() - start > 120:
             raise Exception("File processing timeout (120s)")
         time.sleep(2)
-        uploaded = genai.get_file(uploaded.name)
+        uploaded = client.files.get(name=uploaded.name)
     if uploaded.state.name != "ACTIVE":
         raise Exception(f"File processing failed: {uploaded.state.name}")
     return uploaded
@@ -153,8 +162,6 @@ def main():
     api_key = load_api_key()
     config = CONFIGS[args.config].copy()
 
-    genai.configure(api_key=api_key)
-
     fps, total_frames, width, height = get_video_info(video_path)
     duration = total_frames / fps if fps else 0
 
@@ -203,7 +210,7 @@ def main():
 
     if use_file_api:
         print("Uploading via File API... ", end="", flush=True)
-        uploaded_file = upload_video(actual_video)
+        uploaded_file = upload_video(actual_video, api_key)
         file_uri = uploaded_file.uri
         print(f"ACTIVE")
     else:
@@ -241,7 +248,7 @@ def main():
     # Cleanup
     if uploaded_file:
         try:
-            genai.delete_file(uploaded_file.name)
+            _get_client(api_key).files.delete(name=uploaded_file.name)
         except Exception:
             pass
     if preprocessed:
