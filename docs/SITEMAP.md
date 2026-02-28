@@ -1,5 +1,21 @@
 # Project Site Map
 
+## iOS App (`wellBowled/ios/wellBowled/`)
+
+| # | File | Purpose | Status |
+|---|------|---------|--------|
+| 1 | `GeminiLiveService.swift` | WebSocket wire protocol for Gemini Live API | Step 1 done |
+| 2 | `AudioSessionManager.swift` | AVAudioSession + AVAudioEngine 24kHz PCM playback | Step 1 done |
+| 3 | `SessionViewModel.swift` | Wires CameraService → Live API (video + audio) | Step 1 done |
+| 4 | `HomeView.swift` | API key prompt + session entry | Step 1 done |
+| 5 | `LiveSessionView.swift` | Camera preview + transcript + connection status | Step 1 done |
+| 6 | `WBConfig.swift` | Central config: API keys, thresholds, mate persona | Step 1 done |
+| 7 | `CameraService.swift` | AVCaptureSession with video + audio outputs | Step 1 done |
+| 8 | `Protocols.swift` | VoiceMateService, DeliveryDetecting, CameraProviding | Step 1 done |
+| 9 | `DeliveryDetector.swift` | MediaPipe wrist velocity detection | Step 2.2 (guarded) |
+| 10 | `WristVelocityTracker.swift` | Pure spike detection algorithm | Step 2.2 |
+| 11 | `TTSService.swift` | iOS TTS for count + pace announcements | Step 2.2 |
+
 ## docs/
 
 | # | File | Purpose | Status |
