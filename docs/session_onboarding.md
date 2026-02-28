@@ -17,7 +17,7 @@ You bowl
     ↓
 MediaPipe detects delivery (wrist velocity spike, on-device, instant)
     ↓
-iOS TTS speaks: "Three. Medium pace."  ← zero latency, no network
+iOS TTS speaks: "Three."  ← count only, zero latency, no network
     ↓
 You ask: "How was that?"
     ↓
@@ -65,7 +65,7 @@ Session summary: count, pace trend, challenge mode score
 | Attribute | Method | Accuracy | Status |
 |-----------|--------|----------|--------|
 | Delivery count | MediaPipe wrist spike + Gemini | High | Proven (4/4 nets) |
-| Pace band | Gemini Pro on clip | ±3 kph cross-delivery | Proven |
+| Pace band | Gemini Pro on clip | Classification only (no radar ground truth) | Exploratory |
 | Length (yorker/full/good/short) | Gemini on clip (visual) | ~75-85% estimated | To validate |
 | Line (off/middle/leg) | Gemini on clip (visual) | ~60-70% estimated | To validate |
 | Type (seam/spin) | Gemini on clip (action) | ~80%+ estimated | To validate |
@@ -81,7 +81,7 @@ Session summary: count, pace trend, challenge mode score
 ## Stack
 
 - **Delivery detection**: MediaPipe Pose on-device (wrist velocity spike) — instant, proven 4/4
-- **Count + pace announcement**: iOS TTS (AVSpeechSynthesizer) — zero latency, local
+- **Count announcement**: iOS TTS (AVSpeechSynthesizer) — count only, zero latency, local
 - **Voice conversation**: Gemini Live API (`gemini-2.5-flash-native-audio`) — AUDIO mode, bowler asks → mate answers (R17 validated)
 - **Challenge mode evaluation**: Gemini on clip (generateContent) — delivery type + success assessment
 - **Post-session analysis**: Gemini 3 Pro (`gemini-3-pro-preview`) via generateContent

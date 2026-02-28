@@ -68,9 +68,9 @@ def track_ball(clip_path, model, conf_threshold=0.15):
 
 
 def compute_speed(detections, fps, pixels_per_meter):
-    """Compute speed from consecutive ball detections."""
+    """Compute speed from consecutive ball detections. Returns list of speed dicts."""
     if len(detections) < 2:
-        return None, []
+        return []
 
     # Sort by frame
     dets = sorted(detections, key=lambda d: d["frame"])

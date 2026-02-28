@@ -92,11 +92,11 @@ Key findings:
 - **Revised architecture**: MediaPipe detection + iOS TTS for core loop; Live API for voice conversation about what it saw
 
 ### R12: Speed Estimation
-**Status**: VERIFIED | **Ref**: `experiments/live_speed/results.md`
-- **Gemini 3 Pro**: 96-99 kph avg, ±3 kph cross-delivery consistency, type classification reliable
+**Status**: EXPLORATORY, UNCALIBRATED | **Ref**: `experiments/live_speed/results.md`
+- **Gemini 3 Pro**: 96-99 kph avg across 4 clips from same bowler. Per-run spread ±10 kph. Cross-delivery spread ±3 kph. No radar ground truth — treat as rough classification only
 - **YOLO (COCO, 30fps)**: Cannot detect cricket ball — needs 240fps + fine-tuning
-- **MediaPipe wrist velocity**: Peak 1016-1967 px/s at release, identifies bowling arm, useful proxy
-- **Best for hackathon**: Gemini Pro classification on 2.5s clips ("medium pace ~95-100 kph")
+- **MediaPipe wrist velocity**: Peak 1016-1967 px/s at release, identifies bowling arm, useful proxy (not calibrated to real speed)
+- **Best for hackathon**: Gemini Pro pace band classification ("medium pace") — do NOT show kph numbers
 
 ### R13: MediaPipe as Delivery Trigger
 **Status**: PROMISING | **Ref**: `experiments/live_speed/results.md`

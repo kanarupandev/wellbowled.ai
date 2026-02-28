@@ -14,6 +14,7 @@ import json
 import time
 import statistics
 import os
+import sys
 import tempfile
 import base64
 import urllib.request
@@ -24,18 +25,8 @@ import google.generativeai as genai
 from configs import CONFIGS, prompt_with_metadata
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-ENV_PATH = os.path.join(SCRIPT_DIR, "../../.env")
-MODEL = "gemini-3-flash-preview"
-FILE_SIZE_THRESHOLD_MB = 5.0
-
-
-def load_api_key():
-    if os.path.exists(ENV_PATH):
-        with open(ENV_PATH) as f:
-            for line in f:
-                if line.startswith("GEMINI_API_KEY="):
-                    return line.strip().split("=", 1)[1]
-    return os.environ.get("GEMINI_API_KEY")
+sys.path.insert(0, os.path.join(SCRIPT_DIR, ".."))
+from shared_config import SCOUT_MODEL as MODEL, FILE_SIZE_THRESHOLD_MB, load_api_key
 
 
 def get_video_info(video_path):

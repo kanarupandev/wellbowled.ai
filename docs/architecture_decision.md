@@ -14,8 +14,8 @@ LIVE (on-device)                    CONVERSATION              POST-SESSION
 Phone records (60fps)               Bowler: "How was that?"   Clip 5s window
 MediaPipe detects delivery            ↓                       generateContent
   → wrist velocity spike           Live API audio response:   → analysis card
-iOS TTS: "3. Medium pace."         "Good length, seam up,
-  → zero latency, local             bit wide of off"
+iOS TTS: "3."                      "Good length, seam up,
+  → count only, zero latency         bit wide of off"
 ```
 
 **Why ±1s is fine**: 5-second clip window guarantees release point is captured. Precise timestamp refined by generateContent (proven 0.04-0.22s).
@@ -46,15 +46,15 @@ Config E: temp=0.1, default thinking, simple prompt, File API >5MB, no downscali
 
 **Revised architecture**:
 - **Detection + count**: MediaPipe on-device (wrist velocity spike) — instant, proven 4/4
-- **Pace + count announcement**: iOS TTS (AVSpeechSynthesizer) — zero latency, local
+- **Count announcement**: iOS TTS (AVSpeechSynthesizer) — count only, zero latency, local. Pace band requires post-clip Gemini analysis
 - **Conversation**: Live API — bowler asks "How was that?", mate answers with audio based on video context
 - **Post-session analysis**: generateContent (Gemini Pro) on auto-clipped deliveries
 
 This is actually better: the core loop (detect → announce) has zero API dependency. The Live API does what it's best at — voice conversation with video understanding.
 
-## Speed Status (R12)
+## Speed Status (R12) — Exploratory, Uncalibrated
 
-Gemini Pro: 96-99 kph, ±3 kph cross-delivery, type classification reliable. YOLO not viable at 30fps. Show ranges not precise numbers.
+Gemini Pro: 96-99 kph avg (4 clips, same bowler, no radar ground truth). Per-run ±10 kph, cross-delivery ±3 kph. Type classification (medium/slow/quick) is reliable. YOLO not viable at 30fps. Show pace bands, not kph numbers.
 
 ## Fallback (Option C)
 

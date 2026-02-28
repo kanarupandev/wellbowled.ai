@@ -1,6 +1,6 @@
 # Project Site Map
 
-## iOS App (`wellBowled/ios/wellBowled/`)
+## iOS App (separate repo: `wellBowled/ios/wellBowled/`, not in this repo)
 
 | # | File | Purpose | Status |
 |---|------|---------|--------|

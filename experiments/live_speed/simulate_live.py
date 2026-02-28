@@ -22,14 +22,14 @@ import base64
 import json
 import os
 import re
+import sys
 import time
 import urllib.request
 import cv2
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-ENV_PATH = os.path.join(SCRIPT_DIR, "../../.env")
-MODEL = "gemini-3-flash-preview"
-POLL_INTERVAL = 3  # seconds between polls (send 3 frames per poll)
+sys.path.insert(0, os.path.join(SCRIPT_DIR, ".."))
+from shared_config import SCOUT_MODEL as MODEL, POLL_INTERVAL_S as POLL_INTERVAL, load_api_key
 
 
 DETECT_PROMPT = """You are watching a live cricket bowling session one frame at a time.
@@ -42,15 +42,6 @@ Did a bowling delivery happen in these frames? Be precise about which second.
 
 Reply ONLY with JSON:
 {{"delivery": true, "second": 7.0}} or {{"delivery": false}}"""
-
-
-def load_api_key():
-    if os.path.exists(ENV_PATH):
-        with open(ENV_PATH) as f:
-            for line in f:
-                if line.startswith("GEMINI_API_KEY="):
-                    return line.strip().split("=", 1)[1]
-    return os.environ.get("GEMINI_API_KEY")
 
 
 def call_gemini(api_key, frames_b64, timestamps, interval):

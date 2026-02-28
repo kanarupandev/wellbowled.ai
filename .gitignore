@@ -1,3 +1,34 @@
+# Secrets
 .env
+
+# Sample videos (large)
 resources/samples/*
 !resources/samples/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Experiment outputs (regenerable)
+experiments/**/result_*.json
+experiments/**/clips/
+experiments/**/*.wav
+experiments/**/*.mp3
+
+# Model weights (download, don't commit)
+*.pt
+*.onnx
+*.mlmodel
+*.tflite
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
