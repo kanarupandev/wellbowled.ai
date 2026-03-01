@@ -5,6 +5,7 @@ Runs without API keys or video files.
 
 import sys
 import os
+import json
 import unittest
 import tempfile
 from unittest import mock
@@ -15,6 +16,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "liv
 
 from delivery_detection.detect import parse_response, extract_timestamps
 from live_speed.speed_yolo import compute_speed
+from live_speed import simulate_live, speed_gemini
 import shared_config
 
 
@@ -123,6 +125,59 @@ class TestSharedConfig(unittest.TestCase):
         finally:
             shared_config.ENV_PATH = original_path
             os.unlink(tmp_path)
+
+
+class _FakeHTTPResponse:
+    def __init__(self, payload: dict):
+        self._payload = payload
+
+    def read(self):
+        import json
+        return json.dumps(self._payload).encode("utf-8")
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        return False
+
+
+class TestApiCallConfigUsage(unittest.TestCase):
+
+    def test_simulate_live_uses_config_temperature_and_timeout(self):
+        captured = {}
+
+        def fake_urlopen(request, timeout):
+            captured["timeout"] = timeout
+            captured["request"] = request
+            return _FakeHTTPResponse({"candidates": [{"content": {"parts": [{"text": '{"delivery": false}'}]}}]})
+
+        with mock.patch("live_speed.simulate_live.urllib.request.urlopen", side_effect=fake_urlopen):
+            simulate_live.call_gemini(
+                api_key="test_key",
+                frames_b64=["abc"],
+                timestamps=[1.0],
+                interval=shared_config.POLL_INTERVAL_S,
+            )
+
+        self.assertEqual(captured["timeout"], shared_config.DETECTION_HTTP_TIMEOUT_S)
+        payload = json.loads(captured["request"].data.decode("utf-8"))
+        self.assertEqual(payload["generationConfig"]["temperature"], shared_config.DEFAULT_TEMPERATURE)
+
+    def test_speed_gemini_uses_config_temperature_and_timeout(self):
+        captured = {}
+
+        def fake_urlopen(request, timeout):
+            captured["timeout"] = timeout
+            captured["request"] = request
+            return _FakeHTTPResponse({"candidates": [{"content": {"parts": [{"text": '{"speed_kph": 95}'}]}}]})
+
+        with mock.patch("live_speed.speed_gemini.urllib.request.urlopen", side_effect=fake_urlopen):
+            speed_gemini.call_gemini(api_key="test_key", video_b64="abc")
+
+        self.assertEqual(captured["timeout"], shared_config.SPEED_HTTP_TIMEOUT_S)
+        payload = json.loads(captured["request"].data.decode("utf-8"))
+        self.assertEqual(payload["generationConfig"]["temperature"], shared_config.DEFAULT_TEMPERATURE)
 
 
 if __name__ == "__main__":
