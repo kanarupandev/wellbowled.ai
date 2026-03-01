@@ -44,6 +44,7 @@
 | 2 | `dev_process.md` | Development workflow and conventions — **read first, follow always** | Active |
 | 3 | `prompting_techniques.md` | Gemini prompt designs, cross-cutting techniques, honest limitations | Active |
 | 4 | `architecture_decision.md` | Option B hybrid approach — live detection + post-session analysis | Active |
+| 5 | `project_dev_deploy_guide.md` | Project-specific dev flow + hackathon deployment runbook (cross-referenced) | Active |
 
 ## research/
 
