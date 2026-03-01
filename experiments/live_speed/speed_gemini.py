@@ -21,6 +21,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 import sys
 sys.path.insert(0, os.path.join(SCRIPT_DIR, ".."))
 from shared_config import COACH_MODEL as MODEL, load_api_key
+from shared_config import DEFAULT_TEMPERATURE, SPEED_HTTP_TIMEOUT_S
 
 SPEED_PROMPT = """Analyze this cricket bowling delivery clip and estimate the bowling speed.
 
@@ -51,14 +52,14 @@ def call_gemini(api_key, video_b64):
             {"text": SPEED_PROMPT},
         ]}],
         "generationConfig": {
-            "temperature": 0.1,
+            "temperature": DEFAULT_TEMPERATURE,
             "responseMimeType": "application/json",
         },
     }
 
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=120) as resp:
+    with urllib.request.urlopen(req, timeout=SPEED_HTTP_TIMEOUT_S) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
 

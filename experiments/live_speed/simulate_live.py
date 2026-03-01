@@ -30,6 +30,13 @@ import cv2
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(SCRIPT_DIR, ".."))
 from shared_config import SCOUT_MODEL as MODEL, POLL_INTERVAL_S as POLL_INTERVAL, load_api_key
+from shared_config import (
+    DEFAULT_JPEG_QUALITY,
+    DEFAULT_TEMPERATURE,
+    DETECTION_COOLDOWN_S,
+    DETECTION_HTTP_TIMEOUT_S,
+    POLL_RATE_LIMIT_SLEEP_S,
+)
 
 
 DETECT_PROMPT = """You are watching a live cricket bowling session one frame at a time.
@@ -58,14 +65,14 @@ def call_gemini(api_key, frames_b64, timestamps, interval):
     payload = {
         "contents": [{"parts": parts}],
         "generationConfig": {
-            "temperature": 0.1,
+            "temperature": DEFAULT_TEMPERATURE,
             "responseMimeType": "application/json",
         },
     }
 
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=30) as resp:
+    with urllib.request.urlopen(req, timeout=DETECTION_HTTP_TIMEOUT_S) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
 
@@ -146,7 +153,7 @@ def main():
             ret, frame = cap.read()
             if not ret:
                 break
-            _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+            _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, DEFAULT_JPEG_QUALITY])
             frames_b64.append(base64.b64encode(buf.tobytes()).decode("utf-8"))
             timestamps.append(float(sec))
 
@@ -174,7 +181,7 @@ def main():
             if data.get("delivery"):
                 det_sec = data.get("second", window_start + interval / 2)
                 detections.append({"time": det_sec, "window": [window_start, window_end]})
-                cooldown_until = det_sec + 3  # 3s cooldown
+                cooldown_until = det_sec + DETECTION_COOLDOWN_S
                 print(f"  [{window_start}-{window_end}s] >>> DELIVERY at {det_sec}s (latency: {latency:.1f}s, tokens: {tokens})")
             else:
                 print(f"  [{window_start}-{window_end}s] no delivery (latency: {latency:.1f}s, tokens: {tokens})")
@@ -182,7 +189,7 @@ def main():
         except Exception as e:
             print(f"  [{window_start}-{window_end}s] ERROR: {e}")
 
-        time.sleep(0.5)  # rate limit
+        time.sleep(POLL_RATE_LIMIT_SLEEP_S)
 
     elapsed = time.time() - start_time
 
