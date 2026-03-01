@@ -68,24 +68,46 @@ Gemini Pro: 96-99 kph avg (4 clips, same bowler, **no radar ground truth**). Per
 
 **Latency**: Marketed sub-800ms. Real-world: 1-3s typical, 5-7s spikes on longer sessions. Acceptable for "ask and hear" UX — bowler picks up next ball during response.
 
+## What's Done (R19 — March 2026)
+
+- `[DONE]` Live API WebSocket connects, mate hears and speaks on device
+- `[DONE]` Auto-reconnect with 1.5s backoff on TCP abort
+- `[DONE]` Screen idle timer disabled during sessions
+- `[DONE]` Mate persona system: 4 styles (Aussie, English, Tamil, Tanglish) × 2 genders = 8 options
+- `[DONE]` Persona persisted via UserDefaults, voice + system instruction switch dynamically
+- `[DONE]` Session struct (value type) — fixes @Observable/@Published mismatch
+- `[DONE]` CIContext cached (was creating per frame at 30fps)
+- `[DONE]` Timestamp offset for clip extraction (recording-relative, not CMTime-absolute)
+- `[DONE]` sendJSON serialized via sendQueue (data race fix)
+- `[DONE]` openContinuation thread safety (NSLock against concurrent delegate callbacks)
+- `[DONE]` AudioSessionManager detach safety
+- `[DONE]` Timeout error message corrected (15s, not 10s)
+- `[DONE]` Navigation: fullScreenCover for sessions (fixes dismiss issues)
+- `[DONE]` Brand: peacock blue #006D77 + grey blue #8DA9C4 + programmatic app icon
+- `[DONE]` Unit tests: Session, WBConfig, WristVelocityTracker, Enums, Delivery codable
+- `[DONE]` Integration tests: session lifecycle, wire protocol encode/decode, timestamp offset
+
 ## Road Map
 
-### Tier 1: Complete MVP (end-to-end loop)
-1. **Session resumption** — send handle on reconnect so mate keeps context across drops
-2. **Validate delivery detection on device** — MediaPipe wrist spike → TTS count. Code wired, never confirmed live
-3. **Validate post-session analysis** — end session → clips → Gemini Pro → delivery cards in SessionResultsView
-4. **Fix bugs from 1-3** — likely: MediaPipe model bundling, clip timing, analysis prompt tuning
+> **Convention**: Claude Code commits with default prefix. Codex commits with `codex:` prefix.
+
+### Tier 1: Complete MVP (end-to-end loop) — IN PROGRESS
+1. `[DONE]` ~~Session resumption~~ — handle captured but NOT sent on reconnect yet. **Next: wire handle into setup message**
+2. **Validate delivery detection on device** — MediaPipe wrist spike → TTS count. Code wired, never confirmed live on device. Needs: MediaPipe model bundled in app (`pose_landmarker_heavy.task`), camera frame → processFrame wiring confirmed
+3. **Validate post-session analysis** — end session → clips → Gemini Pro → delivery cards in SessionResultsView. Code written, untested end-to-end
+4. **Fix bugs from 2-3** — likely: MediaPipe model bundling path, clip timing edge cases, analysis prompt tuning
 
 ### Tier 2: Demo-worthy polish
-5. **Mate persona tuning** — natural cricket language, environment-aware greetings
+5. `[DONE]` ~~Mate persona tuning~~ — 4 language styles × 2 genders, dynamic system instructions
 6. **Pace band on delivery cards** — Gemini Pro classifies "medium pace" / "fast" from clips
-7. **Session summary** — 2-3 sentence summary after all deliveries analyzed
+7. **Session summary** — generateSessionSummary() after all deliveries analyzed, display in SessionResultsView
+8. **Session resumption handle** — send `sessionResumption.handle` in setup message on reconnect to preserve context
 
 ### Tier 3: Challenge Mode (differentiator)
-8. **Mate speaks target** — "Try a yorker on off stump" (Q10)
-9. **Evaluate delivery against target** — clip → Gemini → success/fail
-10. **Track challenge score** — "2 out of 3 so far"
-11. Needs end-to-end experiment first (Q10)
+9. **Mate speaks target** — "Try a yorker on off stump" (Q10)
+10. **Evaluate delivery against target** — clip → Gemini → success/fail
+11. **Track challenge score** — "2 out of 3 so far"
+12. Needs end-to-end experiment first (Q10)
 
 ### Tier 4: Post-hackathon (parked)
 - Ball tracking (YOLO fine-tuned on cricket ball, 240fps)

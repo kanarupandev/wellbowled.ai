@@ -76,6 +76,16 @@ Never write integration code from API docs alone. Prove it works first.
 - **Read log before starting work.** `git log --oneline -15` for general context, `git log --oneline -10 -- <path>` when working on a specific area. Understand what was done and why before adding to it.
 - Small commits. Each one self-contained and honest.
 
+### Multi-Agent Conventions
+
+Multiple agents (Claude Code, Codex) work on this repo concurrently.
+
+- **Claude Code**: default commit prefix (e.g. `fix:`, `feat:`, `docs:`)
+- **Codex**: commits prefixed with `codex:` (e.g. `codex: add session resumption handle`)
+- **Before starting work**: always pull latest and read recent commits from all agents
+- **Conflicts**: if your change touches a file another agent recently modified, re-read the file before editing
+- **iOS source of truth**: `/Users/kanarupan/workspace/wellBowled/ios/wellBowled/` — sync to Xcode project before building
+
 ---
 
 ## Keeping Docs Alive
