@@ -61,6 +61,39 @@ This is actually better: the core loop (detect → announce) has zero API depend
 
 Gemini Pro: 96-99 kph avg (4 clips, same bowler, **no radar ground truth**). Per-run ±10 kph spread, cross-delivery ±3 kph spread — but **uncalibrated** (no radar reference). Type classification (medium/slow/quick) is feasible but unvalidated. YOLO not viable at 30fps. Show pace bands, not kph numbers. Treat all speed numbers as rough classification only until radar ground truth is available.
 
+## Session Resumption (R18)
+
+**Current**: Reconnect starts a fresh session — mate forgets everything.
+**Fix**: Send `sessionResumption.handle` in setup message on reconnect. Server already sends `sessionResumptionUpdate.newHandle` (code captures it). Handle valid for **2 hours**. Restores full conversation context.
+
+**Latency**: Marketed sub-800ms. Real-world: 1-3s typical, 5-7s spikes on longer sessions. Acceptable for "ask and hear" UX — bowler picks up next ball during response.
+
+## Road Map
+
+### Tier 1: Complete MVP (end-to-end loop)
+1. **Session resumption** — send handle on reconnect so mate keeps context across drops
+2. **Validate delivery detection on device** — MediaPipe wrist spike → TTS count. Code wired, never confirmed live
+3. **Validate post-session analysis** — end session → clips → Gemini Pro → delivery cards in SessionResultsView
+4. **Fix bugs from 1-3** — likely: MediaPipe model bundling, clip timing, analysis prompt tuning
+
+### Tier 2: Demo-worthy polish
+5. **Mate persona tuning** — natural cricket language, environment-aware greetings
+6. **Pace band on delivery cards** — Gemini Pro classifies "medium pace" / "fast" from clips
+7. **Session summary** — 2-3 sentence summary after all deliveries analyzed
+
+### Tier 3: Challenge Mode (differentiator)
+8. **Mate speaks target** — "Try a yorker on off stump" (Q10)
+9. **Evaluate delivery against target** — clip → Gemini → success/fail
+10. **Track challenge score** — "2 out of 3 so far"
+11. Needs end-to-end experiment first (Q10)
+
+### Tier 4: Post-hackathon (parked)
+- Ball tracking (YOLO fine-tuned on cricket ball, 240fps)
+- Zone-based pitch maps from accumulated classifications
+- Biomechanical deep analysis (6-phase Expert prompt)
+- Legality observation flags
+- Precise speed estimation
+
 ## Fallback (Option C)
 
 If Live API unreliable: skip live, upload full video → detect all deliveries → clip → analyze. Strava for bowling.
