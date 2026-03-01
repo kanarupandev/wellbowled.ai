@@ -82,7 +82,7 @@ Session summary: count, pace trend, challenge mode score
 
 - **Delivery detection**: MediaPipe Pose on-device (wrist velocity spike) — instant, proven 4/4
 - **Count announcement**: iOS TTS (AVSpeechSynthesizer) — count only, zero latency, local
-- **Voice conversation**: Gemini Live API (`gemini-2.5-flash-native-audio`) — AUDIO mode, bowler asks → mate answers (R17 validated)
+- **Voice conversation**: Gemini Live API (`gemini-2.5-flash-native-audio`) — AUDIO mode, bowler asks → mate answers (R17+R18 validated on device)
 - **Challenge mode evaluation**: Gemini on clip (generateContent) — delivery type + success assessment
 - **Post-session analysis**: Gemini 3 Pro (`gemini-3-pro-preview`) via generateContent
 - **iOS client**: Swift, camera capture + pose overlay

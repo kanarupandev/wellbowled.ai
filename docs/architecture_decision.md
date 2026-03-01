@@ -4,7 +4,7 @@
 
 ## Verdict
 
-Delivery detection on uploaded clips **works** (6/7 PASS at mixed thresholds: 0.2s broadcast / 0.3s nets, 0.04-0.22s precision, ~$0.001/call). Real-time live detection is untested but feasible at lower precision (~1s). Hybrid approach: live for triggers, async for precision.
+`[VALIDATED]` Delivery detection on uploaded clips **works** (6/7 PASS at mixed thresholds: 0.2s broadcast / 0.3s nets, 0.04-0.22s precision, ~$0.001/call). `[HYPOTHESIS]` Real-time live detection is untested but feasible at lower precision (~1s). Hybrid approach: live for triggers, async for precision.
 
 ## Pipeline
 
@@ -22,8 +22,8 @@ iOS TTS: "3."                      "Good length, seam up,
 
 ## What works / doesn't
 
-**Works**: Single delivery detection, nets sessions (4/4), replay filtering, ~$1/day at 1K calls
-**Doesn't**: Broadcast montage (3/7), real-time overlay (9-12s latency), legality (2D can't measure 15°)
+`[VALIDATED]` **Works**: Single delivery detection, nets sessions (4/4), replay filtering, ~$1/day at 1K calls
+`[VALIDATED]` **Doesn't**: Broadcast montage (3/7), real-time overlay (9-12s latency), legality (2D can't measure 15°)
 
 ## Speed estimation
 
@@ -40,15 +40,20 @@ Config E: temp=0.1, default thinking, simple prompt, File API >5MB, no downscali
 **Do**: Record → live detection with count → auto-clip → post-session analysis cards
 **Don't**: Real-time overlay, precise speed, legality, broadcast video
 
-## Live API Status (R11 + R17)
+## Live API Status (R11 + R17 + R18)
 
-**Validated: Live API is conversational, not monitoring.** Native-audio model connects, understands cricket context ("Right, I'm watching. Let's see what the bowlers have got."), but does NOT proactively call out deliveries from video frames. It waits for user speech (VAD turn-taking).
+`[VALIDATED]` **Live API is conversational, not monitoring.** Native-audio model connects, understands cricket context ("Right, I'm watching. Let's see what the bowlers have got."), but does NOT proactively call out deliveries from video frames. It waits for user speech (VAD turn-taking).
+
+`[VALIDATED R18]` **End-to-end on device (March 2026).** Live API WebSocket connects, mate hears user speech and responds with audio on iPhone 15. Key fixes applied:
+- Must NOT send video/audio frames before `setupComplete` — server aborts if data arrives pre-handshake
+- iOS TCP stack aborts connection after ~20s of heavy streaming (ECONNABORTED) — auto-reconnect with 1.5s backoff handles this transparently
+- Screen idle timer must be disabled during active sessions
 
 **Revised architecture**:
-- **Detection + count**: MediaPipe on-device (wrist velocity spike) — instant, proven 4/4
-- **Count announcement**: iOS TTS (AVSpeechSynthesizer) — count only, zero latency, local. Pace band requires post-clip Gemini analysis
-- **Conversation**: Live API — bowler asks "How was that?", mate answers with audio based on video context
-- **Post-session analysis**: generateContent (Gemini Pro) on auto-clipped deliveries
+- `[VALIDATED]` **Detection + count**: MediaPipe on-device (wrist velocity spike) — instant, proven 4/4
+- `[VALIDATED]` **Count announcement**: iOS TTS (AVSpeechSynthesizer) — count only, zero latency, local. Pace band requires post-clip Gemini analysis
+- `[VALIDATED R18]` **Conversation**: Live API — bowler asks "How was that?", mate answers with audio based on video context. Working on device with auto-reconnect.
+- `[HYPOTHESIS]` **Post-session analysis**: generateContent (Gemini Pro) on auto-clipped deliveries — code written, untested end-to-end on device
 
 This is actually better: the core loop (detect → announce) has zero API dependency. The Live API does what it's best at — voice conversation with video understanding.
 

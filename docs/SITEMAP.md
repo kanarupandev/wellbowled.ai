@@ -3,7 +3,7 @@
 ## iOS App (separate repo: `wellBowled/ios/wellBowled/`, not in this repo)
 
 > Files below are **external/unverified in this repo**. Source of truth: `wellBowled` repo, branch `main`.
-> Last verified commit: `c12fc89` (Step 1 + full pipeline wiring).
+> Last verified commit: `23273f4` (Live API working on device + auto-reconnect + idle timer).
 
 | # | File | Purpose | Status |
 |---|------|---------|--------|
