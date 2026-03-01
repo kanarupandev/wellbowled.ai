@@ -29,4 +29,12 @@ Win hackathon by hardening the current Gemini Live experimentation stack and con
 - Exit gate: final readiness checklist complete.
 
 ## Immediate Atomic Task (P1.1)
-Implement missing `run_interactive_2min.py` + `session_2min_config.json` + `session_2min_mock_config.json` and tests, based on current `experiments/live_audio` outputs.
+Status: Completed
+
+Implemented missing `run_interactive_2min.py` + `session_2min_config.json` + `session_2min_mock_config.json` + tests, based on current `experiments/live_audio` outputs.
+
+## Next Atomic Task (P2.1)
+Add reliability harness for live mode:
+- bounded reconnect/retry policy
+- deterministic event schema
+- explicit session resumption handle trace in results

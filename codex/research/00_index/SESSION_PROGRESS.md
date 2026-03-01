@@ -183,3 +183,23 @@ Both clips appear right-arm actions with near-full arm extension and medium-slow
 - Added waterfall execution plan:
   - `03_recommendations/waterfall_execution_plan_2026-03-02.md`
 - First atomic implementation slice: restore interactive 2-min runner + configs + tests.
+
+### EXPERIMENT
+- Implemented missing artifacts:
+  - `experiments/live_audio/run_interactive_2min.py`
+  - `experiments/live_audio/session_2min_config.json`
+  - `experiments/live_audio/session_2min_mock_config.json`
+  - `experiments/live_audio/mock_live_responses.json`
+  - `experiments/live_audio/README_INTERACTIVE_2MIN.md`
+  - `experiments/live_audio/tests/test_run_interactive_2min.py`
+- Ran:
+  - `python3 .../run_interactive_2min.py --config .../session_2min_mock_config.json`
+  - `python3 -m unittest discover -s .../experiments/live_audio/tests -p 'test_*.py' -v`
+
+### VERIFY
+- Mock run produced contract-valid JSON update with zero validation errors.
+- Unit tests passed (`3/3`).
+- Reproducibility gap is closed for P1.1.
+
+### NEXT
+- Start P2: reliability harness (session-resumption/retry strategy + deterministic event log schema).

@@ -1,0 +1,8 @@
+[
+  {
+    "event_type": "turn_complete",
+    "transcript": "{\"event\":\"update\",\"delivery_count\":1,\"pace_band\":\"medium-slow\",\"line\":\"off\",\"length\":\"good\",\"risk_level\":\"low\",\"cue\":\"Good rhythm. Keep your head steady.\"}",
+    "audio_duration_s": 0.1,
+    "session_handle": "mock-session-handle-1"
+  }
+]

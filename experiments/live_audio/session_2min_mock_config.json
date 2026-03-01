@@ -1,0 +1,20 @@
+{
+  "video_path": "../../resources/samples/whatsapp_nets_session.mp4",
+  "model": "models/gemini-2.5-flash-native-audio-preview-12-2025",
+  "max_session_seconds": 120,
+  "mock_mode": true,
+  "allow_live_api_calls": false,
+  "mock_response_path": "mock_live_responses.json",
+  "mock_default_audio_duration_s": 0.1,
+  "json_contract_required_fields": [
+    "event",
+    "delivery_count",
+    "pace_band",
+    "line",
+    "length",
+    "risk_level",
+    "cue"
+  ],
+  "output_dir": ".",
+  "output_basename": "interactive_2min_mock_run"
+}
