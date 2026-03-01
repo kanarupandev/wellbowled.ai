@@ -146,7 +146,7 @@ Bumrah montage (7 deliveries, rapid cuts): best result 3/7 at 0.2s threshold. Co
 Is Pro meaningfully better than Flash for biomechanical phase analysis? Cost difference is ~4x. Needs experiment.
 
 ### Q3: Bowling type classification accuracy
-~~Can Gemini reliably distinguish fast/medium/spin from video alone?~~ **ANSWERED by R12**: Yes, type classification (fast/medium/spin) is reliable. Absolute speed ±10 kph.
+~~Can Gemini reliably distinguish fast/medium/spin from video alone?~~ **ANSWERED by R12**: Feasible but not validated against labeled ground truth. Treat as exploratory pace-band classification only; absolute speed remains uncalibrated.
 
 ### Q4: Multi-pass detection
 Coarse pass to find delivery windows, fine pass (zoomed to 1-sec window) for precise timestamp. Follows from R10 trend that focused analysis improves precision.
