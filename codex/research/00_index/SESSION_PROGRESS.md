@@ -160,3 +160,26 @@ Analyze two provided Downloads videos (`netball1.mp4`, `netball2.mp4`) for bowli
 
 ### Outcome
 Both clips appear right-arm actions with near-full arm extension and medium-slow coarse speed band (~90-105 kph proxy).
+
+## 2026-03-02 (Codex waterfall restart on correct repo path)
+
+### UNDERSTAND
+- User direction: execute only under `/Users/kanarupan/workspace/wellbowled.ai`.
+- User asks for full roadmap + waterfall execution to maximize hackathon win probability.
+
+### RESEARCH
+- Read `docs/dev_process.md` and recent `git log`.
+- Audited `experiments/live_audio`; found result artifacts referencing:
+  - `run_interactive_2min.py`
+  - `session_2min_config.json`
+  - `session_2min_mock_config.json`
+  but these files are currently missing.
+
+### VERIFY
+- Evidence: `result_interactive_2min_mock_run.json` contains absolute paths to missing files.
+- This is a reproducibility gap and blocks reliable execution handoff.
+
+### PLAN
+- Added waterfall execution plan:
+  - `03_recommendations/waterfall_execution_plan_2026-03-02.md`
+- First atomic implementation slice: restore interactive 2-min runner + configs + tests.
