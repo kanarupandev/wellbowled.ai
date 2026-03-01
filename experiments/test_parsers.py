@@ -6,6 +6,8 @@ Runs without API keys or video files.
 import sys
 import os
 import unittest
+import tempfile
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "delivery_detection"))
@@ -13,6 +15,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "liv
 
 from delivery_detection.detect import parse_response, extract_timestamps
 from live_speed.speed_yolo import compute_speed
+import shared_config
 
 
 class TestParseResponse(unittest.TestCase):
@@ -90,6 +93,36 @@ class TestComputeSpeed(unittest.TestCase):
         ]
         result = compute_speed(dets, 30.0, 100.0)
         self.assertEqual(result, [])
+
+
+class TestSharedConfig(unittest.TestCase):
+
+    def test_constants_are_defined(self):
+        self.assertGreater(shared_config.DEFAULT_TEMPERATURE, 0.0)
+        self.assertGreater(shared_config.DETECTION_HTTP_TIMEOUT_S, 0)
+        self.assertGreater(shared_config.SPEED_HTTP_TIMEOUT_S, 0)
+        self.assertGreater(shared_config.DEFAULT_JPEG_QUALITY, 0)
+        self.assertGreater(shared_config.DETECTION_COOLDOWN_S, 0)
+        self.assertGreater(shared_config.POLL_RATE_LIMIT_SLEEP_S, 0)
+
+    def test_load_api_key_from_environment(self):
+        with mock.patch("shared_config.os.path.exists", return_value=False):
+            with mock.patch.dict(os.environ, {"GEMINI_API_KEY": "env_key_123"}, clear=False):
+                self.assertEqual(shared_config.load_api_key(), "env_key_123")
+
+    def test_load_api_key_from_env_file_precedence(self):
+        with tempfile.NamedTemporaryFile(mode="w", delete=False) as tmp:
+            tmp.write("GEMINI_API_KEY=file_key_456\n")
+            tmp_path = tmp.name
+
+        original_path = shared_config.ENV_PATH
+        try:
+            shared_config.ENV_PATH = tmp_path
+            with mock.patch.dict(os.environ, {"GEMINI_API_KEY": "env_key_123"}, clear=False):
+                self.assertEqual(shared_config.load_api_key(), "file_key_456")
+        finally:
+            shared_config.ENV_PATH = original_path
+            os.unlink(tmp_path)
 
 
 if __name__ == "__main__":
