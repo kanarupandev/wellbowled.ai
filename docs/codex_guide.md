@@ -1,43 +1,57 @@
 # Codex Handover Guide — wellBowled
 
-> **Last updated**: R21 (2 March 2026) by Claude Code
+> **Last updated**: R24 (3 March 2026) by Codex
 > **Purpose**: Self-contained input for Codex when Claude quota is unavailable.
 > **Rule**: Read this ENTIRE document before writing any code.
 
 ## CODE PATH — READ THIS FIRST
 
-There are TWO repos. Know which is which:
+**ONE repo for everything: `wellbowled.ai`**
 
-| Repo | Path | Contains | You code here? |
-|------|------|----------|---------------|
-| **wellBowled** | `/Users/kanarupan/workspace/wellBowled/` | iOS app source code | **YES — all code goes here** |
-| **wellbowled.ai** | `/Users/kanarupan/workspace/wellbowled.ai/` | Docs, experiments, this guide | NO — docs only, no app code |
-
-**All Swift code lives here. Edit ONLY this path:**
 ```
-/Users/kanarupan/workspace/wellBowled/ios/wellBowled/
-```
-
-**Tests live here:**
-```
-/Users/kanarupan/workspace/wellBowled/ios/wellBowled/Tests/
+/Users/kanarupan/workspace/wellbowled.ai/
+├── ios/wellBowled/          ← ALL Swift code lives here. EDIT ONLY HERE.
+├── ios/wellBowled/Tests/    ← test source files
+├── docs/                    ← canonical docs (this guide + architecture_decision.md)
+├── experiments/             ← archived, DO NOT USE (see section 10)
+├── research/                ← archived, DO NOT USE
+└── codex/                   ← old codex research, DO NOT USE
 ```
 
-**Git repo for code commits:**
+**Git repo:**
 ```
-cd /Users/kanarupan/workspace/wellBowled
-git branch: codex/full-dev-takeover
+cd /Users/kanarupan/workspace/wellbowled.ai
+git branch: claude/ios-fresh-build
 ```
 
 **DO NOT edit anything under:**
 ```
 /Users/kanarupan/workspace/xcodeProj/     ← disposable build copy, wiped on every sync
-/Users/kanarupan/workspace/wellbowled.ai/ ← docs repo, not app code
+/Users/kanarupan/workspace/dont_use_obsolete_wellBowled/    ← OBSOLETE repo, do not use
 ```
 
 ---
 
-## 1. Current State (R21)
+## 0. Operating Contract (Non-Negotiable)
+
+1. Do not ask the user how to execute the development process.
+2. Use docs + repo + tooling to resolve workflow details:
+- `docs/dev_process.md`
+- `docs/project_dev_deploy_guide.md`
+- this handover guide
+3. Ask the user only for hard blockers:
+- missing product decision
+- missing permission/credential/device access
+- unresolved contradiction in canonical docs
+4. Any blocker escalation must include:
+- commands already attempted
+- exact error/evidence
+- next best options to proceed
+5. Deploy means reinstall/update app on target iPhone and verify launch.
+
+---
+
+## 1. Current State (R24)
 
 ### What's DONE and validated
 | Feature | Status | Key Files |
@@ -45,6 +59,10 @@ git branch: codex/full-dev-takeover
 | Live API WebSocket (mate hears + speaks) | On device | `GeminiLiveService.swift` |
 | Auto-reconnect (1.5s backoff on TCP abort) | On device | `GeminiLiveService.swift` |
 | Session resumption handle sent on reconnect | On device | `GeminiLiveService.swift` |
+| Proactive waterfall onboarding (greet → plan → 5s reprompt → setup check → pilot run → "Session started") | Code wired, unit tested | `SessionViewModel.swift`, `WBConfig.swift`, `Tests/SessionViewModelPromptTests.swift` |
+| Live mode switch tool call (`switch_session_mode`) | Code wired, unit tested | `GeminiLiveService.swift`, `Protocols.swift`, `SessionViewModel.swift`, `Enums.swift` |
+| Live mode fine-print label at top-left (`Mode: Free/Challenge`) | Code wired | `LiveSessionView.swift`, `Enums.swift` |
+| Live session timeout set to 3 minutes (config one-liner) | Code wired, unit tested | `WBConfig.swift`, `Tests/WBConfigTests.swift` |
 | 8 mate personas (4 lang × 2 gender) | On device | `WBConfig.swift`, `HomeView.swift` |
 | MediaPipe delivery detection (wrist spike) | Code wired, builds | `DeliveryDetector.swift`, `WristVelocityTracker.swift` |
 | Post-session analysis (clips → Gemini Pro) | Code wired, builds | `SessionViewModel.swift`, `GeminiAnalysisService.swift` |
@@ -61,7 +79,8 @@ git branch: codex/full-dev-takeover
 - Delivery detection firing live (MediaPipe + camera frames)
 - Post-session clip extraction + Gemini analysis end-to-end
 - BowlingDNA extraction from real clips (Gemini vision prompt)
-- Challenge mode (not started)
+- Challenge mode evaluation accuracy (hit/miss correctness not benchmarked on real sessions)
+- Model-driven mode switching via live tool call on physical device (free ↔ challenge during planning/live)
 
 ---
 
@@ -75,13 +94,13 @@ git branch: codex/full-dev-takeover
 ### NEXT — Tier 4: Challenge Mode (differentiator)
 | Step | Task | Requirements | Approach |
 |------|------|-------------|----------|
-| 4.1 | Mate speaks challenge target | Mate says "Try a yorker on off stump" | Add `speakChallenge(target:)` to `VoiceMateService` protocol. Send text via Live API `sendContext()`. TTS fallback if Live API disconnected. |
-| 4.2 | Generate random targets | Target pool: yorker/bouncer/off-stump/leg-stump combos | Static array in `WBConfig.swift`. Rotate after each delivery. |
-| 4.3 | Evaluate delivery vs target | After clip extraction, send clip + target to Gemini | Use existing `evaluateChallenge(clipURL:target:)` in `GeminiAnalysisService.swift`. Already implemented, just not wired. |
-| 4.4 | Wire challenge into SessionViewModel | On delivery detect → extract clip → evaluate → update score | In `runPostSessionAnalysis`, after Phase 2 analysis, add Phase 2b: challenge evaluation if `session.mode == .challenge`. |
-| 4.5 | Track + display challenge score | "2 out of 3 yorkers landed (67%)" | `Session.recordChallengeResult(hit:)` already exists. Show in `SessionResultsView` summary section. |
-| 4.6 | Challenge mode entry in HomeView | Button to start challenge session | Add `.challenge` mode option. Pass to `startSession(mode:)`. |
-| 4.7 | Unit tests for challenge flow | Test target generation, score tracking, evaluation wiring | `Tests/ChallengeTests.swift` |
+| 4.1 | Mate speaks challenge target | Mate says "Try a yorker on off stump" | `speakChallenge(target:)` added; sends context through Live API with TTS fallback in SessionViewModel. |
+| 4.2 | Generate random targets | Target pool: yorker/bouncer/off-stump/leg-stump combos | `WBConfig.challengeTargets` + `ChallengeEngine` rotation/reset wiring in SessionViewModel. |
+| 4.3 | Evaluate delivery vs target | After clip extraction, send clip + target to Gemini | `evaluateChallenge(clipURL:target:)` wired in post-session Phase 2b. |
+| 4.4 | Track + display challenge score | "2 out of 3 yorkers landed (67%)" | `Session.recordChallengeResult(hit:)` updates summary score path. |
+| 4.5 | Validate challenge accuracy | Confirm hit/miss quality over real clips | Run controlled device sessions and review false hit/miss cases. |
+| 4.6 | Complete mode-entry UI wiring | Start `.challenge` from Home, pass mode into live session start | Finish and validate `HomeView` + `LiveSessionView` mode handoff. |
+| 4.7 | Unit tests for challenge flow | Target generation, formatting, score path, mode wiring regressions | Add `Tests/ChallengeEngineTests.swift` and update affected tests. |
 
 ### PARKED — Tier 5: Post-hackathon
 - Ball tracking (YOLO 240fps)
@@ -95,20 +114,20 @@ git branch: codex/full-dev-takeover
 
 ## 3. File Locations
 
-### WORK HERE (source of truth)
+### WORK HERE (source of truth — all in wellbowled.ai repo)
 ```
-/Users/kanarupan/workspace/wellBowled/ios/wellBowled/     ← ALL iOS code lives here
-/Users/kanarupan/workspace/wellBowled/ios/wellBowled/Tests/ ← test source files
-/Users/kanarupan/workspace/wellbowled.ai/docs/             ← canonical docs (this guide + architecture_decision.md)
+/Users/kanarupan/workspace/wellbowled.ai/ios/wellBowled/       ← ALL iOS code
+/Users/kanarupan/workspace/wellbowled.ai/ios/wellBowled/Tests/ ← test source files
+/Users/kanarupan/workspace/wellbowled.ai/docs/                 ← canonical docs
 ```
 
-### DO NOT MODIFY (read-only reference or stale)
+### DO NOT MODIFY
 ```
-/Users/kanarupan/workspace/xcodeProj/                      ← Xcode project, overwritten by sync command
-/Users/kanarupan/workspace/wellbowled.ai/experiments/      ← archived experiment logs, known stale data (see section 10)
-/Users/kanarupan/workspace/wellbowled.ai/research/         ← archived research, superseded findings
-/Users/kanarupan/workspace/wellbowled.ai/codex/            ← old codex research/submission docs
-/Users/kanarupan/workspace/wellBowled/backend/             ← no backend deployed, not in scope
+/Users/kanarupan/workspace/xcodeProj/                          ← disposable Xcode build copy
+/Users/kanarupan/workspace/dont_use_obsolete_wellBowled/      ← OBSOLETE, do not use
+/Users/kanarupan/workspace/wellbowled.ai/experiments/          ← archived, stale (see section 10)
+/Users/kanarupan/workspace/wellbowled.ai/research/             ← archived, superseded
+/Users/kanarupan/workspace/wellbowled.ai/codex/                ← old codex research
 ```
 
 ### Key Files by Feature Area
@@ -157,7 +176,7 @@ git branch: codex/full-dev-takeover
 
 **Tests**
 ```
-/Users/kanarupan/workspace/wellBowled/ios/wellBowled/Tests/
+/Users/kanarupan/workspace/wellbowled.ai/ios/wellBowled/Tests/
 ```
 Tests go to `wellBowledTests/` target in Xcode — NOT in `Tests/` subfolder of app source (XCTest can't be imported in app target).
 
@@ -182,14 +201,14 @@ Tests go to `wellBowledTests/` target in Xcode — NOT in `Tests/` subfolder of 
 
 ## 5. Development Workflow (MUST follow this loop)
 
-There are TWO separate directories. You write code in the **source of truth**, then copy it to the **Xcode project** to build. Never edit the Xcode project directly — it gets overwritten on every sync.
+You write code in `wellbowled.ai/ios/wellBowled/`, then copy it to the Xcode project to build. Never edit the Xcode project directly — it gets overwritten on every sync.
 
 ```
-SOURCE OF TRUTH (you edit here)          XCODE PROJECT (build from here)
-/Users/kanarupan/workspace/              /Users/kanarupan/workspace/
-  wellBowled/ios/wellBowled/               xcodeProj/wellBowled/wellBowled/
-       ↓ cp -R                                    ↓ xcodebuild
-  Your .swift files                        Compiled app → iPhone
+SOURCE OF TRUTH (you edit here)             XCODE PROJECT (build from here)
+/Users/kanarupan/workspace/                 /Users/kanarupan/workspace/
+  wellbowled.ai/ios/wellBowled/               xcodeProj/wellBowled/wellBowled/
+       ↓ cp -R                                       ↓ xcodebuild
+  Your .swift files                           Compiled app → iPhone
 ```
 
 ### Target Device
@@ -200,11 +219,19 @@ SOURCE OF TRUTH (you edit here)          XCODE PROJECT (build from here)
 
 ### The Loop: Edit → Sync → Build → Install → Monitor → Iterate
 
+#### Step 0: AUTONOMOUS STARTUP — no process questions
+
+Before editing:
+```bash
+cd /Users/kanarupan/workspace/wellbowled.ai && git log --oneline -15
+```
+Resolve workflow details from docs and repo state. Ask user only for hard blockers listed in section 0.
+
 #### Step 1: IMPLEMENT — edit code in source of truth
 
 All code changes go here and ONLY here:
 ```
-/Users/kanarupan/workspace/wellBowled/ios/wellBowled/
+/Users/kanarupan/workspace/wellbowled.ai/ios/wellBowled/
 ```
 Never touch files under `/Users/kanarupan/workspace/xcodeProj/` — they get wiped on sync.
 
@@ -213,7 +240,7 @@ Never touch files under `/Users/kanarupan/workspace/xcodeProj/` — they get wip
 This replaces all Swift files in the Xcode project with the source of truth:
 ```bash
 rm -rf /Users/kanarupan/workspace/xcodeProj/wellBowled/wellBowled/*.swift && \
-cp -R /Users/kanarupan/workspace/wellBowled/ios/wellBowled/ \
+cp -R /Users/kanarupan/workspace/wellbowled.ai/ios/wellBowled/ \
      /Users/kanarupan/workspace/xcodeProj/wellBowled/wellBowled/
 ```
 
@@ -224,11 +251,11 @@ rm -rf /Users/kanarupan/workspace/xcodeProj/wellBowled/wellBowled/Tests/
 
 Copy test files to the separate test target:
 ```bash
-cp /Users/kanarupan/workspace/wellBowled/ios/wellBowled/Tests/*.swift \
+cp /Users/kanarupan/workspace/wellbowled.ai/ios/wellBowled/Tests/*.swift \
    /Users/kanarupan/workspace/xcodeProj/wellBowled/wellBowledTests/
 ```
 
-#### Step 3: BUILD + INSTALL — compile and deploy to iPhone
+#### Step 3: BUILD + REINSTALL — compile and deploy to iPhone
 
 ```bash
 cd /Users/kanarupan/workspace/xcodeProj/wellBowled && \
@@ -236,9 +263,17 @@ xcodebuild -workspace wellBowled.xcworkspace \
   -scheme wellBowled \
   -destination "platform=iOS,id=00008120-001230560204A01E" \
   -configuration Debug clean build
+
+APP_PATH=$(find /Users/kanarupan/Library/Developer/Xcode/DerivedData/wellBowled-* \
+  -path '*/Build/Products/Debug-iphoneos/wellBowled.app' -type d | grep -v 'Index.noindex' | sort | tail -n 1) && \
+xcrun devicectl device install app --device 00008120-001230560204A01E "$APP_PATH"
 ```
 
-Wait for `** BUILD SUCCEEDED **`. The app is now installed on the iPhone. Open it from the home screen.
+Wait for `** BUILD SUCCEEDED **`. Then confirm install succeeded. Launch from the home screen, or launch from terminal:
+
+```bash
+xcrun devicectl device process launch --device 00008120-001230560204A01E kanarupan.wellBowled
+```
 
 If you only need a compile check (no device needed):
 ```bash
@@ -289,8 +324,8 @@ Fix issues found in Step 4/5, then repeat the loop: Edit → Sync → Build → 
 #### Step 7: COMMIT — when feature is working
 
 ```bash
-cd /Users/kanarupan/workspace/wellBowled && \
-git add <changed files> && \
+cd /Users/kanarupan/workspace/wellbowled.ai && \
+git add ios/wellBowled/<changed files> && \
 git commit -m "codex: <description>" && \
 git push
 ```
@@ -314,7 +349,7 @@ git push
 
 - **TDD**: write tests before implementation
 - **Never use mocks in production code paths**
-- Tests source of truth: `ios/wellBowled/Tests/`
+- Tests source of truth: `wellbowled.ai/ios/wellBowled/Tests/`
 - Tests Xcode target: `wellBowledTests/` (synced via Step 3 above)
 - Existing coverage: Session lifecycle, WBConfig, WristVelocityTracker, Enums, Delivery codable, BowlingDNA (encoding, matching, normalization, codable round-trip)
 
@@ -327,9 +362,7 @@ git push
 - Small, self-contained commits
 - Always `git pull` before starting — check for commits from both agents
 - Read `git log --oneline -10` before touching any file area
-- Repos:
-  - iOS: `/Users/kanarupan/workspace/wellBowled` (branch: `codex/full-dev-takeover`)
-  - Docs/experiments: `/Users/kanarupan/workspace/wellbowled.ai` (branch: `claude/ios-fresh-build`)
+- **Single repo**: `/Users/kanarupan/workspace/wellbowled.ai` (branch: `claude/ios-fresh-build`)
 
 ---
 
@@ -346,7 +379,7 @@ git push
 ## 9. Quick Reference: What's Where
 
 ```
-wellBowled/ios/wellBowled/
+wellbowled.ai/ios/wellBowled/
 ├── BowlingDNA.swift              # DNA struct + 18 enum types + BowlingDNAMatch
 ├── BowlingDNAMatcher.swift       # Vector encoder + weighted Euclidean matcher
 ├── BowlingDNAView.swift          # DNA UI cards (similarity ring, traits)

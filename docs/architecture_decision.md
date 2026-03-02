@@ -53,6 +53,9 @@ Config E: temp=0.1, default thinking, simple prompt, File API >5MB, no downscali
 - `[VALIDATED]` **Detection + count**: MediaPipe on-device (wrist velocity spike) — instant, proven 4/4
 - `[VALIDATED]` **Count announcement**: iOS TTS (AVSpeechSynthesizer) — count only, zero latency, local. Pace band requires post-clip Gemini analysis
 - `[VALIDATED R18]` **Conversation**: Live API — bowler asks "How was that?", mate answers with audio based on video context. Working on device with auto-reconnect.
+- `[DONE R24]` **Waterfall startup flow**: proactive greet → plan prompt → 5s natural reprompt if no answer → setup verification → pilot run → explicit "Session started".
+- `[DONE R24]` **Mode switch tool call path**: Live API can request `switch_session_mode` and app switches free/challenge dynamically with UI mode badge.
+- `[DONE R24]` **Session duration config**: live timeout increased to 3 minutes via `WBConfig.liveSessionMaxDurationSeconds = 180`.
 - `[HYPOTHESIS]` **Post-session analysis**: generateContent (Gemini Pro) on auto-clipped deliveries — code written, untested end-to-end on device
 
 This is actually better: the core loop (detect → announce) has zero API dependency. The Live API does what it's best at — voice conversation with video understanding.
@@ -126,11 +129,12 @@ Gemini Pro: 96-99 kph avg (4 clips, same bowler, **no radar ground truth**). Per
 13. `[DONE]` DNA results UI in SessionResultsView (similarity ring, traits, closest phase)
 14. `[DONE]` Unit tests for encoding, matching, normalization
 
-### Tier 4: Challenge Mode (differentiator) — NEXT
-15. **Mate speaks target** — "Try a yorker on off stump"
-16. **Evaluate delivery against target** — clip → Gemini → success/fail
-17. **Track challenge score** — "2 out of 3 so far"
-18. Needs end-to-end experiment first
+### Tier 4: Challenge Mode (differentiator) — IN PROGRESS
+15. `[DONE IN CODE]` Mate speaks target and rotates target per ball
+16. `[DONE IN CODE]` Evaluate delivery against target (clip -> Gemini -> hit/miss)
+17. `[DONE IN CODE]` Track challenge score in session summary
+18. `[UNVERIFIED]` Accuracy of challenge evaluation on real-device sessions
+19. `[UNVERIFIED]` End-to-end device validation under demo conditions
 
 ### Tier 5: Post-hackathon (parked)
 - Ball tracking (YOLO fine-tuned on cricket ball, 240fps)
@@ -148,14 +152,14 @@ Gemini Pro: 96-99 kph avg (4 clips, same bowler, **no radar ground truth**). Per
 ```bash
 # 1. Sync source → Xcode project
 rm -rf /Users/kanarupan/workspace/xcodeProj/wellBowled/wellBowled/*.swift && \
-cp -R /Users/kanarupan/workspace/wellBowled/ios/wellBowled/ \
+cp -R /Users/kanarupan/workspace/wellbowled.ai/ios/wellBowled/ \
      /Users/kanarupan/workspace/xcodeProj/wellBowled/wellBowled/
 
 # 2. Remove Tests dir from app target (XCTest can't import in app target)
 rm -rf /Users/kanarupan/workspace/xcodeProj/wellBowled/wellBowled/Tests
 
 # 3. Copy tests to test target
-cp /Users/kanarupan/workspace/wellBowled/ios/wellBowled/Tests/*.swift \
+cp /Users/kanarupan/workspace/wellbowled.ai/ios/wellBowled/Tests/*.swift \
    /Users/kanarupan/workspace/xcodeProj/wellBowled/wellBowledTests/
 
 # 4. Build + install to physical device

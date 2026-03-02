@@ -45,6 +45,7 @@ final class CameraService: NSObject, CameraProviding {
 
     private var isConfigured = false
     private var currentVideoInput: AVCaptureDeviceInput?
+    private var lastVideoSourcePosition: AVCaptureDevice.Position?
 
     // MARK: - CameraProviding
 
@@ -111,10 +112,11 @@ final class CameraService: NSObject, CameraProviding {
     // MARK: - Camera Toggle
 
     /// Toggle between front and back camera. Safe to call during session.
-    func toggleCamera() {
+    func toggleCamera(onSwitched: ((AVCaptureDevice.Position) -> Void)? = nil) {
         sessionQueue.async { [weak self] in
             guard let self else { return }
             let newPosition: AVCaptureDevice.Position = self.cameraPosition == .back ? .front : .back
+            let previousInput = self.currentVideoInput
 
             guard let newCamera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: newPosition),
                   let newInput = try? AVCaptureDeviceInput(device: newCamera) else {
@@ -122,10 +124,11 @@ final class CameraService: NSObject, CameraProviding {
                 return
             }
 
+            var switched = false
             self.captureSession.beginConfiguration()
 
             // Remove old video input
-            if let current = self.currentVideoInput {
+            if let current = previousInput {
                 self.captureSession.removeInput(current)
             }
 
@@ -134,22 +137,31 @@ final class CameraService: NSObject, CameraProviding {
                 self.captureSession.addInput(newInput)
                 self.currentVideoInput = newInput
                 self.cameraPosition = newPosition
-
-                // Rebuild routing so data output follows the active camera input.
-                self.rebuildVideoDataOutput()
-                self.applyVideoConnectionSettings(for: newPosition)
-
-                self.configureCameraFrameRate(newCamera, targetFPS: 30)
-                log.info("Switched to \(newPosition == .front ? "front" : "back") camera")
+                switched = true
             } else {
                 // Rollback
-                if let old = self.currentVideoInput {
+                if let old = previousInput, self.captureSession.canAddInput(old) {
                     self.captureSession.addInput(old)
                 }
                 log.error("Could not add \(newPosition == .front ? "front" : "back") camera input")
             }
 
             self.captureSession.commitConfiguration()
+
+            guard switched else { return }
+
+            // Rebuild video data output after input change has been committed.
+            self.captureSession.beginConfiguration()
+            self.rebuildVideoDataOutput()
+            self.captureSession.commitConfiguration()
+
+            self.applyVideoConnectionSettings(for: newPosition)
+            self.configureCameraFrameRate(newCamera, targetFPS: 30)
+            log.info("Switched to \(newPosition == .front ? "front" : "back") camera")
+
+            DispatchQueue.main.async {
+                onSwitched?(newPosition)
+            }
         }
     }
 
@@ -269,6 +281,11 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate, AVCapture
                        didOutput sampleBuffer: CMSampleBuffer,
                        from connection: AVCaptureConnection) {
         if output === videoOutput {
+            if let sourcePosition = connection.inputPorts.compactMap({ $0.sourceDevicePosition }).first,
+               sourcePosition != lastVideoSourcePosition {
+                lastVideoSourcePosition = sourcePosition
+                log.info("Video output source: \(sourcePosition == .front ? "front" : "back")")
+            }
             let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
             onVideoFrame?(sampleBuffer, timestamp)
         } else if output === audioOutput {
