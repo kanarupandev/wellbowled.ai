@@ -68,7 +68,7 @@ Gemini Pro: 96-99 kph avg (4 clips, same bowler, **no radar ground truth**). Per
 
 **Latency**: Marketed sub-800ms. Real-world: 1-3s typical, 5-7s spikes on longer sessions. Acceptable for "ask and hear" UX — bowler picks up next ball during response.
 
-## What's Done (R20 — March 2026)
+## What's Done (R21 — March 2026)
 
 - `[DONE]` Live API WebSocket connects, mate hears and speaks on device
 - `[DONE]` Auto-reconnect with 1.5s backoff on TCP abort
@@ -92,35 +92,97 @@ Gemini Pro: 96-99 kph avg (4 clips, same bowler, **no radar ground truth**). Per
 - `[DONE]` Brand: peacock blue #006D77 + grey blue #8DA9C4 + programmatic app icon
 - `[DONE]` Unit tests: Session, WBConfig, WristVelocityTracker, Enums, Delivery codable
 - `[DONE]` Integration tests: session lifecycle, wire protocol encode/decode, timestamp offset, resumption handle
+- `[DONE R21]` **BowlingDNA Action Signature feature** — 20-dimension bowling action fingerprint
+- `[DONE R21]` **BowlingDNA model** — 18 categorical + 2 continuous dimensions across 6 bowling phases
+- `[DONE R21]` **Vector encoder + weighted matcher** — ordinal encoding, weighted Euclidean distance (release 2x)
+- `[DONE R21]` **Famous bowler database** — 10 international bowlers spanning all styles (McGrath, Akram, Warne, Akhtar, Murali, Anderson, Starc, Ashwin, Marshall, Bumrah)
+- `[DONE R21]` **Gemini DNA extraction** — vision prompt extracts 16 categorical fields from clip, merged with MediaPipe wristOmega + releaseWristY
+- `[DONE R21]` **DNA results UI** — similarity ring, closest phase, biggest difference, signature traits in SessionResultsView
+- `[DONE R21]` **wristOmega + releaseWristY** captured from MediaPipe at delivery detection, stored on Delivery
+- `[DONE R21]` **pose_landmarker.task in iOS source of truth** — auto-syncs and auto-bundles
+- `[DONE R21]` **BowlingDNA unit tests** — vector encoding, matching, partial DNA, normalization, codable round-trip
 
 ## Road Map
 
 > **Convention**: Claude Code commits with default prefix. Codex commits with `codex:` prefix.
 
-### Tier 1: Complete MVP (end-to-end loop)
+### Tier 1: Complete MVP (end-to-end loop) — DONE
 1. `[DONE]` Session resumption handle — sent on reconnect, restores mate context
-2. `[DONE]` Delivery detection pipeline — MediaPipe wrist spike → TTS count → Live API context. **Code wired + builds. Needs on-device validation with bundled `pose_landmarker.task`**
+2. `[DONE]` Delivery detection pipeline — MediaPipe wrist spike → TTS count → Live API context
 3. `[DONE]` Post-session analysis — parallel clip extraction + parallel Gemini Pro analysis → delivery cards
 4. **Validate on device** — run full session, confirm detection fires, clips extract, analysis returns
 
-### Tier 2: Demo-worthy polish
+### Tier 2: Demo-worthy polish — DONE
 5. `[DONE]` Mate persona tuning — 4 language styles × 2 genders, dynamic system instructions
 6. `[DONE]` Pace band classification — returned from Gemini Pro analysis, displayed in delivery cards
 7. `[DONE]` Session summary — generated after analysis, displayed in SessionResultsView
 8. `[DONE]` Session resumption handle — sent on reconnect via setup message
 
-### Tier 3: Challenge Mode (differentiator)
-9. **Mate speaks target** — "Try a yorker on off stump" (Q10)
-10. **Evaluate delivery against target** — clip → Gemini → success/fail
-11. **Track challenge score** — "2 out of 3 so far"
-12. Needs end-to-end experiment first (Q10)
+### Tier 3: BowlingDNA Action Signature — DONE
+9. `[DONE]` BowlingDNA 20-dimension model (6 phases, 18 categorical + 2 continuous)
+10. `[DONE]` Vector encoder + weighted Euclidean matcher (release fields 2x weight)
+11. `[DONE]` Famous bowler database (10 international bowlers)
+12. `[DONE]` Gemini DNA extraction prompt + MediaPipe wrist field merge
+13. `[DONE]` DNA results UI in SessionResultsView (similarity ring, traits, closest phase)
+14. `[DONE]` Unit tests for encoding, matching, normalization
 
-### Tier 4: Post-hackathon (parked)
+### Tier 4: Challenge Mode (differentiator) — NEXT
+15. **Mate speaks target** — "Try a yorker on off stump"
+16. **Evaluate delivery against target** — clip → Gemini → success/fail
+17. **Track challenge score** — "2 out of 3 so far"
+18. Needs end-to-end experiment first
+
+### Tier 5: Post-hackathon (parked)
 - Ball tracking (YOLO fine-tuned on cricket ball, 240fps)
 - Zone-based pitch maps from accumulated classifications
 - Biomechanical deep analysis (6-phase Expert prompt)
 - Legality observation flags
 - Precise speed estimation
+- BowlingDNA trend tracking across sessions (improvement over time)
+- DNA sharing / comparison with friends
+
+## Deployment Guide
+
+### iOS App (iPhone 15)
+
+```bash
+# 1. Sync source → Xcode project
+rm -rf /Users/kanarupan/workspace/xcodeProj/wellBowled/wellBowled/*.swift && \
+cp -R /Users/kanarupan/workspace/wellBowled/ios/wellBowled/ \
+     /Users/kanarupan/workspace/xcodeProj/wellBowled/wellBowled/
+
+# 2. Remove Tests dir from app target (XCTest can't import in app target)
+rm -rf /Users/kanarupan/workspace/xcodeProj/wellBowled/wellBowled/Tests
+
+# 3. Copy tests to test target
+cp /Users/kanarupan/workspace/wellBowled/ios/wellBowled/Tests/*.swift \
+   /Users/kanarupan/workspace/xcodeProj/wellBowled/wellBowledTests/
+
+# 4. Build + install to physical device
+cd /Users/kanarupan/workspace/xcodeProj/wellBowled && \
+xcodebuild -workspace wellBowled.xcworkspace \
+  -scheme wellBowled \
+  -destination "platform=iOS,id=00008120-001230560204A01E" \
+  -configuration Debug clean build
+
+# 5. Build for simulator (testing)
+cd /Users/kanarupan/workspace/xcodeProj/wellBowled && \
+xcodebuild -workspace wellBowled.xcworkspace \
+  -scheme wellBowled \
+  -destination "platform=iOS Simulator,name=iPhone 17 Pro" build
+```
+
+### Prerequisites
+- Xcode 16+ with iOS 17 SDK
+- CocoaPods installed (`pod install` in Xcode project dir)
+- MediaPipeTasksVision pod (for pose detection)
+- Gemini API key set in app Settings or Info.plist `GEMINI_API_KEY`
+
+### GCP Backend (Cloud Run)
+- Project: `gen-lang-client-0673130950`
+- Service: `wellbowled` in `us-central1`
+- Bucket: `wellbowled-ai-clips`
+- Deploy: `gcloud run deploy wellbowled --source backend/ --region us-central1`
 
 ## Fallback (Option C)
 
