@@ -174,19 +174,6 @@ xcodebuild -workspace wellBowled.xcworkspace \
   -destination "platform=iOS Simulator,name=iPhone 17 Pro" test
 ```
 
-### GCP Backend
-```bash
-# Project: gen-lang-client-0673130950
-# Service: wellbowled in us-central1
-# Bucket: wellbowled-ai-clips
-
-# Deploy backend
-gcloud run deploy wellbowled --source backend/ --region us-central1
-
-# Check service
-gcloud run services describe wellbowled --region us-central1
-```
-
 ### Prerequisites
 - Xcode 16+ with iOS 17 SDK
 - CocoaPods: `cd /Users/kanarupan/workspace/xcodeProj/wellBowled && pod install`

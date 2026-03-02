@@ -178,12 +178,6 @@ xcodebuild -workspace wellBowled.xcworkspace \
 - MediaPipeTasksVision pod (for pose detection)
 - Gemini API key set in app Settings or Info.plist `GEMINI_API_KEY`
 
-### GCP Backend (Cloud Run)
-- Project: `gen-lang-client-0673130950`
-- Service: `wellbowled` in `us-central1`
-- Bucket: `wellbowled-ai-clips`
-- Deploy: `gcloud run deploy wellbowled --source backend/ --region us-central1`
-
 ## Fallback (Option C)
 
 If Live API unreliable: skip live, upload full video → detect all deliveries → clip → analyze. Strava for bowling.
