@@ -149,9 +149,15 @@ Tests go to `wellBowledTests/` target in Xcode — NOT in `Tests/` subfolder of 
 
 ---
 
-## 5. Build & Deploy
+## 5. Build & Install to iPhone
 
-### Sync + Build (ALWAYS do this sequence)
+### Target Device
+- **Name**: Kanarupan
+- **Model**: iPhone 15 (iPhone15,4)
+- **CoreDevice UUID**: `00008120-001230560204A01E`
+- **Connection**: USB cable to Mac (must be plugged in and unlocked)
+
+### Full Sync + Build + Install (run this EVERY time)
 
 ```bash
 # Step 1: Sync iOS source → Xcode project
@@ -166,31 +172,44 @@ rm -rf /Users/kanarupan/workspace/xcodeProj/wellBowled/wellBowled/Tests/
 cp /Users/kanarupan/workspace/wellBowled/ios/wellBowled/Tests/*.swift \
    /Users/kanarupan/workspace/xcodeProj/wellBowled/wellBowledTests/
 
-# Step 4a: Build for simulator (fast iteration)
-cd /Users/kanarupan/workspace/xcodeProj/wellBowled && \
-xcodebuild -workspace wellBowled.xcworkspace \
-  -scheme wellBowled \
-  -destination "platform=iOS Simulator,name=iPhone 17 Pro" build
-
-# Step 4b: Build for physical device (iPhone 15)
+# Step 4: Build + install to Kanarupan iPhone 15
 cd /Users/kanarupan/workspace/xcodeProj/wellBowled && \
 xcodebuild -workspace wellBowled.xcworkspace \
   -scheme wellBowled \
   -destination "platform=iOS,id=00008120-001230560204A01E" \
   -configuration Debug clean build
+```
 
-# Step 5: Run tests
+The `xcodebuild` command compiles and installs the app to the iPhone in one step. After `BUILD SUCCEEDED`, the app is on the phone — open it from the home screen.
+
+### Simulator build (for quick compile checks only, no install)
+
+```bash
+cd /Users/kanarupan/workspace/xcodeProj/wellBowled && \
+xcodebuild -workspace wellBowled.xcworkspace \
+  -scheme wellBowled \
+  -destination "platform=iOS Simulator,name=iPhone 17 Pro" build
+```
+
+### Run tests
+
+```bash
 cd /Users/kanarupan/workspace/xcodeProj/wellBowled && \
 xcodebuild -workspace wellBowled.xcworkspace \
   -scheme wellBowled \
   -destination "platform=iOS Simulator,name=iPhone 17 Pro" test
 ```
 
+### Troubleshooting
+- **"device not found"** → iPhone must be plugged in via USB cable and unlocked
+- **"unable to install"** → Trust the developer certificate on iPhone: Settings → General → VPN & Device Management → trust the dev profile
+- **Pods out of date** → `cd /Users/kanarupan/workspace/xcodeProj/wellBowled && pod install`
+
 ### Prerequisites
 - Xcode 16+ with iOS 17 SDK
-- CocoaPods: `cd /Users/kanarupan/workspace/xcodeProj/wellBowled && pod install`
-- MediaPipeTasksVision pod (for pose detection)
-- Gemini API key: hardcoded default from `.env` — works out of the box. User can optionally override via in-app Settings (persists in UserDefaults across updates until app deleted).
+- CocoaPods installed (pods already in repo, run `pod install` only if missing)
+- MediaPipeTasksVision pod (included via CocoaPods)
+- Gemini API key: hardcoded default — works out of the box, no setup needed
 
 ---
 
