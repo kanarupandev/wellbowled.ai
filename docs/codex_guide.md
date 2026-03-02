@@ -4,6 +4,24 @@
 > **Purpose**: Self-contained input for Codex when Claude quota is unavailable.
 > **Rule**: Read this ENTIRE document before writing any code.
 
+## CODE PATH — READ THIS FIRST
+
+**All code lives here. Edit ONLY this path:**
+```
+/Users/kanarupan/workspace/wellBowled/ios/wellBowled/
+```
+
+**Tests live here:**
+```
+/Users/kanarupan/workspace/wellBowled/ios/wellBowled/Tests/
+```
+
+**DO NOT edit anything under:**
+```
+/Users/kanarupan/workspace/xcodeProj/
+```
+That directory is a disposable build copy. It gets wiped and replaced from the code path above on every sync.
+
 ---
 
 ## 1. Current State (R21)
