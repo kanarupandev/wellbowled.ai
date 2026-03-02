@@ -23,6 +23,7 @@
 | Gemini DNA extraction prompt | Code wired | `GeminiAnalysisService.swift` |
 | pose_landmarker.task in iOS source | Bundled | `ios/wellBowled/pose_landmarker.task` |
 | Brand (peacock blue + grey blue + logo) | On device | `DesignSystem.swift` |
+| Gemini API key hardcoded default (no setup needed) | Working | `WBConfig.swift` |
 | Unit tests (Session, WBConfig, WristVelocity, DNA) | Passing | `Tests/` |
 
 ### What's NOT validated on device yet
@@ -178,7 +179,7 @@ xcodebuild -workspace wellBowled.xcworkspace \
 - Xcode 16+ with iOS 17 SDK
 - CocoaPods: `cd /Users/kanarupan/workspace/xcodeProj/wellBowled && pod install`
 - MediaPipeTasksVision pod (for pose detection)
-- Gemini API key: set in app Settings or Info.plist `GEMINI_API_KEY`
+- Gemini API key: hardcoded default from `.env` — works out of the box. User can optionally override via in-app Settings (persists in UserDefaults across updates until app deleted).
 
 ---
 
