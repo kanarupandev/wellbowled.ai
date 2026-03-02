@@ -68,10 +68,11 @@ Gemini Pro: 96-99 kph avg (4 clips, same bowler, **no radar ground truth**). Per
 
 **Latency**: Marketed sub-800ms. Real-world: 1-3s typical, 5-7s spikes on longer sessions. Acceptable for "ask and hear" UX — bowler picks up next ball during response.
 
-## What's Done (R19 — March 2026)
+## What's Done (R20 — March 2026)
 
 - `[DONE]` Live API WebSocket connects, mate hears and speaks on device
 - `[DONE]` Auto-reconnect with 1.5s backoff on TCP abort
+- `[DONE]` **Session resumption handle sent on reconnect** — mate remembers context (2h validity)
 - `[DONE]` Screen idle timer disabled during sessions
 - `[DONE]` Mate persona system: 4 styles (Aussie, English, Tamil, Tanglish) × 2 genders = 8 options
 - `[DONE]` Persona persisted via UserDefaults, voice + system instruction switch dynamically
@@ -81,27 +82,32 @@ Gemini Pro: 96-99 kph avg (4 clips, same bowler, **no radar ground truth**). Per
 - `[DONE]` sendJSON serialized via sendQueue (data race fix)
 - `[DONE]` openContinuation thread safety (NSLock against concurrent delegate callbacks)
 - `[DONE]` AudioSessionManager detach safety
-- `[DONE]` Timeout error message corrected (15s, not 10s)
+- `[DONE]` **Parallel post-session analysis** — clip extraction + Gemini API calls run concurrently
+- `[DONE]` **Session summary generation** after all deliveries analyzed
+- `[DONE]` **Live delivery count flash overlay** — large centered count on detection, fades out
+- `[DONE]` **Reconnecting banner with spinner** + error state UI improvements
+- `[DONE]` **Session results view with summary** — dominant pace, key observation, challenge score
+- `[DONE]` Service account keys removed from repo (security cleanup)
 - `[DONE]` Navigation: fullScreenCover for sessions (fixes dismiss issues)
 - `[DONE]` Brand: peacock blue #006D77 + grey blue #8DA9C4 + programmatic app icon
 - `[DONE]` Unit tests: Session, WBConfig, WristVelocityTracker, Enums, Delivery codable
-- `[DONE]` Integration tests: session lifecycle, wire protocol encode/decode, timestamp offset
+- `[DONE]` Integration tests: session lifecycle, wire protocol encode/decode, timestamp offset, resumption handle
 
 ## Road Map
 
 > **Convention**: Claude Code commits with default prefix. Codex commits with `codex:` prefix.
 
-### Tier 1: Complete MVP (end-to-end loop) — IN PROGRESS
-1. `[DONE]` ~~Session resumption~~ — handle captured but NOT sent on reconnect yet. **Next: wire handle into setup message**
-2. **Validate delivery detection on device** — MediaPipe wrist spike → TTS count. Code wired, never confirmed live on device. Needs: MediaPipe model bundled in app (`pose_landmarker_heavy.task`), camera frame → processFrame wiring confirmed
-3. **Validate post-session analysis** — end session → clips → Gemini Pro → delivery cards in SessionResultsView. Code written, untested end-to-end
-4. **Fix bugs from 2-3** — likely: MediaPipe model bundling path, clip timing edge cases, analysis prompt tuning
+### Tier 1: Complete MVP (end-to-end loop)
+1. `[DONE]` Session resumption handle — sent on reconnect, restores mate context
+2. `[DONE]` Delivery detection pipeline — MediaPipe wrist spike → TTS count → Live API context. **Code wired + builds. Needs on-device validation with bundled `pose_landmarker.task`**
+3. `[DONE]` Post-session analysis — parallel clip extraction + parallel Gemini Pro analysis → delivery cards
+4. **Validate on device** — run full session, confirm detection fires, clips extract, analysis returns
 
 ### Tier 2: Demo-worthy polish
-5. `[DONE]` ~~Mate persona tuning~~ — 4 language styles × 2 genders, dynamic system instructions
-6. **Pace band on delivery cards** — Gemini Pro classifies "medium pace" / "fast" from clips
-7. **Session summary** — generateSessionSummary() after all deliveries analyzed, display in SessionResultsView
-8. **Session resumption handle** — send `sessionResumption.handle` in setup message on reconnect to preserve context
+5. `[DONE]` Mate persona tuning — 4 language styles × 2 genders, dynamic system instructions
+6. `[DONE]` Pace band classification — returned from Gemini Pro analysis, displayed in delivery cards
+7. `[DONE]` Session summary — generated after analysis, displayed in SessionResultsView
+8. `[DONE]` Session resumption handle — sent on reconnect via setup message
 
 ### Tier 3: Challenge Mode (differentiator)
 9. **Mate speaks target** — "Try a yorker on off stump" (Q10)
