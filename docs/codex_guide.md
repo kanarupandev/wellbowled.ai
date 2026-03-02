@@ -64,9 +64,20 @@
 
 ## 3. File Locations
 
-### iOS Source of Truth
+### WORK HERE (source of truth)
 ```
-/Users/kanarupan/workspace/wellBowled/ios/wellBowled/
+/Users/kanarupan/workspace/wellBowled/ios/wellBowled/     ← ALL iOS code lives here
+/Users/kanarupan/workspace/wellBowled/ios/wellBowled/Tests/ ← test source files
+/Users/kanarupan/workspace/wellbowled.ai/docs/             ← canonical docs (this guide + architecture_decision.md)
+```
+
+### DO NOT MODIFY (read-only reference or stale)
+```
+/Users/kanarupan/workspace/xcodeProj/                      ← Xcode project, overwritten by sync command
+/Users/kanarupan/workspace/wellbowled.ai/experiments/      ← archived experiment logs, known stale data (see section 10)
+/Users/kanarupan/workspace/wellbowled.ai/research/         ← archived research, superseded findings
+/Users/kanarupan/workspace/wellbowled.ai/codex/            ← old codex research/submission docs
+/Users/kanarupan/workspace/wellBowled/backend/             ← no backend deployed, not in scope
 ```
 
 ### Key Files by Feature Area
@@ -247,7 +258,23 @@ wellBowled/ios/wellBowled/
 
 ---
 
-## 10. Dev Process
+## 10. Known Doc Inconsistencies (DO NOT be misled)
+
+The `experiments/` and `research/` folders contain historical exploration logs with known stale data. **Do NOT use them as source of truth.** Only this guide and `docs/architecture_decision.md` are canonical.
+
+| Stale Artifact | What's Wrong | Correct Answer |
+|----------------|-------------|----------------|
+| `experiments/delivery_detection/003_results.json` | Shows `release_ts: 0.0333`, `bowling_arm: left` | Orphaned from a different video/old run. 003_findings.md says ground truth is right arm at 1.000s. **Ignore this JSON.** |
+| `experiments/delivery_detection/003_findings.md` | Recommends `thinkingLevel: MINIMAL` | **SUPERSEDED by Phase 2.** MINIMAL overfits on smoke tests, degrades on real video. App uses DEFAULT thinking. |
+| `experiments/delivery_detection/phase2_configs.md` | "6/7 PASS" headline | Uses mixed thresholds (0.2s broadcast, 0.3s nets). Strict 0.2s alone is ~4/5. The architecture doc already says "6/7 PASS at mixed thresholds" — the caveat is baked in. |
+| `experiments/live_audio/result_audio_validation.json` | File name suggests audio validation results | It's a raw failed run: 0 deliveries detected from 71 video frames. Confirms Live API is conversational only — does NOT proactively detect. This is the correct and final conclusion. |
+| Various codex research docs | Mix of "hypothesis" vs "validated" for Live API | **Final answer**: Live API voice conversation = VALIDATED on device. Live API delivery detection = DOES NOT WORK (by design — it's conversational, not monitoring). Detection is on-device MediaPipe only. |
+
+**Rule: Only read files in `ios/wellBowled/` for implementation. Treat `experiments/` and `research/` as archived history.**
+
+---
+
+## 11. Dev Process
 
 Follow `docs/dev_process.md` — no exceptions:
 1. UNDERSTAND → 2. RESEARCH → 3. EXPERIMENT → 4. VERIFY → 5. PLAN → 6. TIDY → 7. TEST FIRST → 8. IMPLEMENT → 9. VERIFY AGAIN → 10. DOCUMENT
