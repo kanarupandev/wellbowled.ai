@@ -149,30 +149,57 @@ Tests go to `wellBowledTests/` target in Xcode — NOT in `Tests/` subfolder of 
 
 ---
 
-## 5. Build & Install to iPhone
+## 5. Development Workflow (MUST follow this loop)
+
+There are TWO separate directories. You write code in the **source of truth**, then copy it to the **Xcode project** to build. Never edit the Xcode project directly — it gets overwritten on every sync.
+
+```
+SOURCE OF TRUTH (you edit here)          XCODE PROJECT (build from here)
+/Users/kanarupan/workspace/              /Users/kanarupan/workspace/
+  wellBowled/ios/wellBowled/               xcodeProj/wellBowled/wellBowled/
+       ↓ cp -R                                    ↓ xcodebuild
+  Your .swift files                        Compiled app → iPhone
+```
 
 ### Target Device
 - **Name**: Kanarupan
 - **Model**: iPhone 15 (iPhone15,4)
 - **CoreDevice UUID**: `00008120-001230560204A01E`
-- **Connection**: USB cable to Mac (must be plugged in and unlocked)
+- **Connection**: USB cable to Mac, phone must be unlocked
 
-### Full Sync + Build + Install (run this EVERY time)
+### The Loop: Edit → Sync → Build → Install → Monitor → Iterate
 
+#### Step 1: IMPLEMENT — edit code in source of truth
+
+All code changes go here and ONLY here:
+```
+/Users/kanarupan/workspace/wellBowled/ios/wellBowled/
+```
+Never touch files under `/Users/kanarupan/workspace/xcodeProj/` — they get wiped on sync.
+
+#### Step 2: SYNC — copy source to Xcode project
+
+This replaces all Swift files in the Xcode project with the source of truth:
 ```bash
-# Step 1: Sync iOS source → Xcode project
 rm -rf /Users/kanarupan/workspace/xcodeProj/wellBowled/wellBowled/*.swift && \
 cp -R /Users/kanarupan/workspace/wellBowled/ios/wellBowled/ \
      /Users/kanarupan/workspace/xcodeProj/wellBowled/wellBowled/
+```
 
-# Step 2: Remove Tests/ from app target (XCTest can't import in app target)
+Then remove Tests/ from the app target (XCTest can't be imported in app target):
+```bash
 rm -rf /Users/kanarupan/workspace/xcodeProj/wellBowled/wellBowled/Tests/
+```
 
-# Step 3: Copy tests to test target
+Copy test files to the separate test target:
+```bash
 cp /Users/kanarupan/workspace/wellBowled/ios/wellBowled/Tests/*.swift \
    /Users/kanarupan/workspace/xcodeProj/wellBowled/wellBowledTests/
+```
 
-# Step 4: Build + install to Kanarupan iPhone 15
+#### Step 3: BUILD + INSTALL — compile and deploy to iPhone
+
+```bash
 cd /Users/kanarupan/workspace/xcodeProj/wellBowled && \
 xcodebuild -workspace wellBowled.xcworkspace \
   -scheme wellBowled \
@@ -180,10 +207,9 @@ xcodebuild -workspace wellBowled.xcworkspace \
   -configuration Debug clean build
 ```
 
-The `xcodebuild` command compiles and installs the app to the iPhone in one step. After `BUILD SUCCEEDED`, the app is on the phone — open it from the home screen.
+Wait for `** BUILD SUCCEEDED **`. The app is now installed on the iPhone. Open it from the home screen.
 
-### Simulator build (for quick compile checks only, no install)
-
+If you only need a compile check (no device needed):
 ```bash
 cd /Users/kanarupan/workspace/xcodeProj/wellBowled && \
 xcodebuild -workspace wellBowled.xcworkspace \
@@ -191,7 +217,32 @@ xcodebuild -workspace wellBowled.xcworkspace \
   -destination "platform=iOS Simulator,name=iPhone 17 Pro" build
 ```
 
-### Run tests
+#### Step 4: VERIFY — monitor device logs
+
+Stream live logs from the iPhone to see print statements, os.Logger output, and crashes:
+```bash
+# Stream all wellBowled logs from the device
+xcrun devicectl device process logstream --device 00008120-001230560204A01E \
+  --process-name wellBowled
+```
+
+Alternative — filter by subsystem (matches `Logger(subsystem: "com.wellbowled", ...)`):
+```bash
+log stream --device 00008120-001230560204A01E \
+  --predicate 'subsystem == "com.wellbowled"' --style compact
+```
+
+Key log categories to watch:
+- `com.wellbowled/SessionVM` — session lifecycle, delivery detection, analysis progress
+- `com.wellbowled/Analysis` — Gemini API calls, DNA extraction
+- `com.wellbowled/Live` — WebSocket connection, audio, reconnects
+
+If the app crashes, get the crash log:
+```bash
+xcrun devicectl device process crashlog --device 00008120-001230560204A01E
+```
+
+#### Step 5: RUN TESTS
 
 ```bash
 cd /Users/kanarupan/workspace/xcodeProj/wellBowled && \
@@ -200,10 +251,25 @@ xcodebuild -workspace wellBowled.xcworkspace \
   -destination "platform=iOS Simulator,name=iPhone 17 Pro" test
 ```
 
+#### Step 6: ITERATE — go back to Step 1
+
+Fix issues found in Step 4/5, then repeat the loop: Edit → Sync → Build → Install → Monitor.
+
+#### Step 7: COMMIT — when feature is working
+
+```bash
+cd /Users/kanarupan/workspace/wellBowled && \
+git add <changed files> && \
+git commit -m "codex: <description>" && \
+git push
+```
+
 ### Troubleshooting
 - **"device not found"** → iPhone must be plugged in via USB cable and unlocked
 - **"unable to install"** → Trust the developer certificate on iPhone: Settings → General → VPN & Device Management → trust the dev profile
+- **"BUILD FAILED"** → Read the error lines. Fix in source of truth (Step 1), NOT in Xcode project
 - **Pods out of date** → `cd /Users/kanarupan/workspace/xcodeProj/wellBowled && pod install`
+- **App crashes on launch** → Check crash log (Step 4), likely a missing nil check or force unwrap
 
 ### Prerequisites
 - Xcode 16+ with iOS 17 SDK
