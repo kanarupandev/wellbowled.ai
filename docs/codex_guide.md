@@ -6,7 +6,14 @@
 
 ## CODE PATH — READ THIS FIRST
 
-**All code lives here. Edit ONLY this path:**
+There are TWO repos. Know which is which:
+
+| Repo | Path | Contains | You code here? |
+|------|------|----------|---------------|
+| **wellBowled** | `/Users/kanarupan/workspace/wellBowled/` | iOS app source code | **YES — all code goes here** |
+| **wellbowled.ai** | `/Users/kanarupan/workspace/wellbowled.ai/` | Docs, experiments, this guide | NO — docs only, no app code |
+
+**All Swift code lives here. Edit ONLY this path:**
 ```
 /Users/kanarupan/workspace/wellBowled/ios/wellBowled/
 ```
@@ -16,11 +23,17 @@
 /Users/kanarupan/workspace/wellBowled/ios/wellBowled/Tests/
 ```
 
+**Git repo for code commits:**
+```
+cd /Users/kanarupan/workspace/wellBowled
+git branch: codex/full-dev-takeover
+```
+
 **DO NOT edit anything under:**
 ```
-/Users/kanarupan/workspace/xcodeProj/
+/Users/kanarupan/workspace/xcodeProj/     ← disposable build copy, wiped on every sync
+/Users/kanarupan/workspace/wellbowled.ai/ ← docs repo, not app code
 ```
-That directory is a disposable build copy. It gets wiped and replaced from the code path above on every sync.
 
 ---
 
