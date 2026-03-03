@@ -33,6 +33,12 @@ enum WBConfig {
     /// Analysis model (delivery type, post-session analysis)
     static let analysisModel = "gemini-3-pro-preview"
 
+    /// Low-latency model for on-demand deep delivery analysis (fallback handled in service)
+    static let deepAnalysisModel = "gemini-2.5-flash"
+
+    /// Low-latency model for chip-driven focused guidance (fallback handled in service)
+    static let chipControlModel = "gemini-2.5-flash"
+
     /// Live API WebSocket endpoint
     static let liveAPIEndpoint = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
 
@@ -74,6 +80,9 @@ enum WBConfig {
 
     /// Max duration for a live coaching session (hackathon demo cap)
     static let liveSessionMaxDurationSeconds: TimeInterval = 180
+
+    /// Sampling FPS for offline pose extraction from 5s delivery clips.
+    static let poseExtractionFPS: Double = 10.0
 
     /// Voice for Live API audio responses (derived from persona)
     static var liveAPIVoice: String {

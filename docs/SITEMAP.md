@@ -1,65 +1,80 @@
 # Project Site Map
 
-## iOS App (separate repo: `wellBowled/ios/wellBowled/`, not in this repo)
+## Active Source Of Truth
 
-> Files below are **external/unverified in this repo**. Source of truth: `wellBowled` repo, branch `main`.
-> Last verified commit: R19 (bug fixes, persona system, tests, brand update — March 2026).
+All active development is in:
+`/Users/kanarupan/workspace/wellbowled.ai`
 
-| # | File | Purpose | Status |
-|---|------|---------|--------|
-| 1 | `GeminiLiveService.swift` | WebSocket wire protocol for Gemini Live API | R19: sendQueue race fix, continuation lock, timeout msg |
-| 2 | `AudioSessionManager.swift` | AVAudioSession + AVAudioEngine 24kHz PCM playback | R19: detach safety |
-| 3 | `SessionViewModel.swift` | Full pipeline: camera → detection + Live API → analysis | R19: CIContext cache, timestamp offset, idle timer |
-| 4 | `HomeView.swift` | API key prompt + persona settings + session entry | R19: fullScreenCover, persona picker, brand |
-| 5 | `LiveSessionView.swift` | Camera preview + transcript + session controls | R19: peacock blue theme, status bar |
-| 6 | `WBConfig.swift` | Config: API keys, thresholds, 8 mate personas | R19: persona system (4 styles × 2 genders) |
-| 7 | `CameraService.swift` | AVCaptureSession with video + audio + recording | external/unverified |
-| 8 | `Protocols.swift` | VoiceMateService, DeliveryDetecting, CameraProviding | stable |
-| 9 | `DeliveryDetector.swift` | MediaPipe wrist velocity detection | external/unverified |
-| 10 | `WristVelocityTracker.swift` | Pure spike detection algorithm | unit tested |
-| 11 | `TTSService.swift` | iOS TTS for count announcements | external/unverified |
-| 12 | `ClipExtractor.swift` | AVAssetExportSession clip extraction | external/unverified |
-| 13 | `GeminiAnalysisService.swift` | REST generateContent for delivery analysis | external/unverified |
-| 14 | `Session.swift` | Session struct (value type) + lifecycle | R19: struct fix, unit tested |
-| 15 | `SplashView.swift` | Animated splash screen | R19: brand update |
-| 16 | `Models.swift` | Delivery, DeliveryAnalysis, PoseLandmark models | unit tested |
-| 17 | `Enums.swift` | PaceBand, SessionMode, BowlingArm, DeliveryType/Length/Line | unit tested |
-| 18 | `Delivery.swift` | DeliveryAnalysis, SessionSummary structs | stable |
+## iOS App Source
 
-### Tests (in wellBowledTests target)
+Path:
+`/Users/kanarupan/workspace/wellbowled.ai/ios/wellBowled/`
 
-| # | File | Coverage |
-|---|------|----------|
-| 1 | `SessionTests.swift` | Session lifecycle, value semantics, challenge scoring |
-| 2 | `WBConfigTests.swift` | Persona properties, voice mapping, system instruction |
-| 3 | `WristVelocityTrackerTests.swift` | Spike detection, cooldown, arm detection, utilities |
-| 4 | `EnumsTests.swift` | PaceBand, Delivery codable, DeliveryAnalysis codable |
-| 5 | `SessionLifecycleIntegrationTests.swift` | Full session flow, wire protocol encode/decode, timestamp offset |
+Core files:
+- `SessionViewModel.swift` — live session pipeline orchestration
+- `GeminiLiveService.swift` — Gemini Live WebSocket transport
+- `GeminiAnalysisService.swift` — post-session Gemini analysis
+- `HomeView.swift` — session entry + settings
+- `LiveSessionView.swift` — live camera/session UI + results
+- `Session.swift` / `Enums.swift` / `Delivery.swift` / `Models.swift` — domain model
+- `WBConfig.swift` — runtime config + feature flags + challenge targets
+- `ChallengeEngine.swift` — challenge target rotation + result formatting
+- `DeliveryDetector.swift` / `WristVelocityTracker.swift` — on-device delivery detection
 
-## docs/
+## iOS Tests Source
 
-| # | File | Purpose | Status |
-|---|------|---------|--------|
-| 1 | `session_onboarding.md` | What this is, how to get running | Active |
-| 2 | `dev_process.md` | Development workflow and conventions — **read first, follow always** | Active |
-| 3 | `prompting_techniques.md` | Gemini prompt designs, cross-cutting techniques, honest limitations | Active |
-| 4 | `architecture_decision.md` | Option B hybrid approach — live detection + post-session analysis | Active |
-| 5 | `project_dev_deploy_guide.md` | Project-specific dev flow + hackathon deployment runbook (cross-referenced) | Active |
+Path:
+`/Users/kanarupan/workspace/wellbowled.ai/ios/wellBowled/Tests/`
 
-## research/
+Current test coverage:
+- session lifecycle and scoring (`SessionTests.swift`, `SessionLifecycleIntegrationTests.swift`)
+- config/personas (`WBConfigTests.swift`)
+- wrist spike detection (`WristVelocityTrackerTests.swift`)
+- enums/codable behavior (`EnumsTests.swift`)
+- BowlingDNA encoding/matching (`BowlingDNATests.swift`)
 
-| # | File | Purpose | Status |
-|---|------|---------|--------|
-| 1 | `README.md` | Research index — completed findings, open questions, cross-references | Active |
-| 2 | `cricket_resources.md` | Available datasets, models, APIs, open-source tools for cricket bowling | Active |
+## Build Copy (Disposable)
 
-## experiments/
+Path:
+`/Users/kanarupan/workspace/xcodeProj/wellBowled/`
 
-| # | Directory | Purpose | Status |
-|---|-----------|---------|--------|
-| 1 | `delivery_detection/` | Scout prompt accuracy, thinkingLevel optimization, MediaPipe ground truth | Phase 2 |
-| 1a | `live_speed/` | Live API feasibility, speed estimation (Gemini Pro, YOLO, MediaPipe) | Complete |
-| 2 | `deep_analysis/` | Expert biomechanical analysis prompts | Parked |
-| 3 | `live_feedback/` | Multimodal Live API streaming | Planned |
-| 4 | `legality_assessment/` | Elbow extension observation prompts | Planned |
-| 5 | `speed_estimation/` | Speed classification and estimation | Planned |
+Rule:
+- use for build/test/install only
+- do not treat as source of truth
+- always sync from `wellbowled.ai/ios/wellBowled/`
+
+## Obsolete Repo
+
+Path:
+`/Users/kanarupan/workspace/dont_use_obsolete_wellBowled/`
+
+Rule:
+- do not develop here
+
+## Canonical Docs
+
+Path:
+`/Users/kanarupan/workspace/wellbowled.ai/docs/`
+
+Primary documents:
+- `dev_process.md` — mandatory engineering loop
+- `project_dev_deploy_guide.md` — project-specific dev/deploy flow
+- `codex_guide.md` — handover + execution runbook
+- `architecture_decision.md` — architecture decisions and status
+- `session_onboarding.md` — product framing
+- `live_results_flow_tdd_plan.md` — live results carousel + deep-analysis UX spec and TDD plan
+- `live_delivery_deep_analysis_requirements.md` — dedicated source-of-truth for on-demand deep analysis, async parallelism, latency targets, race-risk checks, and UI flow
+
+Read-only UX reference (flow only, no theme copy):
+- `/Users/kanarupan/workspace/obsolete-wellbowled-alpha/`
+
+## Archived Areas
+
+Paths:
+- `/Users/kanarupan/workspace/wellbowled.ai/experiments/`
+- `/Users/kanarupan/workspace/wellbowled.ai/research/`
+- `/Users/kanarupan/workspace/wellbowled.ai/codex/`
+
+Rule:
+- historical context only
+- do not use as active source of truth unless explicitly reactivated

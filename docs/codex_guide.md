@@ -21,7 +21,7 @@
 **Git repo:**
 ```
 cd /Users/kanarupan/workspace/wellbowled.ai
-git branch: claude/ios-fresh-build
+git branch: codex/dev
 ```
 
 **DO NOT edit anything under:**
@@ -214,7 +214,7 @@ SOURCE OF TRUTH (you edit here)             XCODE PROJECT (build from here)
 ### Target Device
 - **Name**: Kanarupan
 - **Model**: iPhone 15 (iPhone15,4)
-- **CoreDevice UUID**: `00008120-001230560204A01E`
+- **CoreDevice UUID**: `E40F593B-ABB6-514A-873F-48CD7C4F98F3` (verify with `xcrun devicectl list devices`)
 - **Connection**: USB cable to Mac, phone must be unlocked
 
 ### The Loop: Edit → Sync → Build → Install → Monitor → Iterate
@@ -261,18 +261,18 @@ cp /Users/kanarupan/workspace/wellbowled.ai/ios/wellBowled/Tests/*.swift \
 cd /Users/kanarupan/workspace/xcodeProj/wellBowled && \
 xcodebuild -workspace wellBowled.xcworkspace \
   -scheme wellBowled \
-  -destination "platform=iOS,id=00008120-001230560204A01E" \
+  -destination "platform=iOS,id=E40F593B-ABB6-514A-873F-48CD7C4F98F3" \
   -configuration Debug clean build
 
 APP_PATH=$(find /Users/kanarupan/Library/Developer/Xcode/DerivedData/wellBowled-* \
   -path '*/Build/Products/Debug-iphoneos/wellBowled.app' -type d | grep -v 'Index.noindex' | sort | tail -n 1) && \
-xcrun devicectl device install app --device 00008120-001230560204A01E "$APP_PATH"
+xcrun devicectl device install app --device E40F593B-ABB6-514A-873F-48CD7C4F98F3 "$APP_PATH"
 ```
 
 Wait for `** BUILD SUCCEEDED **`. Then confirm install succeeded. Launch from the home screen, or launch from terminal:
 
 ```bash
-xcrun devicectl device process launch --device 00008120-001230560204A01E kanarupan.wellBowled
+xcrun devicectl device process launch --device E40F593B-ABB6-514A-873F-48CD7C4F98F3 kanarupan.wellBowled
 ```
 
 If you only need a compile check (no device needed):
@@ -288,13 +288,13 @@ xcodebuild -workspace wellBowled.xcworkspace \
 Stream live logs from the iPhone to see print statements, os.Logger output, and crashes:
 ```bash
 # Stream all wellBowled logs from the device
-xcrun devicectl device process logstream --device 00008120-001230560204A01E \
+xcrun devicectl device process logstream --device E40F593B-ABB6-514A-873F-48CD7C4F98F3 \
   --process-name wellBowled
 ```
 
 Alternative — filter by subsystem (matches `Logger(subsystem: "com.wellbowled", ...)`):
 ```bash
-log stream --device 00008120-001230560204A01E \
+log stream --device E40F593B-ABB6-514A-873F-48CD7C4F98F3 \
   --predicate 'subsystem == "com.wellbowled"' --style compact
 ```
 
@@ -305,7 +305,7 @@ Key log categories to watch:
 
 If the app crashes, get the crash log:
 ```bash
-xcrun devicectl device process crashlog --device 00008120-001230560204A01E
+xcrun devicectl device process crashlog --device E40F593B-ABB6-514A-873F-48CD7C4F98F3
 ```
 
 #### Step 5: RUN TESTS
@@ -332,6 +332,7 @@ git push
 
 ### Troubleshooting
 - **"device not found"** → iPhone must be plugged in via USB cable and unlocked
+- **"Unable to launch ... device was not unlocked"** → unlock iPhone screen, then retry `xcrun devicectl device process launch`
 - **"unable to install"** → Trust the developer certificate on iPhone: Settings → General → VPN & Device Management → trust the dev profile
 - **"BUILD FAILED"** → Read the error lines. Fix in source of truth (Step 1), NOT in Xcode project
 - **Pods out of date** → `cd /Users/kanarupan/workspace/xcodeProj/wellBowled && pod install`
@@ -362,7 +363,7 @@ git push
 - Small, self-contained commits
 - Always `git pull` before starting — check for commits from both agents
 - Read `git log --oneline -10` before touching any file area
-- **Single repo**: `/Users/kanarupan/workspace/wellbowled.ai` (branch: `claude/ios-fresh-build`)
+- **Single repo**: `/Users/kanarupan/workspace/wellbowled.ai` (branch: `codex/dev`)
 
 ---
 

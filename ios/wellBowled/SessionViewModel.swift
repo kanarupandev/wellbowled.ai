@@ -32,6 +32,10 @@ final class SessionViewModel: ObservableObject {
     @Published var analysisProgress: Double = 0
     @Published var sessionRemainingSeconds: TimeInterval = WBConfig.liveSessionMaxDurationSeconds
     @Published var currentChallengeTarget: String?
+    @Published var isPreparingClips: Bool = false
+    @Published var clipPreparationProgress: Double = 0
+    @Published private(set) var deepAnalysisStatusByDelivery: [UUID: DeliveryDeepAnalysisStatus] = [:]
+    @Published private(set) var deepAnalysisArtifactsByDelivery: [UUID: DeliveryDeepAnalysisArtifacts] = [:]
 
     // MARK: - Services
 
@@ -42,6 +46,7 @@ final class SessionViewModel: ObservableObject {
     private let tts = TTSService()
     private let clipExtractor = ClipExtractor()
     private let analysisService = GeminiAnalysisService()
+    private let clipPoseExtractor = ClipPoseExtractor()
 
     private var cancellables = Set<AnyCancellable>()
     private let ciContext = CIContext()  // Reuse — creating per frame is expensive
@@ -56,6 +61,10 @@ final class SessionViewModel: ObservableObject {
     private var hasBowlerPlanResponse = false
     private var proactiveRepromptTask: Task<Void, Never>?
     private var hasPilotRun = false
+    private var clipPreparationTask: Task<Void, Never>?
+    private var deepAnalysisTasksByDelivery: [UUID: Task<Void, Never>] = [:]
+    private var telemetryTasksByDelivery: [UUID: Task<Void, Never>] = [:]
+    private var challengeEvaluatedDeliveries = Set<UUID>()
 
     // MARK: - Init
 
@@ -94,6 +103,14 @@ final class SessionViewModel: ObservableObject {
         proactiveRepromptTask?.cancel()
         proactiveRepromptTask = nil
         sessionRemainingSeconds = WBConfig.liveSessionMaxDurationSeconds
+        clipPreparationTask?.cancel()
+        clipPreparationTask = nil
+        isPreparingClips = false
+        clipPreparationProgress = 0
+        isAnalyzing = false
+        analysisProgress = 0
+        cancelAllDeepAnalysisTasks(resetState: true)
+        challengeEvaluatedDeliveries = []
         startSessionTimer()
         UIApplication.shared.isIdleTimerDisabled = true
 
@@ -189,9 +206,9 @@ final class SessionViewModel: ObservableObject {
         hasPilotRun = false
         log.debug("Session ended. Deliveries: \(self.session.deliveryCount)")
 
-        // Post-session: extract clips and analyze
+        // Post-session: clip preparation only (deep analysis is on-demand per delivery).
         if let url = recordingURL, session.deliveryCount > 0 {
-            await runPostSessionAnalysis(recordingURL: url)
+            startClipPreparation(recordingURL: url)
         }
     }
 
@@ -276,150 +293,355 @@ final class SessionViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Post-Session Analysis
+    // MARK: - Post-Session Preparation (Immediate)
 
-    private func runPostSessionAnalysis(recordingURL: URL) async {
+    private func startClipPreparation(recordingURL: URL) {
+        clipPreparationTask?.cancel()
+        clipPreparationTask = Task { [weak self] in
+            await self?.prepareDeliveryClips(recordingURL: recordingURL)
+        }
+    }
+
+    private func prepareDeliveryClips(recordingURL: URL) async {
         guard !session.deliveries.isEmpty else { return }
-        log.info("Starting post-session analysis for \(self.session.deliveryCount) deliveries")
-        isAnalyzing = true
-        analysisProgress = 0
 
-        let total = Double(session.deliveries.count)
+        isPreparingClips = true
+        clipPreparationProgress = 0
+        let total = Double(max(session.deliveries.count, 1))
         let recordingOffset = CMTimeGetSeconds(recordingStartTime ?? .zero)
+        let clipCounter = ActorCounter()
 
-        // Phase 1: Extract all clips in parallel (fast, local I/O)
-        await withTaskGroup(of: (Int, URL?, Error?).self) { group in
+        await withTaskGroup(of: (Int, URL?, UIImage?, Error?).self) { group in
             for (index, delivery) in session.deliveries.enumerated() {
                 group.addTask { [clipExtractor] in
                     let clipTimestamp = max(delivery.timestamp - recordingOffset, 0)
                     do {
-                        let url = try await clipExtractor.extractClip(from: recordingURL, at: clipTimestamp)
-                        return (index, url, nil)
+                        let clipURL = try await clipExtractor.extractClip(from: recordingURL, at: clipTimestamp)
+                        let thumbnail = ClipThumbnailGenerator.releaseThumbnail(from: clipURL)
+                        return (index, clipURL, thumbnail, nil)
                     } catch {
-                        return (index, nil, error)
+                        return (index, nil, nil, error)
                     }
                 }
             }
-            for await (index, clipURL, error) in group {
+
+            for await (index, clipURL, thumbnail, error) in group {
                 if let clipURL {
                     session.deliveries[index].videoURL = clipURL
-                    session.deliveries[index].status = .analyzing
+                    session.deliveries[index].thumbnail = thumbnail
+                    session.deliveries[index].status = .queued
+                    deepAnalysisStatusByDelivery[session.deliveries[index].id] = DeliveryDeepAnalysisStatus(
+                        stage: .idle,
+                        elapsedSeconds: 0,
+                        statusMessage: "",
+                        failureMessage: nil
+                    )
                 } else {
-                    log.error("D\(index + 1) clip extraction failed: \(error?.localizedDescription ?? "unknown")")
                     session.deliveries[index].status = .failed
+                    let message = error?.localizedDescription ?? "Clip preparation failed."
+                    deepAnalysisStatusByDelivery[session.deliveries[index].id] = DeliveryDeepAnalysisStatus(
+                        stage: .failed,
+                        elapsedSeconds: 0,
+                        statusMessage: "",
+                        failureMessage: message
+                    )
+                    log.error("D\(index + 1) clip extraction failed: \(message)")
                 }
+                let completed = await clipCounter.increment()
+                clipPreparationProgress = Double(completed) / total
             }
         }
 
-        // Phase 2: Analyze all clips in parallel (Gemini API calls)
-        let analysisCount = ActorCounter()
-        await withTaskGroup(of: (Int, DeliveryAnalysis?, Error?).self) { group in
-            for (index, delivery) in session.deliveries.enumerated() {
-                guard delivery.status == .analyzing, let clipURL = delivery.videoURL else { continue }
-                group.addTask { [analysisService] in
-                    do {
-                        let analysis = try await analysisService.analyzeDelivery(clipURL: clipURL)
-                        return (index, analysis, nil)
-                    } catch {
-                        return (index, nil, error)
-                    }
-                }
-            }
-            for await (index, analysis, error) in group {
-                if let analysis {
-                    session.deliveries[index].report = analysis.observation
-                    session.deliveries[index].speed = analysis.paceEstimate
-                    session.deliveries[index].status = .success
-                    log.debug("D\(index + 1) analyzed: \(analysis.paceEstimate), \(analysis.length.rawValue)")
-                } else {
-                    log.error("D\(index + 1) analysis failed: \(error?.localizedDescription ?? "unknown")")
-                    session.deliveries[index].status = .failed
-                }
-                let completed = await analysisCount.increment()
-                analysisProgress = Double(completed) / total
-            }
+        isPreparingClips = false
+        refreshSessionSummary()
+    }
+
+    // MARK: - On-Demand Deep Analysis
+
+    func deepAnalysisStatus(for deliveryID: UUID) -> DeliveryDeepAnalysisStatus {
+        deepAnalysisStatusByDelivery[deliveryID] ?? DeliveryDeepAnalysisStatus()
+    }
+
+    func deepAnalysisArtifacts(for deliveryID: UUID) -> DeliveryDeepAnalysisArtifacts? {
+        deepAnalysisArtifactsByDelivery[deliveryID]
+    }
+
+    func runDeepAnalysisIfNeeded(for deliveryID: UUID) async {
+        if deepAnalysisTasksByDelivery[deliveryID] != nil { return }
+        let task: Task<Void, Never> = Task { [weak self] in
+            guard let self else { return }
+            await self.runDeepAnalysis(for: deliveryID)
         }
+        deepAnalysisTasksByDelivery[deliveryID] = task
+        await task.value
+    }
 
-        // Phase 2b: Challenge mode evaluation (target hit/miss per delivery)
-        if session.mode == .challenge {
-            await withTaskGroup(of: (Int, String, ChallengeResult?, Error?).self) { group in
-                for (index, delivery) in session.deliveries.enumerated() {
-                    guard delivery.status == .success, let clipURL = delivery.videoURL else { continue }
-                    guard let target = challengeTargetBySequence[delivery.sequence] else { continue }
-
-                    group.addTask { [analysisService] in
-                        do {
-                            let result = try await analysisService.evaluateChallenge(clipURL: clipURL, target: target)
-                            return (index, target, result, nil)
-                        } catch {
-                            return (index, target, nil, error)
-                        }
-                    }
-                }
-
-                for await (index, target, result, error) in group {
-                    if let result {
-                        session.recordChallengeResult(hit: result.matchesTarget)
-                        let challengeText = ChallengeEngine.formatResult(target: target, result: result)
-                        if let existing = session.deliveries[index].report, !existing.isEmpty {
-                            session.deliveries[index].report = "\(existing) • \(challengeText)"
-                        } else {
-                            session.deliveries[index].report = challengeText
-                        }
-                    } else {
-                        log.error("D\(index + 1) challenge evaluation failed: \(error?.localizedDescription ?? "unknown")")
-                    }
-                }
-            }
-        }
-
-        // Phase 3: Extract BowlingDNA in parallel for each delivery with a clip
-        await withTaskGroup(of: (Int, BowlingDNA?).self) { group in
-            for (index, delivery) in session.deliveries.enumerated() {
-                guard delivery.status == .success, let clipURL = delivery.videoURL else { continue }
-                group.addTask { [analysisService] in
-                    do {
-                        let dna = try await analysisService.extractBowlingDNA(
-                            clipURL: clipURL,
-                            wristOmega: delivery.wristOmega,
-                            releaseWristY: delivery.releaseWristY
-                        )
-                        return (index, dna)
-                    } catch {
-                        return (index, nil)
-                    }
-                }
-            }
-            for await (index, dna) in group {
-                if let dna {
-                    session.deliveries[index].dna = dna
-                    session.deliveries[index].dnaMatches = BowlingDNAMatcher.match(userDNA: dna, topN: 3)
-                    log.debug("D\(index + 1) DNA extracted, top match: \(self.session.deliveries[index].dnaMatches?.first?.bowlerName ?? "none")")
-                }
-            }
-        }
-
-        // Phase 4: Generate session summary
-        do {
-            let summary = try await analysisService.generateSessionSummary(deliveries: session.deliveries)
-            let challengeScore = session.mode == .challenge && session.challengeTotal > 0
-                ? session.challengeScoreText
-                : nil
-            session.summary = SessionSummary(
-                totalDeliveries: summary.totalDeliveries,
-                durationMinutes: summary.durationMinutes,
-                dominantPace: summary.dominantPace,
-                paceDistribution: summary.paceDistribution,
-                keyObservation: summary.keyObservation,
-                challengeScore: challengeScore
+    func requestChipGuidance(for deliveryID: UUID, chip: String) async -> ChipGuidanceResponse {
+        guard let delivery = session.deliveries.first(where: { $0.id == deliveryID }) else {
+            return ChipGuidanceResponse(
+                reply: "That delivery is no longer available.",
+                action: "none",
+                phaseName: nil,
+                focusStart: nil,
+                focusEnd: nil,
+                playbackRate: nil
             )
-            log.info("Session summary generated")
-        } catch {
-            log.warning("Session summary generation failed: \(error.localizedDescription)")
         }
 
-        isAnalyzing = false
-        log.info("Post-session analysis complete")
+        let summary = delivery.report ?? "Delivery analysis in progress."
+        let phases = delivery.phases ?? []
+        do {
+            let guidance = try await analysisService.generateChipGuidance(
+                chip: chip,
+                deliverySummary: summary,
+                phases: phases
+            )
+            var artifacts = deepAnalysisArtifactsByDelivery[deliveryID] ?? DeliveryDeepAnalysisArtifacts()
+            artifacts.chipReply = guidance.reply
+            deepAnalysisArtifactsByDelivery[deliveryID] = artifacts
+            return guidance
+        } catch {
+            let fallback = ChipGuidanceResponse(
+                reply: "Focusing that phase now.",
+                action: "focus",
+                phaseName: phases.first?.name,
+                focusStart: phases.first?.clipTimestamp,
+                focusEnd: (phases.first?.clipTimestamp ?? 2.0) + 0.8,
+                playbackRate: 0.45
+            )
+            var artifacts = deepAnalysisArtifactsByDelivery[deliveryID] ?? DeliveryDeepAnalysisArtifacts()
+            artifacts.chipReply = fallback.reply
+            deepAnalysisArtifactsByDelivery[deliveryID] = artifacts
+            return fallback
+        }
+    }
+
+    private enum DeepComponentResult {
+        case detailed(Result<DeliveryDeepAnalysisResult, Error>)
+        case dna(Result<BowlingDNA, Error>)
+        case pose(Result<[FramePoseLandmarks], Error>)
+        case challenge(Result<ChallengeResult, Error>, target: String)
+    }
+
+    private func runDeepAnalysis(for deliveryID: UUID) async {
+        guard let index = session.deliveries.firstIndex(where: { $0.id == deliveryID }) else {
+            deepAnalysisTasksByDelivery[deliveryID] = nil
+            return
+        }
+        guard let clipURL = session.deliveries[index].videoURL else {
+            deepAnalysisStatusByDelivery[deliveryID] = DeliveryDeepAnalysisStatus(
+                stage: .failed,
+                elapsedSeconds: 0,
+                statusMessage: "",
+                failureMessage: "Clip is not ready yet."
+            )
+            deepAnalysisTasksByDelivery[deliveryID] = nil
+            return
+        }
+
+        startTelemetry(for: deliveryID)
+        session.deliveries[index].status = .analyzing
+
+        var detailedResult: DeliveryDeepAnalysisResult?
+        var dnaResult: BowlingDNA?
+        var poseFrames: [FramePoseLandmarks] = []
+        var challengeText: String?
+
+        let challengeTarget: String? = {
+            guard session.mode == .challenge else { return nil }
+            guard !challengeEvaluatedDeliveries.contains(deliveryID) else { return nil }
+            return challengeTargetBySequence[session.deliveries[index].sequence]
+        }()
+
+        await withTaskGroup(of: DeepComponentResult.self) { group in
+            group.addTask { [analysisService] in
+                do {
+                    let deep = try await analysisService.analyzeDeliveryDeep(clipURL: clipURL)
+                    return .detailed(.success(deep))
+                } catch {
+                    return .detailed(.failure(error))
+                }
+            }
+
+            group.addTask { [analysisService, delivery = session.deliveries[index]] in
+                do {
+                    let dna = try await analysisService.extractBowlingDNA(
+                        clipURL: clipURL,
+                        wristOmega: delivery.wristOmega,
+                        releaseWristY: delivery.releaseWristY
+                    )
+                    return .dna(.success(dna))
+                } catch {
+                    return .dna(.failure(error))
+                }
+            }
+
+            group.addTask { [clipPoseExtractor] in
+                do {
+                    let frames = try await clipPoseExtractor.extractFrames(from: clipURL)
+                    return .pose(.success(frames))
+                } catch {
+                    return .pose(.failure(error))
+                }
+            }
+
+            if let target = challengeTarget {
+                group.addTask { [analysisService] in
+                    do {
+                        let result = try await analysisService.evaluateChallenge(clipURL: clipURL, target: target)
+                        return .challenge(.success(result), target: target)
+                    } catch {
+                        return .challenge(.failure(error), target: target)
+                    }
+                }
+            }
+
+            for await component in group {
+                switch component {
+                case .detailed(.success(let result)):
+                    detailedResult = result
+                case .detailed(.failure(let error)):
+                    log.error("Deep analysis failed for D\(index + 1): \(error.localizedDescription)")
+                case .dna(.success(let dna)):
+                    dnaResult = dna
+                case .dna(.failure(let error)):
+                    log.warning("DNA extraction failed for D\(index + 1): \(error.localizedDescription)")
+                case .pose(.success(let frames)):
+                    poseFrames = frames
+                case .pose(.failure(let error)):
+                    log.warning("Pose extraction failed for D\(index + 1): \(error.localizedDescription)")
+                case .challenge(.success(let result), let target):
+                    session.recordChallengeResult(hit: result.matchesTarget)
+                    challengeEvaluatedDeliveries.insert(deliveryID)
+                    challengeText = ChallengeEngine.formatResult(target: target, result: result)
+                case .challenge(.failure(let error), _):
+                    log.warning("Challenge evaluation failed for D\(index + 1): \(error.localizedDescription)")
+                }
+            }
+        }
+
+        stopTelemetry(for: deliveryID)
+
+        guard let detailedResult else {
+            session.deliveries[index].status = .failed
+            deepAnalysisStatusByDelivery[deliveryID] = DeliveryDeepAnalysisStatus(
+                stage: .failed,
+                elapsedSeconds: 0,
+                statusMessage: "",
+                failureMessage: "Detailed analysis failed. Tap to retry."
+            )
+            deepAnalysisTasksByDelivery[deliveryID] = nil
+            return
+        }
+
+        var report = detailedResult.summary
+        if let challengeText, !challengeText.isEmpty {
+            report = report.isEmpty ? challengeText : "\(report) • \(challengeText)"
+        }
+
+        session.deliveries[index].report = report
+        session.deliveries[index].speed = detailedResult.paceEstimate
+        session.deliveries[index].phases = detailedResult.phases
+        session.deliveries[index].status = .success
+
+        if let dna = dnaResult {
+            session.deliveries[index].dna = dna
+            session.deliveries[index].dnaMatches = BowlingDNAMatcher.match(userDNA: dna, topN: 3)
+        }
+
+        var artifacts = deepAnalysisArtifactsByDelivery[deliveryID] ?? DeliveryDeepAnalysisArtifacts()
+        artifacts.poseFrames = poseFrames
+        artifacts.expertAnalysis = detailedResult.expertAnalysis ?? ExpertAnalysisBuilder.build(from: detailedResult.phases)
+        deepAnalysisArtifactsByDelivery[deliveryID] = artifacts
+
+        deepAnalysisStatusByDelivery[deliveryID] = DeliveryDeepAnalysisStatus(
+            stage: .ready,
+            elapsedSeconds: 0,
+            statusMessage: "Deep analysis ready",
+            failureMessage: nil
+        )
+
+        deepAnalysisTasksByDelivery[deliveryID] = nil
+        refreshSessionSummary()
+    }
+
+    private func startTelemetry(for deliveryID: UUID) {
+        stopTelemetry(for: deliveryID)
+        deepAnalysisStatusByDelivery[deliveryID] = DeliveryDeepAnalysisStatus(
+            stage: .running,
+            elapsedSeconds: 0,
+            statusMessage: SessionResultsPlanner.telemetryMessage(elapsedSeconds: 0),
+            failureMessage: nil
+        )
+        telemetryTasksByDelivery[deliveryID] = Task { [weak self] in
+            var elapsed = 0
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                elapsed += 2
+                guard let self else { return }
+                guard var status = self.deepAnalysisStatusByDelivery[deliveryID], status.stage == .running else { return }
+                status.elapsedSeconds = elapsed
+                status.statusMessage = SessionResultsPlanner.telemetryMessage(elapsedSeconds: elapsed)
+                self.deepAnalysisStatusByDelivery[deliveryID] = status
+            }
+        }
+    }
+
+    private func stopTelemetry(for deliveryID: UUID) {
+        telemetryTasksByDelivery[deliveryID]?.cancel()
+        telemetryTasksByDelivery[deliveryID] = nil
+    }
+
+    private func cancelAllDeepAnalysisTasks(resetState: Bool) {
+        for (_, task) in deepAnalysisTasksByDelivery {
+            task.cancel()
+        }
+        deepAnalysisTasksByDelivery.removeAll()
+
+        for (_, task) in telemetryTasksByDelivery {
+            task.cancel()
+        }
+        telemetryTasksByDelivery.removeAll()
+
+        if resetState {
+            deepAnalysisStatusByDelivery.removeAll()
+            deepAnalysisArtifactsByDelivery.removeAll()
+        }
+    }
+
+    private func refreshSessionSummary() {
+        let analyzed = session.deliveries.filter { $0.status == .success }
+        let dominant: PaceBand = {
+            let speeds = analyzed.compactMap { $0.speed?.lowercased() }
+            let quick = speeds.filter { $0.contains("quick") }.count
+            let slow = speeds.filter { $0.contains("slow") || $0.contains("spin") }.count
+            if quick > slow && quick > 0 { return .quick }
+            if slow > quick && slow > 0 { return .slow }
+            return .medium
+        }()
+
+        let paceDistribution: [PaceBand: Int] = [
+            .quick: analyzed.filter { ($0.speed ?? "").lowercased().contains("quick") }.count,
+            .medium: analyzed.filter {
+                let value = ($0.speed ?? "").lowercased()
+                return value.contains("medium") || value.contains("pace")
+            }.count,
+            .slow: analyzed.filter {
+                let value = ($0.speed ?? "").lowercased()
+                return value.contains("slow") || value.contains("spin")
+            }.count
+        ]
+
+        let observation = analyzed.last?.report ?? "Tap Deep Analysis on a delivery to generate coaching insights."
+        let challengeScore = session.mode == .challenge && session.challengeTotal > 0 ? session.challengeScoreText : nil
+        session.summary = SessionSummary(
+            totalDeliveries: session.deliveryCount,
+            durationMinutes: max(session.duration / 60.0, 0),
+            dominantPace: dominant,
+            paceDistribution: paceDistribution,
+            keyObservation: observation,
+            challengeScore: challengeScore
+        )
     }
 
     private func issueNextChallengeTarget(isInitial: Bool = false) async {
@@ -577,6 +799,29 @@ final class SessionViewModel: ObservableObject {
         let label = position == .front ? "front" : "back"
         return "Camera switched to \(label) camera. Treat this active camera view as source of truth now and briefly acknowledge the switch."
     }
+
+    static func shouldEndSession(from transcript: String) -> Bool {
+        let normalized = transcript
+            .lowercased()
+            .replacingOccurrences(of: "[^a-z\\s]", with: " ", options: .regularExpression)
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !normalized.isEmpty else { return false }
+        let phrases = [
+            "end session",
+            "end the session",
+            "stop session",
+            "stop the session",
+            "finish session",
+            "finish the session",
+            "wrap up session",
+            "wrap up the session",
+            "session over"
+        ]
+
+        return phrases.contains { normalized.contains($0) }
+    }
 }
 
 // MARK: - Actor Counter (thread-safe progress tracking)
@@ -611,6 +856,10 @@ extension SessionViewModel: VoiceMateDelegate {
     nonisolated func voiceMate(didTranscribeUser text: String) {
         Task { @MainActor in
             guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+            if Self.shouldEndSession(from: text) {
+                await endSession()
+                return
+            }
             await markPlanResponseAndContinueSetupIfNeeded()
         }
     }
@@ -694,6 +943,12 @@ extension SessionViewModel: DeliveryDetectionDelegate {
                 releaseWristY: releaseWristY
             )
             session.addDelivery(delivery)
+            deepAnalysisStatusByDelivery[delivery.id] = DeliveryDeepAnalysisStatus(
+                stage: .idle,
+                elapsedSeconds: 0,
+                statusMessage: "",
+                failureMessage: nil
+            )
 
             log.info("Delivery #\(count) detected at \(timestamp)s (\(bowlingArm.rawValue) arm, \(paceBand.label))")
 

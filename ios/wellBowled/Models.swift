@@ -255,6 +255,64 @@ extension LandmarksData {
             return FramePoseLandmarks(frameNumber: idx, timestamp: frame.t, landmarks: landmarks)
         }
     }
+
+    /// Builds phase-wise joint feedback directly from backend landmark labels.
+    /// This is the source of truth for overlay colors when Gemini labels joints.
+    func toExpertAnalysisFromGeminiFeedback() -> ExpertAnalysis? {
+        struct FeedbackBucket {
+            var start: Double
+            var end: Double
+            var good = Set<String>()
+            var slow = Set<String>()
+            var injury = Set<String>()
+        }
+
+        var buckets: [String: FeedbackBucket] = [:]
+
+        for frame in frames {
+            let phaseName = frame.p.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? "delivery_phase"
+                : frame.p.trimmingCharacters(in: .whitespacesAndNewlines)
+            var bucket = buckets[phaseName] ?? FeedbackBucket(start: frame.t, end: frame.t)
+            bucket.start = min(bucket.start, frame.t)
+            bucket.end = max(bucket.end, frame.t)
+
+            for landmark in frame.l {
+                guard let label = landmark.f?.lowercased() else { continue }
+                switch label {
+                case "good":
+                    bucket.good.insert(landmark.n)
+                case "slow", "attention", "attension", "needs_work":
+                    bucket.slow.insert(landmark.n)
+                case "injury_risk", "injury risk", "injury-risk", "risk":
+                    bucket.injury.insert(landmark.n)
+                default:
+                    continue
+                }
+            }
+
+            buckets[phaseName] = bucket
+        }
+
+        let mapped = buckets.compactMap { phaseName, bucket -> ExpertAnalysis.Phase? in
+            guard !bucket.good.isEmpty || !bucket.slow.isEmpty || !bucket.injury.isEmpty else {
+                return nil
+            }
+            return ExpertAnalysis.Phase(
+                phaseName: phaseName,
+                start: bucket.start,
+                end: max(bucket.end, bucket.start + 0.001),
+                feedback: ExpertAnalysis.Phase.Feedback(
+                    good: Array(bucket.good).sorted(),
+                    slow: Array(bucket.slow).sorted(),
+                    injuryRisk: Array(bucket.injury).sorted()
+                )
+            )
+        }
+        .sorted(by: { $0.start < $1.start })
+
+        return mapped.isEmpty ? nil : ExpertAnalysis(phases: mapped)
+    }
 }
 
 // MARK: - Analysis Phase (from Expert response)

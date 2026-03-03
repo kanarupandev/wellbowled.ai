@@ -62,6 +62,71 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
     Focus on what you can actually see. Be honest about limitations.
     """
 
+    // MARK: - Deep Analysis Prompt (On-Demand)
+
+    private static let deepAnalysisPrompt = """
+    You are analyzing a single 5-second cricket bowling clip.
+
+    Return STRICT JSON only:
+    {
+      "pace_estimate": "medium pace",
+      "summary": "One short summary sentence.",
+      "phases": [
+        {
+          "name": "Run-up",
+          "status": "GOOD",
+          "observation": "One short observation.",
+          "tip": "One short actionable correction or reinforcement.",
+          "clip_ts": 0.8
+        }
+      ],
+      "expert_analysis": {
+        "phases": [
+          {
+            "phaseName": "Run-up",
+            "start": 0.0,
+            "end": 1.0,
+            "feedback": {
+              "good": ["LEFT_HIP", "RIGHT_HIP"],
+              "slow": ["RIGHT_SHOULDER"],
+              "injury_risk": ["RIGHT_ELBOW"]
+            }
+          }
+        ]
+      }
+    }
+
+    Rules:
+    - Use 4 to 6 chronological phases max.
+    - status must be GOOD or NEEDS WORK.
+    - clip_ts, start, end must be within 0.0 to 5.0.
+    - Keep summary/observation/tip concise and non-robotic.
+    - If uncertain, still provide best-effort phase breakdown with lower-confidence wording.
+    """
+
+    // MARK: - Chip Guidance Prompt
+
+    private static let chipGuidancePrompt = """
+    You are controlling replay guidance for one bowling delivery.
+    Respond with STRICT JSON only:
+    {
+      "reply": "One short natural sentence.",
+      "action": "focus",
+      "phase_name": "Release",
+      "focus_start": 1.8,
+      "focus_end": 2.6,
+      "playback_rate": 0.45
+    }
+
+    Allowed actions: "focus", "pause", "slow_mo", "none".
+
+    Rules:
+    - Keep reply one short sentence.
+    - If action is focus, provide focus_start and focus_end in [0, 5].
+    - If action is slow_mo, playback_rate should be between 0.35 and 0.6.
+    - If pause or none, focus_start/focus_end can be null.
+    """
+
     // MARK: - DNA Extraction
 
     /// Extracts BowlingDNA from a clip using Gemini vision + MediaPipe-derived wrist data.
@@ -195,6 +260,70 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
         return try parseAnalysisResponse(data)
     }
 
+    func analyzeDeliveryDeep(clipURL: URL) async throws -> DeliveryDeepAnalysisResult {
+        let videoData = try Data(contentsOf: clipURL)
+        let base64Video = videoData.base64EncodedString()
+
+        let payload: [String: Any] = [
+            "contents": [[
+                "parts": [
+                    ["inlineData": ["mimeType": "video/mp4", "data": base64Video]],
+                    ["text": Self.deepAnalysisPrompt]
+                ]
+            ]],
+            "generationConfig": [
+                "temperature": 0.1,
+                "responseMimeType": "application/json"
+            ]
+        ]
+
+        let data = try await requestJSON(
+            payload: payload,
+            candidateModels: [WBConfig.deepAnalysisModel, WBConfig.analysisModel]
+        )
+
+        return try parseDeepAnalysisResponse(data)
+    }
+
+    func generateChipGuidance(
+        chip: String,
+        deliverySummary: String,
+        phases: [AnalysisPhase]
+    ) async throws -> ChipGuidanceResponse {
+        let phaseLines = phases.map { phase in
+            let ts = phase.clipTimestamp ?? 2.5
+            return "- \(phase.name) | \(phase.status) | clip_ts: \(String(format: "%.2f", ts)) | obs: \(phase.observation)"
+        }
+        .joined(separator: "\n")
+
+        let context = """
+        Chip selected by bowler: \(chip)
+        Delivery summary: \(deliverySummary)
+        Available phases:
+        \(phaseLines.isEmpty ? "- none" : phaseLines)
+        """
+
+        let payload: [String: Any] = [
+            "contents": [[
+                "parts": [
+                    ["text": Self.chipGuidancePrompt],
+                    ["text": context]
+                ]
+            ]],
+            "generationConfig": [
+                "temperature": 0.1,
+                "responseMimeType": "application/json"
+            ]
+        ]
+
+        let data = try await requestJSON(
+            payload: payload,
+            candidateModels: [WBConfig.chipControlModel, WBConfig.deepAnalysisModel, WBConfig.analysisModel]
+        )
+
+        return try parseChipGuidanceResponse(data)
+    }
+
     func evaluateChallenge(clipURL: URL, target: String) async throws -> ChallengeResult {
         let videoData = try Data(contentsOf: clipURL)
         let base64Video = videoData.base64EncodedString()
@@ -254,15 +383,7 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
     // MARK: - Response Parsing
 
     private func parseAnalysisResponse(_ data: Data) throws -> DeliveryAnalysis {
-        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-
-        guard let candidates = json?["candidates"] as? [[String: Any]],
-              let content = candidates.first?["content"] as? [String: Any],
-              let parts = content["parts"] as? [[String: Any]],
-              let text = parts.first(where: { $0["text"] != nil })?["text"] as? String else {
-            throw AnalysisError.parseError
-        }
-
+        let text = try extractCandidateText(from: data)
         guard let textData = text.data(using: .utf8),
               let result = try JSONSerialization.jsonObject(with: textData) as? [String: Any] else {
             throw AnalysisError.parseError
@@ -281,15 +402,7 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
     }
 
     private func parseChallengeResponse(_ data: Data) throws -> ChallengeResult {
-        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-
-        guard let candidates = json?["candidates"] as? [[String: Any]],
-              let content = candidates.first?["content"] as? [String: Any],
-              let parts = content["parts"] as? [[String: Any]],
-              let text = parts.first(where: { $0["text"] != nil })?["text"] as? String else {
-            throw AnalysisError.parseError
-        }
-
+        let text = try extractCandidateText(from: data)
         guard let textData = text.data(using: .utf8),
               let result = try JSONSerialization.jsonObject(with: textData) as? [String: Any] else {
             throw AnalysisError.parseError
@@ -302,6 +415,104 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
             detectedLength: DeliveryLength(rawValue: result["detected_length"] as? String ?? ""),
             detectedLine: DeliveryLine(rawValue: result["detected_line"] as? String ?? "")
         )
+    }
+
+    private func parseDeepAnalysisResponse(_ data: Data) throws -> DeliveryDeepAnalysisResult {
+        let text = try extractCandidateText(from: data)
+        guard let textData = text.data(using: .utf8),
+              let result = try JSONSerialization.jsonObject(with: textData) as? [String: Any] else {
+            throw AnalysisError.parseError
+        }
+
+        let paceEstimate = result["pace_estimate"] as? String ?? "medium pace"
+        let summary = result["summary"] as? String ?? ""
+
+        let phasesArray = (result["phases"] as? [[String: Any]] ?? [])
+        let phases: [AnalysisPhase] = phasesArray.map { phase in
+            AnalysisPhase(
+                name: phase["name"] as? String ?? "Phase",
+                status: phase["status"] as? String ?? "NEEDS WORK",
+                observation: phase["observation"] as? String ?? "",
+                tip: phase["tip"] as? String ?? "",
+                clipTimestamp: phase["clip_ts"] as? Double
+            )
+        }
+
+        var expertAnalysis: ExpertAnalysis?
+        if let expertDict = result["expert_analysis"] as? [String: Any],
+           let expertData = try? JSONSerialization.data(withJSONObject: expertDict),
+           let parsed = try? JSONDecoder().decode(ExpertAnalysis.self, from: expertData) {
+            expertAnalysis = parsed
+        } else {
+            expertAnalysis = ExpertAnalysisBuilder.build(from: phases)
+        }
+
+        return DeliveryDeepAnalysisResult(
+            paceEstimate: paceEstimate,
+            summary: summary,
+            phases: phases,
+            expertAnalysis: expertAnalysis
+        )
+    }
+
+    private func parseChipGuidanceResponse(_ data: Data) throws -> ChipGuidanceResponse {
+        let text = try extractCandidateText(from: data)
+        guard let textData = text.data(using: .utf8) else {
+            throw AnalysisError.parseError
+        }
+        do {
+            return try JSONDecoder().decode(ChipGuidanceResponse.self, from: textData)
+        } catch {
+            throw AnalysisError.parseError
+        }
+    }
+
+    private func extractCandidateText(from data: Data) throws -> String {
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        guard let candidates = json?["candidates"] as? [[String: Any]],
+              let content = candidates.first?["content"] as? [String: Any],
+              let parts = content["parts"] as? [[String: Any]],
+              let text = parts.first(where: { $0["text"] != nil })?["text"] as? String else {
+            throw AnalysisError.parseError
+        }
+        return text
+    }
+
+    private func requestJSON(payload: [String: Any], candidateModels: [String]) async throws -> Data {
+        var lastError: Error = AnalysisError.parseError
+        var triedAtLeastOne = false
+
+        for model in candidateModels where !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            triedAtLeastOne = true
+            do {
+                let url = WBConfig.generateContentURL(model: model)
+                var request = URLRequest(url: url)
+                request.httpMethod = "POST"
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                request.timeoutInterval = 120
+                request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+
+                let (data, response) = try await URLSession.shared.data(for: request)
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    throw AnalysisError.parseError
+                }
+                guard httpResponse.statusCode == 200 else {
+                    if httpResponse.statusCode == 404 || httpResponse.statusCode == 400 {
+                        continue
+                    }
+                    throw AnalysisError.apiError(httpResponse.statusCode)
+                }
+                return data
+            } catch {
+                lastError = error
+                continue
+            }
+        }
+
+        if !triedAtLeastOne {
+            throw AnalysisError.parseError
+        }
+        throw lastError
     }
 }
 

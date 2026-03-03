@@ -1,128 +1,159 @@
 # wellBowled Project Dev + Deployment Guide
 
-This document is project-specific.  
-The generic process rules remain in [dev_process.md](/Users/kanarupan/workspace/wellbowled.ai/docs/dev_process.md).
+This document is project-specific.
+Generic rules stay in [dev_process.md](/Users/kanarupan/workspace/wellbowled.ai/docs/dev_process.md).
 
 ## 1) Purpose
 
-Translate the generic process into concrete execution steps for this project:
-- multimodal cricket delivery detection experiments in this repo
-- iOS app implementation in external repo (`wellBowled`)
-- hackathon deployment as a demo-ready iPhone build (not production infra)
+Define the concrete workflow for this project:
+- implement iOS app features in this repo
+- ship a demo-ready iPhone build for hackathon judging
+- keep claims separated as `VALIDATED` vs `UNVERIFIED`
 
-## 2) Current Source of Truth
+## 1A) Autonomous Execution Contract
 
-- Product/use-case: [session_onboarding.md](/Users/kanarupan/workspace/wellbowled.ai/docs/session_onboarding.md)
-- Architecture and validated vs hypothesis tags: [architecture_decision.md](/Users/kanarupan/workspace/wellbowled.ai/docs/architecture_decision.md)
-- Research outcomes and open questions: [research/README.md](/Users/kanarupan/workspace/wellbowled.ai/research/README.md)
-- Repository map and external iOS file status: [SITEMAP.md](/Users/kanarupan/workspace/wellbowled.ai/docs/SITEMAP.md)
+1. Never ask the user how to execute the dev process.
+2. Process source of truth is these docs:
+- [dev_process.md](/Users/kanarupan/workspace/wellbowled.ai/docs/dev_process.md)
+- [project_dev_deploy_guide.md](/Users/kanarupan/workspace/wellbowled.ai/docs/project_dev_deploy_guide.md)
+- [codex_guide.md](/Users/kanarupan/workspace/wellbowled.ai/docs/codex_guide.md)
+3. Resolve process gaps by checking repo state and tooling first (`git log`, `rg`, `xcodebuild`, `xcrun devicectl`).
+4. Escalate only hard blockers:
+- missing product decision
+- missing permissions/credentials/device access
+- unresolved conflict between canonical docs after attempted reconciliation
+5. Any escalation must include: commands attempted, concrete errors, and next best options.
 
-## 3) Repos and Ownership
+## 2) Source Of Truth
 
-1. This repo (`wellbowled.ai`) holds:
-- docs
-- research
-- experiments and raw validation artifacts
+1. Product/use-case:
+[session_onboarding.md](/Users/kanarupan/workspace/wellbowled.ai/docs/session_onboarding.md)
+2. Architecture and status:
+[architecture_decision.md](/Users/kanarupan/workspace/wellbowled.ai/docs/architecture_decision.md)
+3. Handover and runbook:
+[codex_guide.md](/Users/kanarupan/workspace/wellbowled.ai/docs/codex_guide.md)
+4. Code map:
+[SITEMAP.md](/Users/kanarupan/workspace/wellbowled.ai/docs/SITEMAP.md)
 
-2. External iOS repo (`wellBowled`) holds:
-- Swift app code
-- XCTest coverage
-- actual on-device integration implementation
+## 3) Repos And Ownership
 
-Path reference from process doc: `/Users/kanarupan/workspace/wellBowled/ios/wellBowled/`.
+1. Only repo for active development:
+`/Users/kanarupan/workspace/wellbowled.ai`
+2. iOS source-of-truth code:
+`/Users/kanarupan/workspace/wellbowled.ai/ios/wellBowled/`
+3. Xcode build copy (disposable, never edit directly):
+`/Users/kanarupan/workspace/xcodeProj/wellBowled/wellBowled/`
+4. Obsolete repo (do not use):
+`/Users/kanarupan/workspace/dont_use_obsolete_wellBowled/`
 
 ## 4) Project-Specific Development Flow
 
-Mapped to generic steps in [dev_process.md](/Users/kanarupan/workspace/wellbowled.ai/docs/dev_process.md):
+Mapped to [dev_process.md](/Users/kanarupan/workspace/wellbowled.ai/docs/dev_process.md):
 
 1. Understand
-- Confirm target slice: Tier 1 MVP loop first.
-- Explicitly separate validated capability vs hypothesis in planning notes.
+- lock the slice (for now: Live Challenge flow first)
+- restate unknowns explicitly
+- do not ask process-level questions; derive from the runbook and execute
 
 2. Research
-- Use [research/README.md](/Users/kanarupan/workspace/wellbowled.ai/research/README.md) as index.
-- Do not restate old conclusions without checking latest commit trail.
+- read latest commits touching changed files
+- confirm current behavior in source, not memory
 
 3. Experiment
-- Run scripts in `experiments/` with config-driven settings.
-- Record exact command, input clip, output artifact path, and pass/fail threshold.
+- run real commands / device checks for integration claims
+- record exact command + result
 
 4. Verify
-- Update docs with `VALIDATED` or `HYPOTHESIS`.
-- If conflicting claims exist, fix contradiction before next implementation task.
+- label each behavior `VALIDATED` or `UNVERIFIED`
+- do not treat local interaction as accuracy proof
 
 5. Plan
-- Plan smallest vertical slice that improves Tier 1 MVP:
-`detect -> local count TTS -> live conversation -> post-session clip analysis`.
+- smallest vertical slice that can be demoed:
+`start mode -> announce challenge -> detect ball -> evaluate -> show score`
 
 6. Test-first + implement
-- Add/extend unit tests in `experiments/test_parsers.py` (and new focused test files as needed).
-- Keep constants in [experiments/shared_config.py](/Users/kanarupan/workspace/wellbowled.ai/experiments/shared_config.py), avoid hardcoded runtime literals.
+- tests in `ios/wellBowled/Tests/`
+- app code in `ios/wellBowled/`
+- one behavior change per commit
 
 7. Verify again
-- Minimum check:
-`python3 -m unittest discover -s experiments -p 'test_parsers.py' -v`
-- Capture result in commit message body or follow-up doc sync when behavior changed.
+- simulator compile/tests
+- physical-device build/install
+- short manual run through the demo path
 
 8. Document
-- Sync affected docs in same workstream.
-- Add cross references, avoid orphan claims.
+- sync affected docs in same workstream
+- remove contradictions immediately
 
 ## 5) Coding Constraints (This Project)
 
-1. No production infra additions for hackathon scope.
-2. Speed outputs must be framed as exploratory/uncalibrated pace bands unless radar-calibrated evidence exists.
-3. Live API behavior assumptions must match validated conversational-turn model behavior.
-4. Any iOS status claim in this repo must be marked external/unverified unless backed by local code in this repo.
+1. No production backend/infrastructure scope for hackathon build.
+2. Speed output must remain exploratory pace bands unless radar-calibrated.
+3. Live API is conversational; do not claim proactive monitoring behavior.
+4. Challenge interaction can be `VALIDATED` while challenge accuracy remains `UNVERIFIED` until measured end-to-end.
 
-## 6) Commit Journal Rules (Multi-Agent)
+## 6) Commit Rules (Multi-Agent)
 
-1. Codex commits must use `codex:` prefix.
-2. Keep commits incremental and scoped (one change theme per commit).
-3. Do not mix unrelated doc cleanup with code behavior changes.
-4. Before editing files touched by other agents, re-read latest commits and current file state.
+1. Codex commits use `codex:` prefix.
+2. Keep commits scoped and incremental.
+3. Do not mix unrelated docs cleanup with behavior changes.
+4. Re-read files recently touched by another agent before editing.
 
-## 7) Hackathon Deployment Steps (Project-Specific)
+## 7) Hackathon Deployment Steps
 
-Definition here: deployment means demo-ready iPhone app delivery, not production backend rollout.
+Deployment here means demo-ready iPhone app delivery.
+In this project, deploy specifically means: build, reinstall/update app on target iPhone, then validate launch.
 
 1. Pre-deploy checklist
-- Tier 1 flow verified end-to-end on device (or explicitly marked partial).
-- Test suite for experiment utilities green.
-- Docs aligned: onboarding, architecture, research index.
+- challenge flow runs end-to-end on device
+- test suite green for touched areas
+- docs synced and contradiction-free
 
-2. iOS build prep (external repo)
-- Open external `wellBowled` Xcode project.
-- Configure API key flow via app settings/runtime prompt (no hardcoded secret).
-- Ensure required assets/models are bundled if needed for on-device detection.
+2. Build prep
+- sync `wellbowled.ai/ios/wellBowled` into `xcodeProj/wellBowled/wellBowled`
+- keep tests in `wellBowledTests` target
 
-3. Device validation run
-- Run one full session:
-record -> detect/count -> live question/response -> end session -> clip analysis.
-- Capture demo-safe evidence (timestamps, screenshots, short recording).
+3. Build + reinstall
+- build from `xcodeProj/wellBowled` for target device
+- reinstall via `xcrun devicectl device install app --device <UDID> <app_path>`
 
-4. Demo package
-- Freeze branch/commit used for demo.
-- Prepare one-page runbook:
-startup, permissions, happy path, fallback path if network degrades.
-- Use pace bands (not precise kph) in UI copy and spoken/demo narrative.
+4. Device validation run
+- run one full session:
+`record -> detect/count -> live conversation -> end -> post-session challenge score`
+- capture evidence (timestamps, screenshots, short recording)
 
-5. Fallback mode for demo stability
-- If Live API is unstable in venue conditions:
-switch to fallback flow documented in [architecture_decision.md](/Users/kanarupan/workspace/wellbowled.ai/docs/architecture_decision.md) (Option C) and state it transparently.
+5. Demo package
+- freeze branch + commit hash
+- prepare 4-minute runbook:
+3-minute live segment + 1-minute results segment
+
+6. Fallback
+- if venue network degrades, switch to fallback path in
+[architecture_decision.md](/Users/kanarupan/workspace/wellbowled.ai/docs/architecture_decision.md)
 
 ## 8) Quick Command Reference
 
-From this repo:
-
 ```bash
-git log --oneline -15
-python3 -m unittest discover -s experiments -p 'test_parsers.py' -v
+git -C /Users/kanarupan/workspace/wellbowled.ai log --oneline -15
+
+xcrun devicectl list devices
+
+cd /Users/kanarupan/workspace/xcodeProj/wellBowled && \
+xcodebuild -workspace wellBowled.xcworkspace \
+  -scheme wellBowled \
+  -destination "platform=iOS Simulator,name=iPhone 17 Pro" test
+
+cd /Users/kanarupan/workspace/xcodeProj/wellBowled && \
+xcodebuild -workspace wellBowled.xcworkspace \
+  -scheme wellBowled \
+  -destination "platform=iOS,id=E40F593B-ABB6-514A-873F-48CD7C4F98F3" \
+  -configuration Debug clean build
+
+APP_PATH=$(find /Users/kanarupan/Library/Developer/Xcode/DerivedData/wellBowled-* \
+  -path '*/Build/Products/Debug-iphoneos/wellBowled.app' -type d | grep -v 'Index.noindex' | sort | tail -n 1) && \
+xcrun devicectl device install app --device E40F593B-ABB6-514A-873F-48CD7C4F98F3 "$APP_PATH"
+
+xcrun devicectl device process launch --device E40F593B-ABB6-514A-873F-48CD7C4F98F3 kanarupan.wellBowled
 ```
 
-Useful file anchors:
-- [experiments/shared_config.py](/Users/kanarupan/workspace/wellbowled.ai/experiments/shared_config.py)
-- [experiments/delivery_detection/detect.py](/Users/kanarupan/workspace/wellbowled.ai/experiments/delivery_detection/detect.py)
-- [experiments/live_speed/simulate_live.py](/Users/kanarupan/workspace/wellbowled.ai/experiments/live_speed/simulate_live.py)
-- [experiments/live_speed/speed_gemini.py](/Users/kanarupan/workspace/wellbowled.ai/experiments/live_speed/speed_gemini.py)
-
+If launch is denied with locked-device error, unlock iPhone and rerun the launch command.
