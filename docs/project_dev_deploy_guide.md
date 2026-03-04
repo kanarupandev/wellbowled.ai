@@ -131,6 +131,23 @@ In this project, deploy specifically means: build, reinstall/update app on targe
 - if venue network degrades, switch to fallback path in
 [architecture_decision.md](/Users/kanarupan/workspace/wellbowled.ai/docs/architecture_decision.md)
 
+## 7A) Regression Guardrail (Camera Preview API Incident)
+
+Incident class (must not repeat):
+- shared component API changed (`CameraPreview(session:)` -> `CameraPreview(previewLayer:)`) but one call site was missed, causing compile/test/install delay.
+
+Mandatory prevention checklist before install:
+1. Call-site sweep for changed symbols:
+- `rg -n "CameraPreview\\(" /Users/kanarupan/workspace/wellbowled.ai/ios/wellBowled`
+2. Verify no stale initializer remains:
+- no `CameraPreview(session:` usage allowed.
+3. Full simulator tests pass:
+- `xcodebuild ... test` must return `** TEST SUCCEEDED **`.
+4. Device build + reinstall + launch:
+- only after step 3 is green.
+5. If step 1-4 fails:
+- stop install attempts, fix source-of-truth, resync, rerun.
+
 ## 8) Quick Command Reference
 
 ```bash

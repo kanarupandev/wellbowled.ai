@@ -1,6 +1,6 @@
 # Codex Handover Guide — wellBowled
 
-> **Last updated**: R24 (3 March 2026) by Codex
+> **Last updated**: R26 (4 March 2026) by Codex
 > **Purpose**: Self-contained input for Codex when Claude quota is unavailable.
 > **Rule**: Read this ENTIRE document before writing any code.
 
@@ -51,7 +51,7 @@ git branch: codex/dev
 
 ---
 
-## 1. Current State (R24)
+## 1. Current State (R25)
 
 ### What's DONE and validated
 | Feature | Status | Key Files |
@@ -63,6 +63,7 @@ git branch: codex/dev
 | Live mode switch tool call (`switch_session_mode`) | Code wired, unit tested | `GeminiLiveService.swift`, `Protocols.swift`, `SessionViewModel.swift`, `Enums.swift` |
 | Live mode fine-print label at top-left (`Mode: Free/Challenge`) | Code wired | `LiveSessionView.swift`, `Enums.swift` |
 | Live session timeout set to 3 minutes (config one-liner) | Code wired, unit tested | `WBConfig.swift`, `Tests/WBConfigTests.swift` |
+| Native iPhone camera tuning (target 60fps + preferred 720p+, per-camera format selection + fallback) | Code wired, unit tested, device build validated | `CameraService.swift`, `WBConfig.swift`, `Tests/WBConfigTests.swift` |
 | 8 mate personas (4 lang × 2 gender) | On device | `WBConfig.swift`, `HomeView.swift` |
 | MediaPipe delivery detection (wrist spike) | Code wired, builds | `DeliveryDetector.swift`, `WristVelocityTracker.swift` |
 | Post-session analysis (clips → Gemini Pro) | Code wired, builds | `SessionViewModel.swift`, `GeminiAnalysisService.swift` |
@@ -337,6 +338,20 @@ git push
 - **"BUILD FAILED"** → Read the error lines. Fix in source of truth (Step 1), NOT in Xcode project
 - **Pods out of date** → `cd /Users/kanarupan/workspace/xcodeProj/wellBowled && pod install`
 - **App crashes on launch** → Check crash log (Step 4), likely a missing nil check or force unwrap
+- **Compile fails after API refactor** → run call-site sweep immediately:
+  - `rg -n "CameraPreview\\(" /Users/kanarupan/workspace/wellbowled.ai/ios/wellBowled`
+  - stale `CameraPreview(session:)` is invalid; only `CameraPreview(previewLayer:)` is allowed
+- **Install request arrives before validation complete** → do not install yet:
+  - simulator tests must pass first (`** TEST SUCCEEDED **`)
+  - then build/install/launch on device
+
+### Non-Repeat Rule (Camera Preview Regression)
+
+This mistake must not recur. Hard rule:
+1. If shared symbol signature changes, sweep all call sites with `rg` before running tests.
+2. Fix only in source-of-truth (`wellbowled.ai/ios/wellBowled`), then sync to Xcode copy.
+3. Do not attempt reinstall until full simulator tests pass.
+4. After install, launch app and confirm process start on device.
 
 ### Prerequisites
 - Xcode 16+ with iOS 17 SDK
