@@ -3,6 +3,11 @@ import os
 
 private let log = Logger(subsystem: "com.wellbowled", category: "Analysis")
 
+struct GeminiSegmentDeliveryDetection: Equatable {
+    let localTimestamp: Double
+    let confidence: Double
+}
+
 /// Analyzes delivery clips using Gemini generateContent REST API.
 /// Implements DeliveryAnalyzing protocol for post-session analysis.
 final class GeminiAnalysisService: DeliveryAnalyzing {
@@ -127,6 +132,30 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
     - If pause or none, focus_start/focus_end can be null.
     """
 
+    // MARK: - Segment Delivery Detection Prompt
+
+    private static let segmentDeliveryDetectionPrompt = """
+    You are analyzing one cricket bowling video segment.
+    Detect each bowling RELEASE instant (the ball leaving the hand).
+
+    Return STRICT JSON only:
+    {
+      "deliveries": [
+        {
+          "release_time_sec": 12.4,
+          "confidence": 0.86
+        }
+      ]
+    }
+
+    Rules:
+    - `release_time_sec` is seconds from segment start.
+    - Keep times sorted ascending.
+    - Ignore non-bowling motion and partial run-ups without release.
+    - Use confidence in [0, 1].
+    - If none found, return { "deliveries": [] }.
+    """
+
     // MARK: - DNA Extraction
 
     /// Extracts BowlingDNA from a clip using Gemini vision + MediaPipe-derived wrist data.
@@ -227,6 +256,7 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
     func analyzeDelivery(clipURL: URL) async throws -> DeliveryAnalysis {
         let videoData = try Data(contentsOf: clipURL)
         let base64Video = videoData.base64EncodedString()
+        log.debug("Starting standard delivery analysis: clip=\(clipURL.lastPathComponent, privacy: .public)")
 
         let payload: [String: Any] = [
             "contents": [[
@@ -257,12 +287,15 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
             throw AnalysisError.apiError(statusCode)
         }
 
-        return try parseAnalysisResponse(data)
+        let analysis = try parseAnalysisResponse(data)
+        log.debug("Standard delivery analysis completed: clip=\(clipURL.lastPathComponent, privacy: .public), pace=\(analysis.paceEstimate, privacy: .public)")
+        return analysis
     }
 
     func analyzeDeliveryDeep(clipURL: URL) async throws -> DeliveryDeepAnalysisResult {
         let videoData = try Data(contentsOf: clipURL)
         let base64Video = videoData.base64EncodedString()
+        log.debug("Starting deep delivery analysis: clip=\(clipURL.lastPathComponent, privacy: .public)")
 
         let payload: [String: Any] = [
             "contents": [[
@@ -282,7 +315,9 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
             candidateModels: [WBConfig.deepAnalysisModel, WBConfig.analysisModel]
         )
 
-        return try parseDeepAnalysisResponse(data)
+        let result = try parseDeepAnalysisResponse(data)
+        log.debug("Deep delivery analysis completed: clip=\(clipURL.lastPathComponent, privacy: .public), phases=\(result.phases.count)")
+        return result
     }
 
     func generateChipGuidance(
@@ -290,6 +325,7 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
         deliverySummary: String,
         phases: [AnalysisPhase]
     ) async throws -> ChipGuidanceResponse {
+        log.debug("Starting chip guidance request: chip=\(chip, privacy: .public), phases=\(phases.count)")
         let phaseLines = phases.map { phase in
             let ts = phase.clipTimestamp ?? 2.5
             return "- \(phase.name) | \(phase.status) | clip_ts: \(String(format: "%.2f", ts)) | obs: \(phase.observation)"
@@ -321,12 +357,15 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
             candidateModels: [WBConfig.chipControlModel, WBConfig.deepAnalysisModel, WBConfig.analysisModel]
         )
 
-        return try parseChipGuidanceResponse(data)
+        let response = try parseChipGuidanceResponse(data)
+        log.debug("Chip guidance completed: action=\(response.action, privacy: .public), phase=\(response.phaseName ?? "-", privacy: .public)")
+        return response
     }
 
     func evaluateChallenge(clipURL: URL, target: String) async throws -> ChallengeResult {
         let videoData = try Data(contentsOf: clipURL)
         let base64Video = videoData.base64EncodedString()
+        log.debug("Starting challenge evaluation: clip=\(clipURL.lastPathComponent, privacy: .public), target=\(target, privacy: .public)")
 
         let prompt = """
         You are evaluating a cricket bowling delivery against a target.
@@ -363,8 +402,55 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
         request.timeoutInterval = 120
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
-        let (data, _) = try await URLSession.shared.data(for: request)
-        return try parseChallengeResponse(data)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            log.error("Challenge evaluation API error: HTTP \(statusCode)")
+            throw AnalysisError.apiError(statusCode)
+        }
+        let result = try parseChallengeResponse(data)
+        log.debug("Challenge evaluation completed: match=\(result.matchesTarget), confidence=\(result.confidence, privacy: .public)")
+        return result
+    }
+
+    func detectDeliveryTimestampsInSegment(
+        segmentURL: URL,
+        segmentDuration: Double
+    ) async throws -> [GeminiSegmentDeliveryDetection] {
+        let videoData = try Data(contentsOf: segmentURL)
+        let base64Video = videoData.base64EncodedString()
+        let durationText = String(format: "%.2f", max(segmentDuration, 0))
+        log.debug(
+            "Segment delivery detection started: segment=\(segmentURL.lastPathComponent, privacy: .public), duration=\(durationText, privacy: .public)s"
+        )
+
+        let context = "Segment duration: \(durationText) seconds."
+        let payload: [String: Any] = [
+            "contents": [[
+                "parts": [
+                    ["inlineData": ["mimeType": "video/mp4", "data": base64Video]],
+                    ["text": Self.segmentDeliveryDetectionPrompt],
+                    ["text": context]
+                ]
+            ]],
+            "generationConfig": [
+                "temperature": 0.0,
+                "responseMimeType": "application/json"
+            ]
+        ]
+
+        let data = try await requestJSON(
+            payload: payload,
+            candidateModels: [WBConfig.deliveryDetectionModel, WBConfig.deepAnalysisModel, WBConfig.analysisModel]
+        )
+        let detections = try parseSegmentDeliveryDetections(data, segmentDuration: segmentDuration)
+        let preview = detections.prefix(8).map {
+            String(format: "%.2fs@%.2f", $0.localTimestamp, $0.confidence)
+        }.joined(separator: ", ")
+        log.debug(
+            "Segment delivery detection completed: segment=\(segmentURL.lastPathComponent, privacy: .public), releases=\(detections.count), preview=[\(preview, privacy: .public)]"
+        )
+        return detections
     }
 
     func generateSessionSummary(deliveries: [Delivery]) async throws -> SessionSummary {
@@ -434,17 +520,18 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
                 status: phase["status"] as? String ?? "NEEDS WORK",
                 observation: phase["observation"] as? String ?? "",
                 tip: phase["tip"] as? String ?? "",
-                clipTimestamp: phase["clip_ts"] as? Double
+                clipTimestamp: (phase["clip_ts"] as? Double).flatMap { min(max($0, 0), 5.0) }
             )
         }
+        .sorted { ($0.clipTimestamp ?? 10.0) < ($1.clipTimestamp ?? 10.0) }
 
         var expertAnalysis: ExpertAnalysis?
         if let expertDict = result["expert_analysis"] as? [String: Any],
            let expertData = try? JSONSerialization.data(withJSONObject: expertDict),
            let parsed = try? JSONDecoder().decode(ExpertAnalysis.self, from: expertData) {
-            expertAnalysis = parsed
+            expertAnalysis = normalized(expertAnalysis: parsed)
         } else {
-            expertAnalysis = ExpertAnalysisBuilder.build(from: phases)
+            expertAnalysis = ExpertAnalysisBuilder.build(from: phases).map { normalized(expertAnalysis: $0) }
         }
 
         return DeliveryDeepAnalysisResult(
@@ -467,6 +554,77 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
         }
     }
 
+    private func parseSegmentDeliveryDetections(
+        _ data: Data,
+        segmentDuration: Double
+    ) throws -> [GeminiSegmentDeliveryDetection] {
+        let text = try extractCandidateText(from: data)
+        return try Self.parseSegmentDeliveryDetections(fromCandidateText: text, segmentDuration: segmentDuration)
+    }
+
+    static func parseSegmentDeliveryDetections(
+        fromCandidateText text: String,
+        segmentDuration: Double
+    ) throws -> [GeminiSegmentDeliveryDetection] {
+        let jsonText = extractJSONObjectText(from: text)
+        guard let textData = jsonText.data(using: .utf8),
+              let object = try JSONSerialization.jsonObject(with: textData) as? [String: Any] else {
+            throw AnalysisError.parseError
+        }
+
+        let rawDeliveries: [Any] = {
+            if let deliveries = object["deliveries"] as? [Any] {
+                return deliveries
+            }
+            if let releaseTimes = object["release_times_sec"] as? [Any] {
+                return releaseTimes
+            }
+            if let releaseTimes = object["release_times"] as? [Any] {
+                return releaseTimes
+            }
+            return []
+        }()
+
+        let maxDuration = max(segmentDuration, 0)
+        var parsed: [GeminiSegmentDeliveryDetection] = []
+
+        for item in rawDeliveries {
+            if let number = parseDouble(item) {
+                parsed.append(
+                    GeminiSegmentDeliveryDetection(
+                        localTimestamp: min(max(number, 0), maxDuration),
+                        confidence: 0.5
+                    )
+                )
+                continue
+            }
+
+            guard let dict = item as? [String: Any] else { continue }
+            let rawTimestamp = (
+                parseDouble(dict["release_time_sec"]) ??
+                parseDouble(dict["time_sec"]) ??
+                parseDouble(dict["timestamp"]) ??
+                parseDouble(dict["release_timestamp"])
+            )
+            guard let rawTimestamp else { continue }
+
+            let rawConfidence = parseDouble(dict["confidence"]) ?? 0.5
+            parsed.append(
+                GeminiSegmentDeliveryDetection(
+                    localTimestamp: min(max(rawTimestamp, 0), maxDuration),
+                    confidence: min(max(rawConfidence, 0), 1)
+                )
+            )
+        }
+
+        return parsed.sorted { lhs, rhs in
+            if lhs.localTimestamp != rhs.localTimestamp {
+                return lhs.localTimestamp < rhs.localTimestamp
+            }
+            return lhs.confidence > rhs.confidence
+        }
+    }
+
     private func extractCandidateText(from data: Data) throws -> String {
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         guard let candidates = json?["candidates"] as? [[String: Any]],
@@ -478,6 +636,32 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
         return text
     }
 
+    private static func extractJSONObjectText(from raw: String) -> String {
+        var cleaned = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if cleaned.hasPrefix("```") {
+            cleaned = cleaned
+                .replacingOccurrences(of: "```json", with: "")
+                .replacingOccurrences(of: "```", with: "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if let start = cleaned.firstIndex(of: "{"),
+           let end = cleaned.lastIndex(of: "}") {
+            return String(cleaned[start...end])
+        }
+        return cleaned
+    }
+
+    private static func parseDouble(_ value: Any?) -> Double? {
+        guard let value else { return nil }
+        if let number = value as? Double { return number }
+        if let number = value as? Int { return Double(number) }
+        if let number = value as? NSNumber { return number.doubleValue }
+        if let text = value as? String {
+            return Double(text.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+        return nil
+    }
+
     private func requestJSON(payload: [String: Any], candidateModels: [String]) async throws -> Data {
         var lastError: Error = AnalysisError.parseError
         var triedAtLeastOne = false
@@ -485,6 +669,7 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
         for model in candidateModels where !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             triedAtLeastOne = true
             do {
+                log.debug("JSON request attempt: model=\(model, privacy: .public)")
                 let url = WBConfig.generateContentURL(model: model)
                 var request = URLRequest(url: url)
                 request.httpMethod = "POST"
@@ -497,13 +682,16 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
                     throw AnalysisError.parseError
                 }
                 guard httpResponse.statusCode == 200 else {
+                    log.debug("JSON request non-200: model=\(model, privacy: .public), status=\(httpResponse.statusCode)")
                     if httpResponse.statusCode == 404 || httpResponse.statusCode == 400 {
                         continue
                     }
                     throw AnalysisError.apiError(httpResponse.statusCode)
                 }
+                log.debug("JSON request success: model=\(model, privacy: .public)")
                 return data
             } catch {
+                log.debug("JSON request failed: model=\(model, privacy: .public), error=\(error.localizedDescription, privacy: .public)")
                 lastError = error
                 continue
             }
@@ -513,6 +701,22 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
             throw AnalysisError.parseError
         }
         throw lastError
+    }
+
+    private func normalized(expertAnalysis: ExpertAnalysis) -> ExpertAnalysis {
+        let normalizedPhases = expertAnalysis.phases
+            .map { phase -> ExpertAnalysis.Phase in
+                let start = min(max(phase.start, 0), 5.0)
+                let end = min(max(phase.end, start + 0.001), 5.0)
+                return ExpertAnalysis.Phase(
+                    phaseName: phase.phaseName,
+                    start: start,
+                    end: max(end, start + 0.001),
+                    feedback: phase.feedback
+                )
+            }
+            .sorted(by: { $0.start < $1.start })
+        return ExpertAnalysis(phases: normalizedPhases)
     }
 }
 
