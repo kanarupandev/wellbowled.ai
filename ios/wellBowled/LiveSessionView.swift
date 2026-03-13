@@ -590,6 +590,7 @@ private struct SessionDeliveryResultPage: View {
                     .ignoresSafeArea()
                 }
                 .onAppear {
+                    liveViewLog.info("SessionDeliveryResultPage appeared: deliveryID=\(deliveryID.uuidString.prefix(8), privacy: .public), hasVideo=\(delivery.videoURL != nil)")
                     setupPlayerIfNeeded()
                     refreshArtifactsFromViewModel()
                 }
@@ -622,6 +623,7 @@ private struct SessionDeliveryResultPage: View {
     private var saveButton: some View {
         let status = viewModel.sessionVideoSaveStatus
         Button {
+            liveViewLog.debug("Save button tapped: deliveryID=\(deliveryID.uuidString.prefix(8), privacy: .public), status=\(String(describing: status), privacy: .public)")
             Task { await viewModel.saveLastSessionVideoToPhotos() }
         } label: {
             Group {
@@ -649,6 +651,7 @@ private struct SessionDeliveryResultPage: View {
         switch deepStatus.stage {
         case .idle:
             Button {
+                liveViewLog.debug("Deep analysis sparkle tapped: deliveryID=\(deliveryID.uuidString.prefix(8), privacy: .public)")
                 Task { await viewModel.runDeepAnalysisIfNeeded(for: deliveryID) }
             } label: {
                 Image(systemName: "sparkles")
@@ -669,6 +672,7 @@ private struct SessionDeliveryResultPage: View {
                 .background(Circle().fill(Color.black.opacity(0.45)))
         case .failed:
             Button {
+                liveViewLog.debug("Deep analysis retry tapped: deliveryID=\(deliveryID.uuidString.prefix(8), privacy: .public)")
                 Task { await viewModel.runDeepAnalysisIfNeeded(for: deliveryID) }
             } label: {
                 Image(systemName: "arrow.clockwise")
@@ -707,7 +711,10 @@ private struct SessionDeliveryResultPage: View {
                 }
 
                 // Pause
-                Button { togglePause() } label: {
+                Button {
+                    liveViewLog.debug("Overlay pause chip tapped: paused=\(isPlaybackPaused)")
+                    togglePause()
+                } label: {
                     Image(systemName: isPlaybackPaused ? "play.fill" : "pause.fill")
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundColor(isPlaybackPaused ? .black : .white)
@@ -723,7 +730,10 @@ private struct SessionDeliveryResultPage: View {
                 .buttonStyle(.plain)
 
                 // Slow-mo
-                Button { toggleSlowMotion() } label: {
+                Button {
+                    liveViewLog.debug("Overlay slow-mo chip tapped: slowMo=\(isSlowMotion)")
+                    toggleSlowMotion()
+                } label: {
                     Text("0.5×")
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundColor(isSlowMotion ? .black : .white)
@@ -876,7 +886,7 @@ private struct SessionDeliveryResultPage: View {
     }
 
     private func refreshArtifactsFromViewModel() {
-        print("🦴 [LiveSession] refreshArtifacts called: deliveryID=\(deliveryID.uuidString.prefix(8)), phases=\(phases.count), deepStatus=\(deepStatus.stage), artifactKeys=\(viewModel.deepAnalysisArtifactsByDelivery.keys.map { String($0.uuidString.prefix(8)) })")
+        liveViewLog.debug("refreshArtifacts: deliveryID=\(self.deliveryID.uuidString.prefix(8), privacy: .public), phases=\(self.phases.count), deepStatus=\(String(describing: self.deepStatus.stage), privacy: .public)")
         guard let artifacts = viewModel.deepAnalysisArtifacts(for: deliveryID) else {
             liveViewLog.debug("refreshArtifacts: no artifacts for delivery \(self.deliveryID.uuidString.prefix(8), privacy: .public), phases=\(self.phases.count)")
             if phases.isEmpty {
@@ -885,15 +895,13 @@ private struct SessionDeliveryResultPage: View {
                 // Deep analysis completed but no artifacts found — likely ID mismatch
                 poseNote = "Pose data not linked. Re-run deep analysis."
                 liveViewLog.warning("Phases exist (\(self.phases.count)) but no artifacts for deliveryID=\(self.deliveryID.uuidString.prefix(8), privacy: .public). Available artifact keys: \(self.viewModel.deepAnalysisArtifactsByDelivery.keys.map { $0.uuidString.prefix(8) }, privacy: .public)")
-                print("🦴 [LiveSession] BUG: phases=\(self.phases.count) but artifacts nil for \(self.deliveryID.uuidString.prefix(8)). Keys: \(self.viewModel.deepAnalysisArtifactsByDelivery.keys.map { String($0.uuidString.prefix(8)) })")
                 expertAnalysis = ExpertAnalysisBuilder.build(from: phases)
             }
             rebuildSyncControllerIfPossible()
             return
         }
 
-        liveViewLog.info("refreshArtifacts: delivery \(self.deliveryID.uuidString.prefix(8), privacy: .public) — poseFrames=\(artifacts.poseFrames.count), hasExpertAnalysis=\(artifacts.expertAnalysis != nil), hasChipReply=\(artifacts.chipReply != nil)")
-        print("🦴 [LiveSession] refreshArtifacts: poseFrames=\(artifacts.poseFrames.count)")
+        liveViewLog.info("refreshArtifacts: delivery \(self.deliveryID.uuidString.prefix(8), privacy: .public) — poseFrames=\(artifacts.poseFrames.count), hasExpertAnalysis=\(artifacts.expertAnalysis != nil)")
 
         if !artifacts.poseFrames.isEmpty {
             poseFrames = artifacts.poseFrames
@@ -902,7 +910,6 @@ private struct SessionDeliveryResultPage: View {
         } else if deepStatus.stage == .ready {
             poseNote = artifacts.poseFailureReason ?? "Pose overlay unavailable for this delivery."
             liveViewLog.warning("Deep analysis ready but 0 pose frames for delivery \(self.deliveryID.uuidString.prefix(8), privacy: .public). reason=\(artifacts.poseFailureReason ?? "-", privacy: .public)")
-            print("🦴 [LiveSession] WARNING: 0 pose frames despite deep analysis ready")
         }
 
         if let analysis = artifacts.expertAnalysis {
@@ -1036,7 +1043,6 @@ private struct SessionDeliveryResultPage: View {
             expertAnalysis: expertAnalysis
         )
         liveViewLog.info("Skeleton sync controller rebuilt: frames=\(self.poseFrames.count), hasExpertAnalysis=\(self.expertAnalysis != nil)")
-        print("🦴 [LiveSession] Skeleton rebuilt: \(self.poseFrames.count) frames")
     }
 
     private func feedbackForPhase(_ phase: AnalysisPhase) -> ExpertAnalysis.Phase.Feedback? {
@@ -1160,90 +1166,6 @@ private struct SessionDeepAnalysisPendingCard: View {
             RoundedRectangle(cornerRadius: 10)
                 .stroke(Color.white.opacity(0.14), lineWidth: 1)
         )
-    }
-}
-
-private struct SessionVideoControlChips: View {
-    let suggestions: [SessionPhaseSuggestion]
-    let selectedFocusChipID: String?
-    let isPaused: Bool
-    let isSlowMotion: Bool
-    let onFocusTap: (SessionPhaseSuggestion) -> Void
-    let onPauseTap: () -> Void
-    let onSlowMoTap: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Focus suggestions")
-                .font(.caption.weight(.semibold))
-                .foregroundColor(.white.opacity(0.86))
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(suggestions) { suggestion in
-                        SessionControlChip(
-                            title: suggestion.phaseName,
-                            subtitle: "Focus",
-                            isSelected: selectedFocusChipID == suggestion.id,
-                            color: peacockBlue
-                        ) {
-                            onFocusTap(suggestion)
-                        }
-                    }
-
-                    SessionControlChip(
-                        title: "Pause",
-                        subtitle: "Playback",
-                        isSelected: isPaused,
-                        color: .orange
-                    ) {
-                        onPauseTap()
-                    }
-
-                    SessionControlChip(
-                        title: "Slow-mo",
-                        subtitle: "Phase",
-                        isSelected: isSlowMotion,
-                        color: .yellow
-                    ) {
-                        onSlowMoTap()
-                    }
-                }
-                .padding(.vertical, 2)
-            }
-        }
-    }
-}
-
-private struct SessionControlChip: View {
-    let title: String
-    let subtitle: String
-    let isSelected: Bool
-    let color: Color
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title)
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(isSelected ? .black : .white)
-                    .lineLimit(1)
-                Text(subtitle)
-                    .font(.caption2)
-                    .foregroundColor(isSelected ? .black.opacity(0.75) : .white.opacity(0.72))
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(
-                Capsule().fill(isSelected ? color : Color.white.opacity(0.1))
-            )
-            .overlay(
-                Capsule()
-                    .stroke(isSelected ? Color.clear : Color.white.opacity(0.18), lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
     }
 }
 
