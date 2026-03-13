@@ -383,451 +383,83 @@ struct LiveSessionView: View {
 struct SessionResultsView: View {
     @ObservedObject var viewModel: SessionViewModel
     let onExitToHome: () -> Void
-    @Environment(\.dismiss) private var dismiss
     @State private var selectedDeliveryIndex = 0
-    @State private var showDeliveryCarousel = false
-    @State private var hasHeldFullReplay = false
-    @State private var replayHoldTask: Task<Void, Never>?
 
-    private var shouldShowSpinner: Bool {
-        SessionResultsPlanner.shouldShowClipPreparationSpinner(
-            hasHeldFullReplay: hasHeldFullReplay,
-            isPreparingClips: viewModel.isPreparingClips
-        )
-    }
-
-    private var shouldShowNoDeliveriesOverlay: Bool {
-        SessionResultsPlanner.shouldShowNoDeliveriesOverlay(
-            hasHeldFullReplay: hasHeldFullReplay,
-            isPreparingClips: viewModel.isPreparingClips,
-            deliveryCount: viewModel.session.deliveryCount
-        )
-    }
-
-    private var clipPreparationTelemetry: String {
-        if !viewModel.clipPreparationStatusMessage.isEmpty {
-            if viewModel.isPreparingClips {
-                let progressPercent = Int((viewModel.clipPreparationProgress * 100).rounded())
-                return "\(viewModel.clipPreparationStatusMessage) \(progressPercent)%"
-            }
-            return viewModel.clipPreparationStatusMessage
-        }
-        return viewModel.isPreparingClips ? "Detecting and clipping deliveries..." : "Preparing session replay..."
-    }
+    private var deliveries: [Delivery] { viewModel.session.deliveries }
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                LinearGradient(
-                    colors: [Color(hex: "050910"), Color(hex: "0A141D"), Color.black],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            if deliveries.isEmpty {
+                // Clip preparation state
+                VStack(spacing: 14) {
+                    if viewModel.isPreparingClips {
+                        ProgressView().tint(peacockBlue)
+                        Text(viewModel.clipPreparationStatusMessage.isEmpty
+                             ? "Detecting and clipping deliveries..."
+                             : viewModel.clipPreparationStatusMessage)
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.white.opacity(0.85))
+                            .multilineTextAlignment(.center)
+                    } else {
+                        Image(systemName: "figure.cricket")
+                            .font(.largeTitle)
+                            .foregroundColor(.white.opacity(0.5))
+                        Text("No deliveries found")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(.white.opacity(0.8))
+                    }
+                    Button { onExitToHome() } label: {
+                        Label("Home", systemImage: "house.fill")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.black)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(Capsule().fill(peacockBlue))
+                    }
+                    .padding(.top, 8)
+                }
+            } else {
+                // Horizontal delivery carousel (full screen)
+                TabView(selection: $selectedDeliveryIndex) {
+                    ForEach(Array(deliveries.enumerated()), id: \.element.id) { index, delivery in
+                        SessionDeliveryResultPage(
+                            viewModel: viewModel,
+                            deliveryID: delivery.id,
+                            onExitToHome: onExitToHome
+                        )
+                        .tag(index)
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
                 .ignoresSafeArea()
 
-                VStack(spacing: 12) {
-                    SessionResultsHeaderCard(session: viewModel.session)
-                        .padding(.horizontal, 12)
-                        .padding(.top, 12)
-
-                    if viewModel.lastSessionRecordingURL != nil {
-                        SessionSaveRecordingCard(
-                            status: viewModel.sessionVideoSaveStatus,
-                            onSaveTap: {
-                                Task { await viewModel.saveLastSessionVideoToPhotos() }
-                            }
-                        )
-                        .padding(.horizontal, 12)
-                    }
-
-                    if let topMatch = viewModel.session.deliveries
-                        .compactMap(\.dnaMatches)
-                        .first?
-                        .first {
-                        SessionDNASummaryCard(match: topMatch)
-                            .padding(.horizontal, 12)
-                    }
-
-                    if showDeliveryCarousel && !viewModel.session.deliveries.isEmpty {
-                        HStack {
-                            Label(
-                                "Delivery \(selectedDeliveryIndex + 1) of \(viewModel.session.deliveries.count)",
-                                systemImage: "rectangle.stack.fill.badge.person.crop"
-                            )
-                            .font(.caption.weight(.semibold))
-                            .foregroundColor(.white.opacity(0.84))
-                            Spacer()
-                        }
-                        .padding(.horizontal, 14)
-                    }
-
-                    if !showDeliveryCarousel {
-                        if let recordingURL = viewModel.lastSessionRecordingURL {
-                            SessionFullRecordingReplayCard(
-                                recordingURL: recordingURL,
-                                showSpinner: shouldShowSpinner,
-                                telemetryMessage: clipPreparationTelemetry,
-                                showNoDeliveriesOverlay: shouldShowNoDeliveriesOverlay
-                            )
-                            .padding(.horizontal, 12)
-                            .padding(.bottom, 8)
-                        } else {
-                            ContentUnavailableView(
-                                "Session Replay Unavailable",
-                                systemImage: "video.slash",
-                                description: Text("Recording was unavailable for this session.")
-                            )
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        }
-                    } else {
-                        TabView(selection: $selectedDeliveryIndex) {
-                            ForEach(Array(viewModel.session.deliveries.enumerated()), id: \.element.id) { index, delivery in
-                                SessionDeliveryResultPage(viewModel: viewModel, deliveryID: delivery.id)
-                                    .padding(.horizontal, 12)
-                                    .padding(.bottom, 12)
-                                    .tag(index)
-                            }
-                        }
-                        .tabViewStyle(.page(indexDisplayMode: .never))
-
+                // Pagination dots — bottom center, overlayed
+                if deliveries.count > 1 {
+                    VStack {
+                        Spacer()
                         HStack(spacing: 6) {
-                            ForEach(Array(viewModel.session.deliveries.enumerated()), id: \.offset) { index, _ in
+                            ForEach(deliveries.indices, id: \.self) { i in
                                 Capsule()
-                                    .fill(index == selectedDeliveryIndex ? peacockBlue : Color.white.opacity(0.28))
-                                    .frame(width: index == selectedDeliveryIndex ? 20 : 7, height: 7)
+                                    .fill(i == selectedDeliveryIndex ? peacockBlue : .white.opacity(0.28))
+                                    .frame(width: i == selectedDeliveryIndex ? 20 : 7, height: 7)
                             }
                         }
                         .animation(.easeInOut(duration: 0.2), value: selectedDeliveryIndex)
-                        .padding(.bottom, 2)
+                        .padding(.bottom, 8)
                     }
-                }
-            }
-            .onAppear {
-                startReplayHoldTimer()
-                evaluateAutoNavigationToCarousel()
-            }
-            .onDisappear {
-                replayHoldTask?.cancel()
-                replayHoldTask = nil
-            }
-            .onChange(of: viewModel.isPreparingClips) { _, _ in
-                evaluateAutoNavigationToCarousel()
-            }
-            .onChange(of: viewModel.session.deliveryCount) { _, _ in
-                evaluateAutoNavigationToCarousel()
-            }
-            .navigationTitle("Session Results")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Home") { onExitToHome() }
                 }
             }
         }
         .interactiveDismissDisabled(true)
-    }
-
-    private func startReplayHoldTimer() {
-        replayHoldTask?.cancel()
-        showDeliveryCarousel = false
-        hasHeldFullReplay = false
-
-        replayHoldTask = Task {
-            let holdNanoseconds = UInt64(max(WBConfig.sessionResultsReplayHoldSeconds, 0) * 1_000_000_000)
-            if holdNanoseconds > 0 {
-                try? await Task.sleep(nanoseconds: holdNanoseconds)
-            }
-            guard !Task.isCancelled else { return }
-            await MainActor.run {
-                hasHeldFullReplay = true
-                evaluateAutoNavigationToCarousel()
-            }
-        }
-    }
-
-    private func evaluateAutoNavigationToCarousel() {
-        let shouldNavigate = SessionResultsPlanner.shouldAutoNavigateToDeliveryCarousel(
-            hasHeldFullReplay: hasHeldFullReplay,
-            isPreparingClips: viewModel.isPreparingClips,
-            deliveryCount: viewModel.session.deliveryCount
-        )
-        guard shouldNavigate else { return }
-        showDeliveryCarousel = true
-        selectedDeliveryIndex = 0
-    }
-}
-
-private struct SessionFullRecordingReplayCard: View {
-    let recordingURL: URL
-    let showSpinner: Bool
-    let telemetryMessage: String
-    let showNoDeliveriesOverlay: Bool
-
-    @State private var player: AVQueuePlayer?
-    @State private var looper: AVPlayerLooper?
-
-    var body: some View {
-        ZStack {
-            if let player {
-                CustomVideoPlayer(player: player)
-            } else {
-                Color.black
-                    .overlay { ProgressView().tint(.white) }
-            }
-
-            VStack {
-                HStack {
-                    Text("Full session replay")
-                        .font(.caption.bold())
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Capsule().fill(Color.black.opacity(0.6)))
-                    Spacer()
-                }
-                .padding(10)
-                Spacer()
-            }
-
-            if showSpinner {
-                VStack(spacing: 10) {
-                    ProgressView()
-                        .tint(peacockBlue)
-                    Text(telemetryMessage)
-                        .font(.caption.weight(.semibold))
-                        .foregroundColor(.white)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 12)
-                }
-                .padding(14)
-                .background(RoundedRectangle(cornerRadius: 12).fill(Color.black.opacity(0.72)))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.white.opacity(0.14), lineWidth: 1)
-                )
-            }
-
-            if showNoDeliveriesOverlay {
-                VStack(spacing: 6) {
-                    Image(systemName: "figure.cricket")
-                        .font(.title3)
-                        .foregroundColor(.white.opacity(0.85))
-                    Text("No deliveries found")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundColor(.white)
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(RoundedRectangle(cornerRadius: 12).fill(Color.black.opacity(0.7)))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.white.opacity(0.16), lineWidth: 1)
-                )
-                .padding(.top, 120)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .aspectRatio(9.0 / 16.0, contentMode: .fit)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(Color.white.opacity(0.14), lineWidth: 1)
-        )
-        .onAppear { setupPlayer() }
-        .onDisappear { teardownPlayer() }
-    }
-
-    private func setupPlayer() {
-        guard player == nil else { return }
-        let item = AVPlayerItem(url: recordingURL)
-        let queuePlayer = AVQueuePlayer(playerItem: item)
-        queuePlayer.isMuted = true
-        queuePlayer.actionAtItemEnd = .none
-        looper = AVPlayerLooper(player: queuePlayer, templateItem: item)
-        player = queuePlayer
-        queuePlayer.play()
-    }
-
-    private func teardownPlayer() {
-        player?.pause()
-        looper = nil
-        player = nil
-    }
-}
-
-private struct SessionSaveRecordingCard: View {
-    let status: SessionViewModel.SessionVideoSaveStatus
-    let onSaveTap: () -> Void
-
-    private var isSaving: Bool {
-        if case .saving = status { return true }
-        return false
-    }
-
-    private var isSaved: Bool {
-        if case .saved = status { return true }
-        return false
-    }
-
-    private var errorMessage: String? {
-        if case .failed(let message) = status { return message }
-        return nil
-    }
-
-    private var buttonLabel: String {
-        if isSaving { return "Saving..." }
-        if isSaved { return "Saved to Photos" }
-        return "Save Full Session to Photos"
-    }
-
-    private var buttonIcon: String {
-        if isSaving { return "hourglass" }
-        if isSaved { return "checkmark.circle.fill" }
-        return "square.and.arrow.down"
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Button(action: onSaveTap) {
-                HStack(spacing: 8) {
-                    if isSaving {
-                        ProgressView()
-                            .tint(.black)
-                    } else {
-                        Image(systemName: buttonIcon)
-                    }
-
-                    Text(buttonLabel)
-                        .font(.subheadline.weight(.semibold))
-                        .lineLimit(1)
-                    Spacer()
-                }
-                .foregroundColor(.black)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(Capsule().fill(isSaved ? Color.green.opacity(0.85) : peacockBlue))
-            }
-            .disabled(isSaving)
-
-            if let errorMessage {
-                Text(errorMessage)
-                    .font(.caption2)
-                    .foregroundColor(.red.opacity(0.9))
-            } else if isSaved {
-                Text("Saved successfully. Open Photos to view the full session clip.")
-                    .font(.caption2)
-                    .foregroundColor(.green.opacity(0.9))
-            }
-        }
-        .padding(10)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.06)))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.white.opacity(0.12), lineWidth: 1)
-        )
-    }
-}
-
-private struct SessionResultsHeaderCard: View {
-    let session: Session
-    
-    private var analyzedPaceCount: Int {
-        guard let summary = session.summary else { return 0 }
-        return summary.paceDistribution.values.reduce(0, +)
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Label("\(session.deliveryCount) deliveries", systemImage: "cricket.ball")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(.white)
-
-                Spacer()
-
-                if session.duration > 0 {
-                    Text(formatDuration(session.duration))
-                        .font(.caption.monospacedDigit())
-                        .foregroundColor(.white.opacity(0.8))
-                }
-            }
-
-            if let summary = session.summary {
-                HStack {
-                    if analyzedPaceCount > 0 {
-                        Text(summary.dominantPace.label)
-                            .font(.caption.weight(.semibold))
-                            .foregroundColor(peacockBlue)
-                    } else {
-                        Text("Pace pending")
-                            .font(.caption.weight(.semibold))
-                            .foregroundColor(.white.opacity(0.75))
-                    }
-                    Spacer()
-                    if let challengeScore = summary.challengeScore {
-                        Text(challengeScore)
-                            .font(.caption.weight(.bold))
-                            .foregroundColor(peacockBlue)
-                    }
-                }
-
-                if !summary.keyObservation.isEmpty {
-                    Text(summary.keyObservation)
-                        .font(.caption)
-                        .foregroundColor(.white.opacity(0.85))
-                }
-            }
-        }
-        .padding(12)
-        .background(RoundedRectangle(cornerRadius: 14).fill(Color.white.opacity(0.08)))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(Color.white.opacity(0.12), lineWidth: 1)
-        )
-    }
-
-    private func formatDuration(_ seconds: TimeInterval) -> String {
-        let mins = Int(seconds) / 60
-        let secs = Int(seconds) % 60
-        return "\(mins)m \(secs)s"
-    }
-}
-
-private struct SessionDNASummaryCard: View {
-    let match: BowlingDNAMatch
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "figure.cricket")
-                .foregroundColor(peacockBlue)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Action signature: \(Int(match.similarityPercent))% \(match.bowlerName)")
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-                Text("Closest phase: \(match.closestPhase)")
-                    .font(.caption2)
-                    .foregroundColor(.white.opacity(0.75))
-                    .lineLimit(1)
-            }
-            Spacer()
-        }
-        .padding(10)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.06)))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.white.opacity(0.12), lineWidth: 1)
-        )
     }
 }
 
 private struct SessionDeliveryResultPage: View {
     @ObservedObject var viewModel: SessionViewModel
     let deliveryID: UUID
+    let onExitToHome: () -> Void
 
     @State private var player: AVQueuePlayer?
     @State private var looper: AVPlayerLooper?
@@ -841,8 +473,6 @@ private struct SessionDeliveryResultPage: View {
     @State private var isPlaybackPaused = false
     @State private var isSlowMotion = false
     @State private var slowMotionRate: Float = 0.45
-    @State private var showCoachChips = false
-    @State private var chipReply = ""
 
     private var delivery: Delivery? {
         viewModel.session.deliveries.first(where: { $0.id == deliveryID })
@@ -865,59 +495,105 @@ private struct SessionDeliveryResultPage: View {
         deepStatus.stage == .ready && !phases.isEmpty
     }
 
-    private var chatControlsEnabled: Bool {
-        deepAnalysisReady && player != nil
-    }
-
-    private var chatChips: [String] {
-        var seen = Set<String>()
-        var ordered: [String] = []
-        for value in focusSuggestions.map(\.phaseName) + ["Pause", "Slow-mo"] {
-            if seen.insert(value).inserted {
-                ordered.append(value)
-            }
-        }
-        return ordered
-    }
-
     var body: some View {
         Group {
             if let delivery {
-                ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 14) {
-                        SessionDeliveryClipCard(
-                            delivery: delivery,
-                            player: player,
-                            syncController: syncController,
-                            isPoseLoading: deepStatus.stage == .running
-                        )
+                GeometryReader { geo in
+                    ScrollView(.vertical, showsIndicators: false) {
+                        VStack(spacing: 0) {
+                            // PAGE 1: Full-screen video with overlays
+                            ZStack(alignment: .top) {
+                                // Video layer (fills entire page)
+                                SessionDeliveryClipCard(
+                                    delivery: delivery,
+                                    player: player,
+                                    syncController: syncController,
+                                    isPoseLoading: deepStatus.stage == .running
+                                )
 
-                        deepAnalysisStatusSection(for: delivery)
+                                // Top bar: Home (left) + Save (right)
+                                HStack {
+                                    Button { onExitToHome() } label: {
+                                        Image(systemName: "house.fill")
+                                            .font(.system(size: 18, weight: .semibold))
+                                            .foregroundColor(.white)
+                                            .padding(10)
+                                            .background(Circle().fill(Color.black.opacity(0.45)))
+                                    }
+                                    Spacer()
+                                    saveButton
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.top, geo.safeAreaInsets.top + 8)
 
-                        if deepAnalysisReady {
-                            swipeHint
+                                // Right side: Deep Analysis button (vertically centered)
+                                HStack {
+                                    Spacer()
+                                    deepAnalysisOverlayButton
+                                }
+                                .frame(maxHeight: .infinity)
+                                .padding(.trailing, 12)
+
+                                // Bottom 15% overlay area
+                                VStack {
+                                    Spacer()
+                                    VStack(spacing: 6) {
+                                        // Telemetry overlay (when running)
+                                        if deepStatus.stage == .running {
+                                            HStack(spacing: 6) {
+                                                ProgressView().tint(.white).scaleEffect(0.6)
+                                                Text("\(deepStatus.elapsedSeconds)s")
+                                                    .font(.caption2.monospacedDigit())
+                                                    .foregroundColor(.white.opacity(0.8))
+                                                if !deepStatus.statusMessage.isEmpty {
+                                                    Text(deepStatus.statusMessage)
+                                                        .font(.caption2)
+                                                        .foregroundColor(.white.opacity(0.65))
+                                                        .lineLimit(1)
+                                                }
+                                            }
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 5)
+                                            .background(Capsule().fill(Color.black.opacity(0.55)))
+                                        }
+
+                                        // Suggestion chips — only after analysis complete
+                                        if deepAnalysisReady {
+                                            videoOverlayChips
+                                        }
+
+                                        // Color legend — only after skeleton overlay
+                                        if syncController != nil {
+                                            FinePrintOverlayLegend()
+                                        }
+
+                                        // Swipe hint chevron
+                                        Image(systemName: "chevron.compact.down")
+                                            .font(.caption)
+                                            .foregroundColor(.white.opacity(0.4))
+                                    }
+                                    .padding(.bottom, 6)
+                                }
+                                .frame(maxHeight: .infinity, alignment: .bottom)
+                                .padding(.bottom, geo.size.height * 0.01)
+                            }
+                            .frame(width: geo.size.width, height: geo.size.height)
+
+                            // PAGE 2: Detail content (swipe down)
+                            detailPage
+                                .frame(minHeight: geo.size.height)
+                                .padding(.horizontal, 12)
+                                .padding(.top, 20)
                         }
-
-                        phaseAnalysisSection
-                        dnaSection(for: delivery)
-                        poseAndControlSection
                     }
+                    .scrollTargetBehavior(.paging)
+                    .ignoresSafeArea()
                 }
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(Color.white.opacity(0.05))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
-                )
                 .onAppear {
                     setupPlayerIfNeeded()
                     refreshArtifactsFromViewModel()
                 }
                 .onReceive(viewModel.$deepAnalysisArtifactsByDelivery) { _ in
-                    // @Published fires on willSet (before value is stored).
-                    // DispatchQueue.main.async guarantees deferral past willSet.
                     DispatchQueue.main.async { refreshArtifactsFromViewModel() }
                 }
                 .onReceive(viewModel.$session) { _ in
@@ -937,6 +613,147 @@ private struct SessionDeliveryResultPage: View {
                 )
                 .foregroundStyle(.white)
             }
+        }
+    }
+
+    // MARK: - Overlay Buttons
+
+    @ViewBuilder
+    private var saveButton: some View {
+        let status = viewModel.sessionVideoSaveStatus
+        Button {
+            Task { await viewModel.saveLastSessionVideoToPhotos() }
+        } label: {
+            Group {
+                switch status {
+                case .idle:
+                    Image(systemName: "square.and.arrow.down")
+                case .saving:
+                    ProgressView().tint(.white).scaleEffect(0.7)
+                case .saved:
+                    Image(systemName: "checkmark.circle.fill")
+                case .failed:
+                    Image(systemName: "exclamationmark.triangle")
+                }
+            }
+            .font(.system(size: 18, weight: .semibold))
+            .foregroundColor(.white)
+            .padding(10)
+            .background(Circle().fill(Color.black.opacity(0.45)))
+        }
+        .disabled(status == .saving || status == .saved)
+    }
+
+    @ViewBuilder
+    private var deepAnalysisOverlayButton: some View {
+        switch deepStatus.stage {
+        case .idle:
+            Button {
+                Task { await viewModel.runDeepAnalysisIfNeeded(for: deliveryID) }
+            } label: {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(12)
+                    .background(Circle().fill(peacockBlue.opacity(0.85)))
+            }
+        case .running:
+            ProgressView().tint(peacockBlue).scaleEffect(0.9)
+                .padding(12)
+                .background(Circle().fill(Color.black.opacity(0.45)))
+        case .ready:
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 20))
+                .foregroundColor(.green)
+                .padding(12)
+                .background(Circle().fill(Color.black.opacity(0.45)))
+        case .failed:
+            Button {
+                Task { await viewModel.runDeepAnalysisIfNeeded(for: deliveryID) }
+            } label: {
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(.orange)
+                    .padding(12)
+                    .background(Circle().fill(Color.black.opacity(0.45)))
+            }
+        }
+    }
+
+    // MARK: - Video Overlay Chips (bottom 15%)
+
+    private var videoOverlayChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                // Focus phase chips
+                ForEach(focusSuggestions) { suggestion in
+                    Button {
+                        toggleFocusSuggestion(suggestion)
+                    } label: {
+                        Text(suggestion.phaseName)
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(selectedFocusChipID == suggestion.id ? .black : .white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 5)
+                            .background(
+                                Capsule().fill(selectedFocusChipID == suggestion.id
+                                               ? peacockBlue : Color.white.opacity(0.15))
+                            )
+                            .overlay(
+                                Capsule().stroke(Color.white.opacity(0.2), lineWidth: 0.5)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                // Pause
+                Button { togglePause() } label: {
+                    Image(systemName: isPlaybackPaused ? "play.fill" : "pause.fill")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(isPlaybackPaused ? .black : .white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(
+                            Capsule().fill(isPlaybackPaused ? .orange : Color.white.opacity(0.15))
+                        )
+                        .overlay(
+                            Capsule().stroke(Color.white.opacity(0.2), lineWidth: 0.5)
+                        )
+                }
+                .buttonStyle(.plain)
+
+                // Slow-mo
+                Button { toggleSlowMotion() } label: {
+                    Text("0.5×")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(isSlowMotion ? .black : .white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(
+                            Capsule().fill(isSlowMotion ? .yellow : Color.white.opacity(0.15))
+                        )
+                        .overlay(
+                            Capsule().stroke(Color.white.opacity(0.2), lineWidth: 0.5)
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 14)
+        }
+    }
+
+    // MARK: - Detail Page (swipe down)
+
+    private var detailPage: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if let delivery {
+                deepAnalysisStatusSection(for: delivery)
+            }
+            phaseAnalysisSection
+            if let delivery {
+                dnaSection(for: delivery)
+            }
+            poseAndControlSection
         }
     }
 
@@ -999,17 +816,6 @@ private struct SessionDeliveryResultPage: View {
         }
     }
 
-    private var swipeHint: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "chevron.compact.down")
-                .font(.body.weight(.semibold))
-                .foregroundColor(peacockBlue)
-            Text("Swipe down for phase insights")
-                .font(.caption.weight(.semibold))
-                .foregroundColor(.white.opacity(0.86))
-        }
-    }
-
     private var phaseAnalysisSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Phase analysis")
@@ -1048,95 +854,6 @@ private struct SessionDeliveryResultPage: View {
 
     private var poseAndControlSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Pose annotated playback")
-                .font(.caption.weight(.semibold))
-                .foregroundColor(.white.opacity(0.92))
-
-            FinePrintOverlayLegend()
-
-            if !focusSuggestions.isEmpty {
-                SessionVideoControlChips(
-                    suggestions: focusSuggestions,
-                    selectedFocusChipID: selectedFocusChipID,
-                    isPaused: isPlaybackPaused,
-                    isSlowMotion: isSlowMotion,
-                    onFocusTap: { suggestion in
-                        toggleFocusSuggestion(suggestion)
-                    },
-                    onPauseTap: {
-                        togglePause()
-                    },
-                    onSlowMoTap: {
-                        toggleSlowMotion()
-                    }
-                )
-            }
-
-            Button {
-                guard chatControlsEnabled else { return }
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    showCoachChips.toggle()
-                }
-            } label: {
-                Label(showCoachChips ? "Hide Chat Controls" : "Show Chat Controls", systemImage: "bubble.left.and.bubble.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(.black)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(Capsule().fill(peacockBlue))
-            }
-            .disabled(!chatControlsEnabled)
-            .opacity(chatControlsEnabled ? 1 : 0.6)
-
-            if !chatControlsEnabled {
-                Text("Run deep analysis to enable chat controls.")
-                    .font(.caption2)
-                    .foregroundColor(.white.opacity(0.7))
-            }
-
-            if showCoachChips {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "text.cursor")
-                            .foregroundColor(.white.opacity(0.7))
-                        Text("Chat input is chip-only in this version.")
-                            .font(.caption2)
-                            .foregroundColor(.white.opacity(0.74))
-                    }
-
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(Array(chatChips.enumerated()), id: \.offset) { _, chip in
-                                Button {
-                                    Task {
-                                        guard chatControlsEnabled else { return }
-                                        liveViewLog.debug("Chat chip tapped: chip=\(chip, privacy: .public), deliveryID=\(deliveryID.uuidString, privacy: .public)")
-                                        let guidance = await viewModel.requestChipGuidance(for: deliveryID, chip: chip)
-                                        apply(guidance: guidance)
-                                    }
-                                } label: {
-                                    Text(chip)
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundColor(.black)
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 7)
-                                        .background(Capsule().fill(Color.white))
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-
-                    if !chipReply.isEmpty {
-                        Text(chipReply)
-                            .font(.caption)
-                            .foregroundColor(.white.opacity(0.86))
-                            .padding(10)
-                            .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.08)))
-                    }
-                }
-            }
-
             Text(poseNote)
                 .font(.caption2)
                 .foregroundColor(.white.opacity(0.65))
@@ -1196,9 +913,6 @@ private struct SessionDeliveryResultPage: View {
             liveViewLog.debug("Expert analysis built from delivery phases: \(self.phases.count) phases")
         }
 
-        if let reply = artifacts.chipReply {
-            chipReply = reply
-        }
         rebuildSyncControllerIfPossible()
     }
 
@@ -1347,40 +1061,6 @@ private struct SessionDeliveryResultPage: View {
             .replacingOccurrences(of: "[^a-z0-9]", with: "", options: .regularExpression)
     }
 
-    @MainActor
-    private func apply(guidance: ChipGuidanceResponse) {
-        chipReply = guidance.reply
-        let action = guidance.action.lowercased()
-        liveViewLog.debug("Applying chip guidance: action=\(action, privacy: .public), phase=\(guidance.phaseName ?? "-", privacy: .public)")
-
-        switch action {
-        case "pause":
-            isPlaybackPaused = true
-            applyPlaybackMode()
-        case "slow_mo":
-            isPlaybackPaused = false
-            isSlowMotion = true
-            if let requestedRate = guidance.playbackRate, requestedRate.isFinite {
-                slowMotionRate = Float(min(max(requestedRate, 0.35), 0.6))
-            } else {
-                slowMotionRate = 0.45
-            }
-            applyPlaybackMode()
-        case "focus":
-            isPlaybackPaused = false
-            let start = min(max(guidance.focusStart ?? 2.0, 0), clipDurationSeconds)
-            let end = min(max(guidance.focusEnd ?? (start + 0.8), start + 0.2), clipDurationSeconds)
-            focusWindow = start...max(end, start + 0.2)
-            selectedFocusChipID = focusSuggestions.first {
-                normalized($0.phaseName) == normalized(guidance.phaseName ?? "")
-            }?.id
-            seek(to: focusWindow?.lowerBound ?? start)
-            applyPlaybackMode()
-            startFocusLoop()
-        default:
-            break
-        }
-    }
 }
 
 private struct SessionDeliveryClipCard: View {
@@ -1390,15 +1070,13 @@ private struct SessionDeliveryClipCard: View {
     let isPoseLoading: Bool
 
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
+        ZStack {
             Group {
                 if let player {
                     CustomVideoPlayer(player: player)
                 } else if delivery.videoURL != nil {
                     Color.black
-                        .overlay {
-                            ProgressView().tint(.white)
-                        }
+                        .overlay { ProgressView().tint(.white) }
                 } else {
                     Color.black
                         .overlay {
@@ -1423,89 +1101,18 @@ private struct SessionDeliveryClipCard: View {
                 SyncedSkeletonOverlayView(syncController: syncController)
                     .onAppear {
                         liveViewLog.info("SessionDeliveryClipCard: skeleton overlay VISIBLE for delivery #\(delivery.sequence)")
-                        print("🦴 [LiveSession] Skeleton overlay VISIBLE for delivery #\(delivery.sequence)")
                     }
             }
-
-            VStack {
-                HStack {
-                    Spacer()
-                    if let thumbnail = delivery.thumbnail {
-                        VStack(alignment: .trailing, spacing: 4) {
-                            Text("Release")
-                                .font(.caption2.weight(.semibold))
-                                .foregroundColor(.white.opacity(0.88))
-                            Image(uiImage: thumbnail)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 84, height: 56)
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(Color.white.opacity(0.22), lineWidth: 1)
-                                )
-                        }
-                        .padding(10)
-                    }
-                }
-                Spacer()
-            }
-
-            if isPoseLoading {
-                VStack {
-                    HStack {
-                        ProgressView()
-                            .tint(.white)
-                            .scaleEffect(0.85)
-                        Text("Loading pose overlay")
-                            .font(.caption2)
-                            .foregroundColor(.white)
-                        Spacer()
-                    }
-                    .padding(10)
-                    Spacer()
-                }
-            }
-
-            HStack(spacing: 8) {
-                Text("Delivery #\(delivery.sequence)")
-                    .font(.caption.bold())
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(Capsule().fill(Color.black.opacity(0.55)))
-
-                if let speed = delivery.speed {
-                    Text(speed)
-                        .font(.caption2.bold())
-                        .foregroundColor(peacockBlue)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 5)
-                        .background(Capsule().fill(Color.black.opacity(0.65)))
-                }
-
-                Text("5s (3s run-up + 2s follow-through)")
-                    .font(.caption2)
-                    .foregroundColor(.white.opacity(0.88))
-            }
-            .padding(10)
         }
-        .aspectRatio(9/16, contentMode: .fit)
-        .frame(maxWidth: .infinity)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(Color.white.opacity(0.14), lineWidth: 1)
-        )
     }
 }
 
 private struct FinePrintOverlayLegend: View {
     var body: some View {
         HStack(spacing: 12) {
-            legendItem(text: "Red injury risk", color: .red)
-            legendItem(text: "Green good", color: .green)
-            legendItem(text: "Yellow attention", color: .yellow)
+            legendItem(text: "Injury risk", color: .red)
+            legendItem(text: "Good", color: .green)
+            legendItem(text: "Attention", color: .yellow)
         }
         .font(.caption2)
         .foregroundColor(.white.opacity(0.82))
