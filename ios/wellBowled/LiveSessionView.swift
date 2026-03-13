@@ -471,8 +471,7 @@ private struct SessionDeliveryResultPage: View {
     @State private var selectedFocusChipID: String?
     @State private var focusWindow: ClosedRange<Double>?
     @State private var isPlaybackPaused = false
-    @State private var isSlowMotion = false
-    @State private var slowMotionRate: Float = 1.0
+    @State private var playbackRate: Float = 1.0
 
     private var delivery: Delivery? {
         viewModel.session.deliveries.first(where: { $0.id == deliveryID })
@@ -695,12 +694,11 @@ private struct SessionDeliveryResultPage: View {
             HStack(spacing: 5) {
                 // Speed chips: 0.25×, 0.5×, 1×
                 ForEach(Self.speedOptions, id: \.rate) { option in
-                    let isActive = !isPlaybackPaused && slowMotionRate == option.rate
+                    let isActive = !isPlaybackPaused && playbackRate == option.rate
                     Button {
                         liveViewLog.debug("Speed chip tapped: rate=\(option.rate)")
                         isPlaybackPaused = false
-                        slowMotionRate = option.rate
-                        isSlowMotion = option.rate < 1.0
+                        playbackRate = option.rate
                         applyPlaybackMode()
                     } label: {
                         Text(option.label)
@@ -998,14 +996,6 @@ private struct SessionDeliveryResultPage: View {
         applyPlaybackMode()
     }
 
-    private func toggleSlowMotion() {
-        isSlowMotion.toggle()
-        if !isSlowMotion {
-            slowMotionRate = 0.45
-        }
-        liveViewLog.debug("Slow-motion toggled: enabled=\(isSlowMotion), rate=\(slowMotionRate, privacy: .public)")
-        applyPlaybackMode()
-    }
 
     private func applyPlaybackMode() {
         guard let player else { return }
@@ -1013,7 +1003,7 @@ private struct SessionDeliveryResultPage: View {
             player.pause()
             return
         }
-        player.playImmediately(atRate: slowMotionRate)
+        player.playImmediately(atRate: playbackRate)
     }
 
     private var clipDurationSeconds: Double {
