@@ -472,7 +472,7 @@ private struct SessionDeliveryResultPage: View {
     @State private var focusWindow: ClosedRange<Double>?
     @State private var isPlaybackPaused = false
     @State private var isSlowMotion = false
-    @State private var slowMotionRate: Float = 0.45
+    @State private var slowMotionRate: Float = 1.0
 
     private var delivery: Delivery? {
         viewModel.session.deliveries.first(where: { $0.id == deliveryID })
@@ -686,69 +686,75 @@ private struct SessionDeliveryResultPage: View {
 
     // MARK: - Video Overlay Chips (bottom 15%)
 
+    private static let speedOptions: [(label: String, rate: Float)] = [
+        ("0.25×", 0.25), ("0.5×", 0.5), ("1×", 1.0)
+    ]
+
     private var videoOverlayChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                // Focus phase chips
-                ForEach(focusSuggestions) { suggestion in
+            HStack(spacing: 5) {
+                // Speed chips: 0.25×, 0.5×, 1×
+                ForEach(Self.speedOptions, id: \.rate) { option in
+                    let isActive = !isPlaybackPaused && slowMotionRate == option.rate
                     Button {
-                        toggleFocusSuggestion(suggestion)
+                        liveViewLog.debug("Speed chip tapped: rate=\(option.rate)")
+                        isPlaybackPaused = false
+                        slowMotionRate = option.rate
+                        isSlowMotion = option.rate < 1.0
+                        applyPlaybackMode()
                     } label: {
-                        Text(suggestion.phaseName)
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundColor(selectedFocusChipID == suggestion.id ? .black : .white)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 5)
+                        Text(option.label)
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(isActive ? .black : .white.opacity(0.9))
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 4)
                             .background(
-                                Capsule().fill(selectedFocusChipID == suggestion.id
-                                               ? peacockBlue : Color.white.opacity(0.15))
-                            )
-                            .overlay(
-                                Capsule().stroke(Color.white.opacity(0.2), lineWidth: 0.5)
+                                Capsule().fill(isActive ? peacockBlue : Color.white.opacity(0.12))
                             )
                     }
                     .buttonStyle(.plain)
                 }
 
-                // Pause
+                // Pause / Play
                 Button {
                     liveViewLog.debug("Overlay pause chip tapped: paused=\(isPlaybackPaused)")
                     togglePause()
                 } label: {
                     Image(systemName: isPlaybackPaused ? "play.fill" : "pause.fill")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(isPlaybackPaused ? .black : .white)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(isPlaybackPaused ? .black : .white.opacity(0.9))
                         .padding(.horizontal, 8)
-                        .padding(.vertical, 5)
+                        .padding(.vertical, 4)
                         .background(
-                            Capsule().fill(isPlaybackPaused ? .orange : Color.white.opacity(0.15))
-                        )
-                        .overlay(
-                            Capsule().stroke(Color.white.opacity(0.2), lineWidth: 0.5)
+                            Capsule().fill(isPlaybackPaused ? .orange : Color.white.opacity(0.12))
                         )
                 }
                 .buttonStyle(.plain)
 
-                // Slow-mo
-                Button {
-                    liveViewLog.debug("Overlay slow-mo chip tapped: slowMo=\(isSlowMotion)")
-                    toggleSlowMotion()
-                } label: {
-                    Text("0.5×")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(isSlowMotion ? .black : .white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 5)
-                        .background(
-                            Capsule().fill(isSlowMotion ? .yellow : Color.white.opacity(0.15))
-                        )
-                        .overlay(
-                            Capsule().stroke(Color.white.opacity(0.2), lineWidth: 0.5)
-                        )
+                // Divider
+                Rectangle()
+                    .fill(Color.white.opacity(0.2))
+                    .frame(width: 1, height: 16)
+
+                // Phase focus chips (ordered by timestamp)
+                ForEach(focusSuggestions) { suggestion in
+                    let isActive = selectedFocusChipID == suggestion.id
+                    Button {
+                        toggleFocusSuggestion(suggestion)
+                    } label: {
+                        Text(suggestion.phaseName)
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(isActive ? .black : .white.opacity(0.9))
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 4)
+                            .background(
+                                Capsule().fill(isActive ? peacockBlue : Color.white.opacity(0.12))
+                            )
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, 12)
         }
     }
 
@@ -1007,9 +1013,7 @@ private struct SessionDeliveryResultPage: View {
             player.pause()
             return
         }
-
-        let rate: Float = isSlowMotion ? slowMotionRate : 1.0
-        player.playImmediately(atRate: rate)
+        player.playImmediately(atRate: slowMotionRate)
     }
 
     private var clipDurationSeconds: Double {
@@ -1115,21 +1119,25 @@ private struct SessionDeliveryClipCard: View {
 
 private struct FinePrintOverlayLegend: View {
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             legendItem(text: "Injury risk", color: .red)
             legendItem(text: "Good", color: .green)
             legendItem(text: "Attention", color: .yellow)
         }
-        .font(.caption2)
-        .foregroundColor(.white.opacity(0.82))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
+        .background(Capsule().fill(Color.black.opacity(0.45)))
     }
 
     private func legendItem(text: String, color: Color) -> some View {
         HStack(spacing: 4) {
             Circle()
                 .fill(color)
-                .frame(width: 7, height: 7)
+                .shadow(color: color.opacity(0.6), radius: 3)
+                .frame(width: 8, height: 8)
             Text(text)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundColor(.white.opacity(0.9))
         }
     }
 }
