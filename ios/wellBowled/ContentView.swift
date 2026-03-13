@@ -26,7 +26,7 @@ struct ContentView: View {
             // 1. Background Content (Camera or Hub Animation)
             Group {
                 if viewModel.uiMode == .live {
-                    CameraPreview(session: cameraManager.session)
+                    CameraPreview(previewLayer: cameraManager.previewLayer)
                         .ignoresSafeArea()
                         .transition(.opacity)
                 } else {

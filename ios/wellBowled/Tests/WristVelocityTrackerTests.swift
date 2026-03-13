@@ -6,7 +6,7 @@ final class WristVelocityTrackerTests: XCTestCase {
     // MARK: - Spike Detection
 
     func testDetectsHighVelocitySpike() {
-        let tracker = WristVelocityTracker(fps: 30.0)
+        var tracker = WristVelocityTracker(fps: 30.0)
         tracker.threshold = 20.0
         tracker.cooldownSeconds = 5.0
 
@@ -34,7 +34,7 @@ final class WristVelocityTrackerTests: XCTestCase {
     }
 
     func testNoSpikeForSlowMovement() {
-        let tracker = WristVelocityTracker(fps: 30.0)
+        var tracker = WristVelocityTracker(fps: 30.0)
         tracker.threshold = 20.0
 
         let dt = 1.0 / 30.0
@@ -49,7 +49,7 @@ final class WristVelocityTrackerTests: XCTestCase {
     }
 
     func testCooldownPreventsDoubleDetection() {
-        let tracker = WristVelocityTracker(fps: 30.0)
+        var tracker = WristVelocityTracker(fps: 30.0)
         tracker.threshold = 20.0
         tracker.cooldownSeconds = 5.0
 
@@ -75,7 +75,7 @@ final class WristVelocityTrackerTests: XCTestCase {
     }
 
     func testCooldownAllowsDetectionAfterExpiry() {
-        let tracker = WristVelocityTracker(fps: 30.0)
+        var tracker = WristVelocityTracker(fps: 30.0)
         tracker.threshold = 20.0
         tracker.cooldownSeconds = 5.0
 
@@ -107,7 +107,7 @@ final class WristVelocityTrackerTests: XCTestCase {
     // MARK: - Reset
 
     func testResetClearsAllState() {
-        let tracker = WristVelocityTracker(fps: 30.0)
+        var tracker = WristVelocityTracker(fps: 30.0)
         tracker.threshold = 10.0 // low threshold for easy trigger
 
         tracker.addSample(theta: 0.0, at: 0.0)
@@ -121,7 +121,7 @@ final class WristVelocityTrackerTests: XCTestCase {
     // MARK: - Arm Detection
 
     func testDetectsCorrectBowlingArm() {
-        let tracker = WristVelocityTracker(fps: 30.0)
+        var tracker = WristVelocityTracker(fps: 30.0)
         tracker.threshold = 10.0
 
         let dt = 1.0 / 30.0
@@ -134,6 +134,38 @@ final class WristVelocityTrackerTests: XCTestCase {
         if let spike = tracker.detectedSpikes.first {
             XCTAssertEqual(spike.arm, .right)
         }
+    }
+
+    func testDetectsLeftArmWhenLeftVelocityDominates() {
+        var tracker = WristVelocityTracker(fps: 30.0)
+        tracker.threshold = 150.0 // deg/s
+
+        let dt = 1.0 / 30.0
+        tracker.addSample(rightTheta: 0.0, leftTheta: 0.0, at: 0.0)
+        tracker.addSample(rightTheta: 0.02, leftTheta: 0.5, at: dt)
+        tracker.addSample(rightTheta: 0.04, leftTheta: 1.1, at: 2 * dt)
+
+        XCTAssertEqual(tracker.detectedSpikes.count, 1)
+        XCTAssertEqual(tracker.detectedSpikes.first?.arm, .left)
+    }
+
+    func testSpikeOmegaIsConvertedToDegreesPerSecondForThresholding() {
+        var tracker = WristVelocityTracker(fps: 30.0)
+        tracker.threshold = 450.0 // deg/s
+
+        // Central difference around sample[1]:
+        // deltaTheta ~= 0.70 rad over 2*dt (~0.0667s) => ~10.5 rad/s => ~601 deg/s.
+        let dt = 1.0 / 30.0
+        tracker.addSample(theta: 0.0, at: 0.0)
+        tracker.addSample(theta: 0.35, at: dt)
+        tracker.addSample(theta: 0.70, at: 2 * dt)
+
+        guard let spike = tracker.detectedSpikes.first else {
+            XCTFail("Expected spike above 450 deg/s threshold")
+            return
+        }
+        XCTAssertGreaterThan(spike.omega, 450.0)
+        XCTAssertLessThan(spike.omega, 900.0)
     }
 
     // MARK: - Static Utilities

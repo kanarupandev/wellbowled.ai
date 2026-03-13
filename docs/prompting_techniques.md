@@ -232,7 +232,13 @@ ALWAYS use: "apparent extension", "worth reviewing", "consider having checked"
 
 ### 2E. Speed Estimation
 
-**Purpose**: Estimate bowling speed from video. Honest about limitations.
+**Purpose**: Produce pace outputs that align with product policy:
+1. Pace Score (primary, relative)
+2. Rough Speed Bucket (secondary)
+3. Estimated Speed only when calibration + confidence gate passes.
+
+Reference:
+- `/Users/kanarupan/workspace/wellbowled.ai/docs/pace_score_metric_model.md`
 
 **Three approaches, ranked by reliability:**
 
@@ -272,7 +278,7 @@ Track ball position across frames with known reference distance (pitch = 20.12m)
 - Ball detection needs YOLO or similar, not MediaPipe
 - Accuracy: +/- 5-10 km/h at 240fps with visible ball
 
-**Recommendation**: Use Approach 1 (Gemini qualitative) now. Add Approach 2 (biomechanical) when MediaPipe integration is ready. Approach 3 is future work requiring custom ball detection model.
+**Recommendation**: Use Approach 1 + 2 to generate `Pace Score` and `Rough Speed Bucket`. Show `Estimated Speed` only when calibration confidence is sufficient. Approach 3 is future work requiring custom ball detection model.
 
 **User-facing honesty**:
 ```
@@ -422,7 +428,7 @@ ALWAYS: "The data suggests... what happens if...?"
 |-------|---------|
 | "Phase detection < 0.2s" | Achievable with MediaPipe timestamps, NOT with Gemini alone |
 | "Elbow legality detection" | 2D video cannot reliably measure 15° — observation only, never conclusive |
-| "Speed estimation" | +/- 15-20 km/h from video — qualitative, not precise |
+| "Exact speed measurement" | Not a product claim; use Pace Score + Rough Speed Bucket, and show estimated km/h only with calibration confidence |
 | "Works in any environment" | Accuracy degrades significantly in harsh sun, nets, or with multiple people |
 | "Multi-delivery detection" | Good with forced enumeration, but phantom deliveries can still false-positive |
 

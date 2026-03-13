@@ -1,11 +1,15 @@
 # Research Task Tracker
 
-Last updated: 2026-02-26
+Last updated: 2026-03-02
 Owner: Codex (research continuity lane)
 Scope rule: Read from `/Users/kanarupan/workspace/wellbowled.ai`, write only to `/Users/kanarupan/workspace/wellbowled.ai/codex`.
 
 ## Active objective
-Research closeout from existing artifacts with explicit scope, verified metrics, and seamless handoff.
+Ship live feedback + challenge loop as production-ready as possible by today's deadline (2-hour push window), with live demo path prioritized over secondary features.
+
+## Non-negotiable language rule
+- Product positioning must use `expert buddy` terminology.
+- Avoid `coach`, `coaching`, and similar labels in UI copy unless explicitly approved.
 
 ## Task board
 
@@ -23,6 +27,9 @@ Research closeout from existing artifacts with explicit scope, verified metrics,
 | T10 | Waterfall execution roadmap (build-on-current) | Done | `03_recommendations/waterfall_execution_plan_2026-03-02.md` | Execute P1.1 runner restore |
 | T11 | Restore missing interactive_2min runner + configs | Done | `experiments/live_audio/run_interactive_2min.py`, config + tests | Start P2 reliability harness |
 | T12 | Live reliability harness (resumption/retry + deterministic logs) | In Progress | Waterfall plan P2 | Implement bounded retry + structured events |
+| T13 | Live-first 4-minute demo plan (3:00 live/challenge + 1:00 secondary) | Done | `submission/2026_demo_blueprint_4min_live_first.md` | Use as recording script |
+| T14 | Deadline directive capture (today, 2-hour production push) | Done | `00_index/SESSION_PROGRESS.md` | Execute implementation sprint in source repo |
+| T15 | Terminology alignment: replace coaching language with expert-buddy language | Pending | This tracker note | Sweep UI strings and prompts at final polish pass |
 
 ## Completion statement
 All research possible from current repo artifacts has been completed and documented. Remaining unknowns are explicitly marked as requiring new experiments/data.

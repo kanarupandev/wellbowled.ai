@@ -17,6 +17,7 @@ Define the concrete workflow for this project:
 - [dev_process.md](/Users/kanarupan/workspace/wellbowled.ai/docs/dev_process.md)
 - [project_dev_deploy_guide.md](/Users/kanarupan/workspace/wellbowled.ai/docs/project_dev_deploy_guide.md)
 - [codex_guide.md](/Users/kanarupan/workspace/wellbowled.ai/docs/codex_guide.md)
+- [pace_score_metric_model.md](/Users/kanarupan/workspace/wellbowled.ai/docs/pace_score_metric_model.md)
 3. Resolve process gaps by checking repo state and tooling first (`git log`, `rg`, `xcodebuild`, `xcrun devicectl`).
 4. Escalate only hard blockers:
 - missing product decision
@@ -34,6 +35,10 @@ Define the concrete workflow for this project:
 [codex_guide.md](/Users/kanarupan/workspace/wellbowled.ai/docs/codex_guide.md)
 4. Code map:
 [SITEMAP.md](/Users/kanarupan/workspace/wellbowled.ai/docs/SITEMAP.md)
+5. Pace/speed metric policy:
+[pace_score_metric_model.md](/Users/kanarupan/workspace/wellbowled.ai/docs/pace_score_metric_model.md)
+6. Live conversational value/guardrails:
+[live_buddy_value_contract.md](/Users/kanarupan/workspace/wellbowled.ai/docs/live_buddy_value_contract.md)
 
 ## 3) Repos And Ownership
 
@@ -88,7 +93,7 @@ Mapped to [dev_process.md](/Users/kanarupan/workspace/wellbowled.ai/docs/dev_pro
 ## 5) Coding Constraints (This Project)
 
 1. No production backend/infrastructure scope for hackathon build.
-2. Speed output must remain exploratory pace bands unless radar-calibrated.
+2. Speed output must follow the canonical metric model: primary `Pace Score (0-100)`, secondary `Rough Speed Bucket`, optional calibrated `Estimated Speed` with confidence only.
 3. Live API is conversational; do not claim proactive monitoring behavior.
 4. Challenge interaction can be `VALIDATED` while challenge accuracy remains `UNVERIFIED` until measured end-to-end.
 

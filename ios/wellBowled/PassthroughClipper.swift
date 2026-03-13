@@ -32,18 +32,15 @@ class PassthroughClipper {
                 exportSession.outputFileType = .mov
                 exportSession.timeRange = CMTimeRange(start: CMTime(seconds: startTime, preferredTimescale: 600), duration: CMTime(seconds: duration, preferredTimescale: 600))
 
-                await withTaskCancellationHandler {
-                    await withCheckedContinuation { continuation in
-                        exportSession.exportAsynchronously {
-                            if exportSession.status == .completed {
-                                continuation.resume()
-                            } else {
-                                continuation.resume() // Resume anyway, we check status or throw
-                            }
-                        }
+                await withCheckedContinuation { continuation in
+                    exportSession.exportAsynchronously {
+                        continuation.resume()
                     }
-                } onCancel: {
+                }
+
+                if Task.isCancelled {
                     exportSession.cancelExport()
+                    throw CancellationError()
                 }
 
                 if exportSession.status == .completed {

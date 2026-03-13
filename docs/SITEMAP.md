@@ -20,6 +20,7 @@ Core files:
 - `WBConfig.swift` — runtime config + feature flags + challenge targets
 - `ChallengeEngine.swift` — challenge target rotation + result formatting
 - `DeliveryDetector.swift` / `WristVelocityTracker.swift` — on-device delivery detection
+- `DeliveryPoseSelector.swift` — stable multi-pose bowler selection + lock scoring
 
 ## iOS Tests Source
 
@@ -30,6 +31,7 @@ Current test coverage:
 - session lifecycle and scoring (`SessionTests.swift`, `SessionLifecycleIntegrationTests.swift`)
 - config/personas (`WBConfigTests.swift`)
 - wrist spike detection (`WristVelocityTrackerTests.swift`)
+- pose selector lock/fallback determinism (`DeliveryPoseSelectorTests.swift`)
 - enums/codable behavior (`EnumsTests.swift`)
 - BowlingDNA encoding/matching (`BowlingDNATests.swift`)
 
@@ -64,6 +66,11 @@ Primary documents:
 - `session_onboarding.md` — product framing
 - `live_results_flow_tdd_plan.md` — live results carousel + deep-analysis UX spec and TDD plan
 - `live_delivery_deep_analysis_requirements.md` — dedicated source-of-truth for on-demand deep analysis, async parallelism, latency targets, race-risk checks, and UI flow
+- `live_session_and_deep_analysis_diagrams.md` — Mermaid diagrams for live demo flow, async deep-analysis pipeline, state machine, and navigation model
+- `delivery_detection_feedback_log.md` — iteration log with change/check/result evidence for delivery detector reliability updates
+- `delivery_detection_hybrid_strategy.md` — canonical hybrid detection policy (MediaPipe live + Gemini Flash batch + timestamp merge rules)
+- `pace_score_metric_model.md` — canonical pace metric model (Pace Score, rough speed bucket, calibrated estimated speed, trend, copy guardrails)
+- `live_buddy_value_contract.md` — canonical value contract for live conversational buddy (event-grounded coaching guardrails and success metrics)
 
 Read-only UX reference (flow only, no theme copy):
 - `/Users/kanarupan/workspace/obsolete-wellbowled-alpha/`

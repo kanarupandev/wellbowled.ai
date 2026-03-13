@@ -17,18 +17,12 @@ import os
 import sys
 import urllib.request
 
-API_KEY = os.environ.get("GEMINI_API_KEY")
-if not API_KEY:
-    # Try loading from .env
-    env_path = os.path.join(os.path.dirname(__file__), "../../.env")
-    if os.path.exists(env_path):
-        with open(env_path) as f:
-            for line in f:
-                if line.startswith("GEMINI_API_KEY="):
-                    API_KEY = line.strip().split("=", 1)[1]
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(SCRIPT_DIR, ".."))
+from shared_config import SCOUT_MODEL as MODEL, load_api_key
 
-VIDEO_PATH = os.path.join(os.path.dirname(__file__), "../../resources/samples/3_sec_1_delivery_nets.mp4")
-MODEL = "gemini-3-flash-preview"
+API_KEY = load_api_key()
+VIDEO_PATH = os.path.join(SCRIPT_DIR, "../../resources/samples/3_sec_1_delivery_nets.mp4")
 RUNS = 5
 TEMP = 0.1
 

@@ -65,7 +65,7 @@ struct VideoAction: Codable, Sendable {
     let timestamp: Double?
 }
 
-class RealNetworkService: NetworkServiceProtocol {
+final class RealNetworkService: NetworkServiceProtocol, @unchecked Sendable {
     // Hidden initializer for internal use
     fileprivate init() {}
     
@@ -439,7 +439,7 @@ class SSEDelegate: NSObject, URLSessionDataDelegate {
 }
 
 // MARK: - MOCK SERVICE
-class MockNetworkService: NetworkServiceProtocol {
+final class MockNetworkService: NetworkServiceProtocol, @unchecked Sendable {
     
     // Simulate latency
     private let latency: TimeInterval
@@ -627,7 +627,7 @@ class MockNetworkService: NetworkServiceProtocol {
 }
 
 // MARK: - COMPOSITE SERVICE (The Router)
-class CompositeNetworkService: NetworkServiceProtocol {
+final class CompositeNetworkService: NetworkServiceProtocol, @unchecked Sendable {
     static let shared = CompositeNetworkService()
     
     private let real = RealNetworkService()

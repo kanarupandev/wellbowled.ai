@@ -4,6 +4,9 @@
   "max_session_seconds": 120,
   "mock_mode": false,
   "allow_live_api_calls": false,
+  "live_retry_max_attempts": 2,
+  "live_retry_backoff_seconds": 1.5,
+  "live_retry_backoff_multiplier": 2.0,
   "json_contract_required_fields": [
     "event",
     "delivery_count",

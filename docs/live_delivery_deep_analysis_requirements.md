@@ -336,6 +336,23 @@ After item 20:
 4. Next action:
 - Unlock iPhone and relaunch command (no rebuild required).
 
+### Iteration E (2026-03-04)
+1. Change:
+- Tuned camera capture for native iPhone capability selection (`target 60fps`, `max 60fps`, preferred `1280x720+`, fallback `30fps`) and added capture config constants in `WBConfig`.
+- Added `WBConfig` unit assertions for camera config sanity.
+2. Check:
+- `xcodebuild -workspace wellBowled.xcworkspace -scheme wellBowled -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:wellBowledTests/WBConfigTests test`
+- `xcodebuild -workspace wellBowled.xcworkspace -scheme wellBowled -configuration Debug -destination 'generic/platform=iOS' build`
+- `xcrun devicectl device install app --device 00008120-001230560204A01E <APP_PATH>`
+- `xcrun devicectl device process launch --device 00008120-001230560204A01E kanarupan.wellBowled`
+3. Result:
+- Targeted tests passed.
+- Device build succeeded.
+- Install succeeded (`databaseSequenceNumber: 4164`).
+- Launch command failed only when phone was locked (`FBSOpenApplicationErrorDomain error 7, Locked`).
+4. Next action:
+- Re-run launch while the device screen remains unlocked and verify on-device camera FPS behavior in live session.
+
 ## 12. References (Primary Sources)
 
 1. Gemini models doc: [https://ai.google.dev/gemini-api/docs/models/gemini-v2](https://ai.google.dev/gemini-api/docs/models/gemini-v2)

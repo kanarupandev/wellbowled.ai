@@ -1,7 +1,7 @@
 import Foundation
 import UIKit
 
-class PersistenceManager: Sendable {
+final class PersistenceManager {
     static let shared = PersistenceManager()
     private let fileName = "favorites.json"
     

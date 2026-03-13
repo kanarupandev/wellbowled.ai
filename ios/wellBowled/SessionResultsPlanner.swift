@@ -42,6 +42,29 @@ enum SessionResultsPlanner {
         return telemetryMessages[step % telemetryMessages.count]
     }
 
+    static func shouldAutoNavigateToDeliveryCarousel(
+        hasHeldFullReplay: Bool,
+        isPreparingClips: Bool,
+        deliveryCount: Int
+    ) -> Bool {
+        hasHeldFullReplay && !isPreparingClips && deliveryCount > 0
+    }
+
+    static func shouldShowClipPreparationSpinner(
+        hasHeldFullReplay: Bool,
+        isPreparingClips: Bool
+    ) -> Bool {
+        hasHeldFullReplay && isPreparingClips
+    }
+
+    static func shouldShowNoDeliveriesOverlay(
+        hasHeldFullReplay: Bool,
+        isPreparingClips: Bool,
+        deliveryCount: Int
+    ) -> Bool {
+        hasHeldFullReplay && !isPreparingClips && deliveryCount == 0
+    }
+
     static func topPhaseSuggestions(
         phases: [AnalysisPhase],
         expertAnalysis: ExpertAnalysis?,
@@ -74,21 +97,24 @@ enum SessionResultsPlanner {
 
     static func focusWindow(for timestamp: Double, clipDuration: Double) -> ClosedRange<Double> {
         let safeDuration = max(clipDuration, 0.5)
-        let start = max(timestamp - 0.6, 0)
-        let end = min(timestamp + 0.8, safeDuration)
+        let clampedTimestamp = min(max(timestamp, 0), safeDuration)
+        let start = max(clampedTimestamp - 0.6, 0)
+        let end = min(clampedTimestamp + 0.8, safeDuration)
         if end <= start {
-            return start...(start + 0.4)
+            let fallbackStart = max(min(clampedTimestamp, safeDuration - 0.2), 0)
+            let fallbackEnd = min(fallbackStart + 0.4, safeDuration)
+            return fallbackStart...max(fallbackEnd, fallbackStart + 0.2)
         }
         return start...end
     }
 
     static func focusTimestamp(for phase: AnalysisPhase, expertAnalysis: ExpertAnalysis?) -> Double {
         if let clipTs = phase.clipTimestamp {
-            return max(clipTs, 0)
+            return min(max(clipTs, 0), 5.0)
         }
 
         if let match = matchedPhase(for: phase, expertAnalysis: expertAnalysis) {
-            return max((match.start + match.end) * 0.5, 0)
+            return min(max((match.start + match.end) * 0.5, 0), 5.0)
         }
 
         return 2.5

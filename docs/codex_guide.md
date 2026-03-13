@@ -1,6 +1,6 @@
 # Codex Handover Guide — wellBowled
 
-> **Last updated**: R26 (4 March 2026) by Codex
+> **Last updated**: R27 (5 March 2026) by Codex
 > **Purpose**: Self-contained input for Codex when Claude quota is unavailable.
 > **Rule**: Read this ENTIRE document before writing any code.
 
@@ -12,7 +12,7 @@
 /Users/kanarupan/workspace/wellbowled.ai/
 ├── ios/wellBowled/          ← ALL Swift code lives here. EDIT ONLY HERE.
 ├── ios/wellBowled/Tests/    ← test source files
-├── docs/                    ← canonical docs (this guide + architecture_decision.md)
+├── docs/                    ← canonical docs (this guide + architecture_decision.md + pace_score_metric_model.md + live_buddy_value_contract.md)
 ├── experiments/             ← archived, DO NOT USE (see section 10)
 ├── research/                ← archived, DO NOT USE
 └── codex/                   ← old codex research, DO NOT USE
@@ -38,6 +38,8 @@ git branch: codex/dev
 2. Use docs + repo + tooling to resolve workflow details:
 - `docs/dev_process.md`
 - `docs/project_dev_deploy_guide.md`
+- `docs/pace_score_metric_model.md`
+- `docs/live_buddy_value_contract.md`
 - this handover guide
 3. Ask the user only for hard blockers:
 - missing product decision
@@ -51,7 +53,7 @@ git branch: codex/dev
 
 ---
 
-## 1. Current State (R25)
+## 1. Current State (R27)
 
 ### What's DONE and validated
 | Feature | Status | Key Files |
@@ -66,6 +68,8 @@ git branch: codex/dev
 | Native iPhone camera tuning (target 60fps + preferred 720p+, per-camera format selection + fallback) | Code wired, unit tested, device build validated | `CameraService.swift`, `WBConfig.swift`, `Tests/WBConfigTests.swift` |
 | 8 mate personas (4 lang × 2 gender) | On device | `WBConfig.swift`, `HomeView.swift` |
 | MediaPipe delivery detection (wrist spike) | Code wired, builds | `DeliveryDetector.swift`, `WristVelocityTracker.swift` |
+| Hybrid release detection (rolling Gemini segments + live merge) | Code wired, unit tested | `DeliveryBatchPlanner.swift`, `SessionViewModel.swift`, `GeminiAnalysisService.swift`, `Tests/DeliveryBatchPlannerTests.swift` |
+| Multi-person delivery detection hardening (subject lock + drift controls + overarm gate) | Code wired, focused tests passing | `DeliveryPoseSelector.swift`, `DeliveryDetector.swift`, `Tests/DeliveryPoseSelectorTests.swift` |
 | Post-session analysis (clips → Gemini Pro) | Code wired, builds | `SessionViewModel.swift`, `GeminiAnalysisService.swift` |
 | **BowlingDNA action signature (20-dim)** | Code wired, builds, unit tested | `BowlingDNA.swift`, `BowlingDNAMatcher.swift`, `FamousBowlerDatabase.swift` |
 | BowlingDNA UI (similarity ring + traits) | Code wired, builds | `BowlingDNAView.swift`, `LiveSessionView.swift` |
@@ -75,13 +79,17 @@ git branch: codex/dev
 | Brand (peacock blue + grey blue + logo) | On device | `DesignSystem.swift` |
 | Gemini API key hardcoded default (no setup needed) | Working | `WBConfig.swift` |
 | Unit tests (Session, WBConfig, WristVelocity, DNA) | Passing | `Tests/` |
+| Focused regression tests (WristVelocity + PoseSelector + CoreDeterminism) | Passing on simulator (2026-03-05) | `Tests/WristVelocityTrackerTests.swift`, `Tests/DeliveryPoseSelectorTests.swift`, `Tests/CoreDeterminismTests.swift` |
+| Device build/install on Kanarupan iPhone | Build + install succeeded (2026-03-05) | `xcodebuild ... -destination platform=iOS,id=00008120-001230560204A01E`, `xcrun devicectl device install app ...` |
 
 ### What's NOT validated on device yet
 - Delivery detection firing live (MediaPipe + camera frames)
+- Hybrid segment detection quality at nets (Gemini release timestamps + merge precision/recall)
 - Post-session clip extraction + Gemini analysis end-to-end
 - BowlingDNA extraction from real clips (Gemini vision prompt)
 - Challenge mode evaluation accuracy (hit/miss correctness not benchmarked on real sessions)
 - Model-driven mode switching via live tool call on physical device (free ↔ challenge during planning/live)
+- Launch-from-terminal reliability when device lock state changes (install succeeded; `devicectl launch` denied when lock state reports locked)
 
 ---
 
@@ -89,7 +97,7 @@ git branch: codex/dev
 
 ### DONE — Tiers 1-3
 - MVP pipeline (detect → count → clip → analyze)
-- Demo polish (personas, pace bands, session summary, results UI)
+- Demo polish (personas, pace metric policy, session summary, results UI)
 - BowlingDNA action signature (model, matcher, database, extraction, UI, tests)
 
 ### NEXT — Tier 4: Challenge Mode (differentiator)
@@ -358,6 +366,7 @@ This mistake must not recur. Hard rule:
 - CocoaPods installed (pods already in repo, run `pod install` only if missing)
 - MediaPipeTasksVision pod (included via CocoaPods)
 - Gemini API key: hardcoded default — works out of the box, no setup needed
+- For `devicectl` launch: keep iPhone awake/unlocked at launch time (install can succeed while launch is denied if lock state flips)
 
 ---
 
@@ -368,6 +377,7 @@ This mistake must not recur. Hard rule:
 - Tests source of truth: `wellbowled.ai/ios/wellBowled/Tests/`
 - Tests Xcode target: `wellBowledTests/` (synced via Step 3 above)
 - Existing coverage: Session lifecycle, WBConfig, WristVelocityTracker, Enums, Delivery codable, BowlingDNA (encoding, matching, normalization, codable round-trip)
+- Recent additions: `DeliveryPoseSelectorTests.swift` (multi-pose lock determinism and fallback behavior), `CoreDeterminismTests.swift` (concurrency determinism guards)
 
 ---
 

@@ -90,9 +90,47 @@ final class WBConfigTests: XCTestCase {
         XCTAssertGreaterThan(WBConfig.clipPostRoll, 0)
     }
 
+    func testDeliveryDetectionSegmentConfigProducesPositiveStride() {
+        XCTAssertGreaterThan(WBConfig.deliveryDetectionSegmentDurationSeconds, 0)
+        XCTAssertGreaterThanOrEqual(WBConfig.deliveryDetectionSegmentOverlapSeconds, 0)
+        XCTAssertLessThan(WBConfig.deliveryDetectionSegmentOverlapSeconds, WBConfig.deliveryDetectionSegmentDurationSeconds)
+        XCTAssertGreaterThan(WBConfig.deliveryDetectionSegmentStrideSeconds, 0)
+        XCTAssertEqual(
+            WBConfig.deliveryDetectionSegmentStrideSeconds,
+            WBConfig.deliveryDetectionSegmentDurationSeconds - WBConfig.deliveryDetectionSegmentOverlapSeconds,
+            accuracy: 0.0001
+        )
+    }
+
+    func testFallbackDeliveryDetectionSegmentConfigProducesPositiveStride() {
+        XCTAssertGreaterThan(WBConfig.deliveryDetectionFallbackSegmentDurationSeconds, 0)
+        XCTAssertGreaterThanOrEqual(WBConfig.deliveryDetectionFallbackSegmentOverlapSeconds, 0)
+        XCTAssertLessThan(WBConfig.deliveryDetectionFallbackSegmentOverlapSeconds, WBConfig.deliveryDetectionFallbackSegmentDurationSeconds)
+        XCTAssertGreaterThan(WBConfig.deliveryDetectionFallbackSegmentStrideSeconds, 0)
+        XCTAssertEqual(
+            WBConfig.deliveryDetectionFallbackSegmentStrideSeconds,
+            WBConfig.deliveryDetectionFallbackSegmentDurationSeconds - WBConfig.deliveryDetectionFallbackSegmentOverlapSeconds,
+            accuracy: 0.0001
+        )
+    }
+
+    func testDeliveryMergeWindowIsReasonable() {
+        XCTAssertGreaterThan(WBConfig.deliveryDetectionMergeWindowSeconds, 0)
+        XCTAssertLessThanOrEqual(WBConfig.deliveryDetectionMergeWindowSeconds, 2.0)
+    }
+
     func testLiveAPIFrameRateIsReasonable() {
         XCTAssertGreaterThanOrEqual(WBConfig.liveAPIFrameRate, 1.0)
         XCTAssertLessThanOrEqual(WBConfig.liveAPIFrameRate, 10.0)
+    }
+
+    func testCameraCaptureConfigIsReasonable() {
+        XCTAssertGreaterThanOrEqual(WBConfig.cameraTargetFPS, 24)
+        XCTAssertGreaterThanOrEqual(WBConfig.cameraMaxFPS, WBConfig.cameraTargetFPS)
+        XCTAssertGreaterThan(WBConfig.cameraFallbackFPS, 0)
+        XCTAssertLessThanOrEqual(WBConfig.cameraFallbackFPS, WBConfig.cameraMaxFPS)
+        XCTAssertGreaterThan(WBConfig.cameraPreferredMinWidth, 0)
+        XCTAssertGreaterThan(WBConfig.cameraPreferredMinHeight, 0)
     }
 
     func testLiveAPIVoiceDerivedFromPersona() {
@@ -109,5 +147,51 @@ final class WBConfigTests: XCTestCase {
 
     func testLiveSessionTimeoutIsThreeMinutes() {
         XCTAssertEqual(WBConfig.liveSessionMaxDurationSeconds, 180)
+    }
+
+    func testGenerateContentURLUsesModelAndConfiguredKey() {
+        let oldKey = UserDefaults.standard.string(forKey: "gemini_api_key")
+        WBConfig.geminiAPIKey = "unit_test_key_123"
+        defer { UserDefaults.standard.set(oldKey, forKey: "gemini_api_key") }
+
+        let url = WBConfig.generateContentURL(model: "gemini-2.5-flash")
+        let value = url.absoluteString
+        XCTAssertTrue(value.contains("/models/gemini-2.5-flash:generateContent"))
+        XCTAssertTrue(value.contains("key=unit_test_key_123"))
+    }
+
+    func testGeminiAPIKeyFallsBackWhenUserDefaultMissing() {
+        let oldKey = UserDefaults.standard.string(forKey: "gemini_api_key")
+        UserDefaults.standard.removeObject(forKey: "gemini_api_key")
+        defer { UserDefaults.standard.set(oldKey, forKey: "gemini_api_key") }
+
+        XCTAssertTrue(WBConfig.hasAPIKey)
+        XCTAssertFalse(WBConfig.geminiAPIKey.isEmpty)
+    }
+
+    func testMatePersonaGetterSetterRoundTrip() {
+        let oldRaw = UserDefaults.standard.string(forKey: "mate_persona")
+        defer { UserDefaults.standard.set(oldRaw, forKey: "mate_persona") }
+
+        WBConfig.matePersona = .tanglishFemale
+        XCTAssertEqual(WBConfig.matePersona, .tanglishFemale)
+        XCTAssertEqual(WBConfig.ttsLanguage, "en-IN")
+    }
+
+    func testMateSystemInstructionIncludesStyleSpecificCues() {
+        let oldRaw = UserDefaults.standard.string(forKey: "mate_persona")
+        defer { UserDefaults.standard.set(oldRaw, forKey: "mate_persona") }
+
+        UserDefaults.standard.set(WBConfig.MatePersona.aussieMale.rawValue, forKey: "mate_persona")
+        XCTAssertTrue(WBConfig.mateSystemInstruction.contains("casual Australian English"))
+
+        UserDefaults.standard.set(WBConfig.MatePersona.englishFemale.rawValue, forKey: "mate_persona")
+        XCTAssertTrue(WBConfig.mateSystemInstruction.contains("clear, standard English"))
+
+        UserDefaults.standard.set(WBConfig.MatePersona.tamilMale.rawValue, forKey: "mate_persona")
+        XCTAssertTrue(WBConfig.mateSystemInstruction.contains("SPEAK ENTIRELY IN TAMIL"))
+
+        UserDefaults.standard.set(WBConfig.MatePersona.tanglishFemale.rawValue, forKey: "mate_persona")
+        XCTAssertTrue(WBConfig.mateSystemInstruction.contains("Speak in Tanglish"))
     }
 }

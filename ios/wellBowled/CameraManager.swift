@@ -15,6 +15,11 @@ protocol CameraManagerProtocol: AnyObject {
 
 class CameraManager: NSObject, ObservableObject, CameraManagerProtocol {
     var session = AVCaptureSession()
+    lazy var previewLayer: AVCaptureVideoPreviewLayer = {
+        let layer = AVCaptureVideoPreviewLayer(session: session)
+        layer.videoGravity = .resizeAspectFill
+        return layer
+    }()
     @MainActor @Published var isRecording = false
     @MainActor @Published var currentPosition: AVCaptureDevice.Position = .back
     @MainActor var currentRecordingURL: URL?
@@ -26,6 +31,7 @@ class CameraManager: NSObject, ObservableObject, CameraManagerProtocol {
     
     private let sessionQueue = DispatchQueue(label: "camera.session.queue")
     private var isConfigured = false
+    private var currentPositionStorage: AVCaptureDevice.Position = .back
     
     override init() {
         super.init()
@@ -69,6 +75,7 @@ class CameraManager: NSObject, ObservableObject, CameraManagerProtocol {
             
             // Set initial position state based on the actual camera used
             let actualPosition = camera.position
+            self.currentPositionStorage = actualPosition
             Task { @MainActor in
                 self.currentPosition = actualPosition
             }
@@ -169,13 +176,14 @@ class CameraManager: NSObject, ObservableObject, CameraManagerProtocol {
             }
             
             // Toggle position
-            let newPosition: AVCaptureDevice.Position = (self.currentPosition == .front) ? .back : .front
+            let newPosition: AVCaptureDevice.Position = (self.currentPositionStorage == .front) ? .back : .front
             
             // Add new input
             if let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: newPosition),
                let input = try? AVCaptureDeviceInput(device: camera),
                self.session.canAddInput(input) {
                 self.session.addInput(input)
+                self.currentPositionStorage = newPosition
                 Task { @MainActor in
                     self.currentPosition = newPosition
                     print("🔄 [CameraManager]: Flipped to \(newPosition == .front ? "front" : "back") camera")

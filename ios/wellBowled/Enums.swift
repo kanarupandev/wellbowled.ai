@@ -3,9 +3,9 @@ import Foundation
 // MARK: - Pace Band (from wrist angular velocity)
 
 enum PaceBand: String, Codable, CaseIterable {
-    case quick   // omega > 1500 rad/s
-    case medium  // 800-1500 rad/s
-    case slow    // < 800 rad/s
+    case quick   // omega > 1500 deg/s
+    case medium  // 800-1500 deg/s
+    case slow    // < 800 deg/s
 
     var label: String {
         switch self {

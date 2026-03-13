@@ -1,5 +1,8 @@
 import SwiftUI
 import AVKit
+import os
+
+private let coachVideoLog = Logger(subsystem: "com.wellbowled", category: "CoachVideo")
 
 // MARK: - CoachChatPage Video Views & Setup
 extension CoachChatPage {
@@ -31,6 +34,10 @@ extension CoachChatPage {
                 SyncedSkeletonOverlayView(syncController: syncController)
                     .opacity(fadeLevel)  // ← 0 = hidden, 1 = fully visible over video
                     .allowsHitTesting(false)
+                    .onAppear {
+                        coachVideoLog.info("CoachChat: skeleton overlay VISIBLE, fadeLevel=\(self.fadeLevel)")
+                        print("🦴 [CoachVideo] Skeleton overlay VISIBLE, fadeLevel=\(self.fadeLevel)")
+                    }
             }
 
             // Pause overlay
@@ -211,29 +218,43 @@ extension CoachChatPage {
     // MARK: - Backend Landmarks JSON → SkeletonSyncController
 
     func loadLandmarksIfAvailable() {
-        guard let url = liveDelivery.landmarksURL, let p = player else { return }
-        guard skeletonSyncController == nil else { return }  // Already loaded
+        coachVideoLog.debug("loadLandmarksIfAvailable: landmarksURL=\(self.liveDelivery.landmarksURL?.absoluteString ?? "nil", privacy: .public), hasPlayer=\(self.player != nil), hasSyncController=\(self.skeletonSyncController != nil)")
+        guard let url = liveDelivery.landmarksURL, let p = player else {
+            coachVideoLog.debug("loadLandmarks skipped: no URL or no player")
+            return
+        }
+        guard skeletonSyncController == nil else {
+            coachVideoLog.debug("loadLandmarks skipped: sync controller already loaded")
+            return
+        }
         Task { await loadLandmarksFromURL(url, player: p) }
     }
 
     func loadLandmarksFromURL(_ url: URL, player: AVPlayer) async {
-        print("🦴 [CoachPage] Downloading landmarks JSON: \(url.lastPathComponent)")
+        coachVideoLog.info("Downloading landmarks JSON: \(url.absoluteString, privacy: .public)")
         isLoadingPoseData = true
         defer { isLoadingPoseData = false }
 
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, response) = try await URLSession.shared.data(from: url)
+            if let httpResponse = response as? HTTPURLResponse {
+                coachVideoLog.debug("Landmarks HTTP status=\(httpResponse.statusCode), bytes=\(data.count)")
+            }
             let landmarksData = try JSONDecoder().decode(LandmarksData.self, from: data)
             let frames = landmarksData.toFramePoseLandmarks()
+            coachVideoLog.info("Landmarks decoded: \(frames.count) frames, fps=\(landmarksData.fps)")
             let expertAnalysis = ExpertAnalysisBuilder.build(from: phases)
+            coachVideoLog.debug("ExpertAnalysis built from \(self.phases.count) phases")
             skeletonSyncController = SkeletonSyncController(
                 player: player,
                 frames: frames,
                 expertAnalysis: expertAnalysis
             )
-            print("🦴 [CoachPage] ✅ Skeleton sync ready — \(frames.count) frames from backend JSON")
+            coachVideoLog.info("Skeleton sync controller ready — \(frames.count) frames from backend JSON")
+            print("🦴 [CoachVideo] Skeleton sync ready — \(frames.count) frames")
         } catch {
-            print("🦴 [CoachPage] ❌ Failed to load landmarks: \(error)")
+            coachVideoLog.error("Failed to load landmarks: \(error.localizedDescription, privacy: .public)")
+            print("🦴 [CoachVideo] Landmarks FAILED: \(error)")
         }
     }
 }

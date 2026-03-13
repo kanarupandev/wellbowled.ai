@@ -156,6 +156,30 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
     - If none found, return { "deliveries": [] }.
     """
 
+    private static let segmentDeliveryDetectionHighRecallPrompt = """
+    You are analyzing one cricket bowling video segment in HIGH-RECALL mode.
+    Detect each likely bowling RELEASE instant (ball leaving the hand) from an overarm bowling action.
+    Prefer recall over precision: include plausible releases with lower confidence instead of dropping them.
+
+    Return STRICT JSON only:
+    {
+      "deliveries": [
+        {
+          "release_time_sec": 12.4,
+          "confidence": 0.62
+        }
+      ]
+    }
+
+    Rules:
+    - `release_time_sec` is seconds from segment start.
+    - Keep times sorted ascending.
+    - Ignore obvious non-bowling movement.
+    - If uncertain, still include the candidate with lower confidence.
+    - Use confidence in [0, 1].
+    - If none found, return { "deliveries": [] }.
+    """
+
     // MARK: - DNA Extraction
 
     /// Extracts BowlingDNA from a clip using Gemini vision + MediaPipe-derived wrist data.
@@ -415,13 +439,14 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
 
     func detectDeliveryTimestampsInSegment(
         segmentURL: URL,
-        segmentDuration: Double
+        segmentDuration: Double,
+        highRecall: Bool = false
     ) async throws -> [GeminiSegmentDeliveryDetection] {
         let videoData = try Data(contentsOf: segmentURL)
         let base64Video = videoData.base64EncodedString()
         let durationText = String(format: "%.2f", max(segmentDuration, 0))
         log.debug(
-            "Segment delivery detection started: segment=\(segmentURL.lastPathComponent, privacy: .public), duration=\(durationText, privacy: .public)s"
+            "Segment delivery detection started: segment=\(segmentURL.lastPathComponent, privacy: .public), duration=\(durationText, privacy: .public)s, highRecall=\(highRecall)"
         )
 
         let context = "Segment duration: \(durationText) seconds."
@@ -429,7 +454,7 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
             "contents": [[
                 "parts": [
                     ["inlineData": ["mimeType": "video/mp4", "data": base64Video]],
-                    ["text": Self.segmentDeliveryDetectionPrompt],
+                    ["text": highRecall ? Self.segmentDeliveryDetectionHighRecallPrompt : Self.segmentDeliveryDetectionPrompt],
                     ["text": context]
                 ]
             ]],

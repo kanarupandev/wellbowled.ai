@@ -6,6 +6,11 @@ Scope path: `/Users/kanarupan/workspace/wellbowled.ai` only
 ## Objective
 Win hackathon by hardening the current Gemini Live experimentation stack and converting it into a reliable demo/submission pipeline.
 
+## Strategic Priority (2026-03-02 update)
+1. Primary: Live feedback reliability + challenge loop execution.
+2. Secondary: DNA/pose-analysis/chat-control add-ons.
+3. Demo allocation: 4:00 total = 3:00 primary live/challenge + 1:00 secondary.
+
 ## Phase Gates
 
 ### P1: Reproducible Live Runner
@@ -19,7 +24,9 @@ Win hackathon by hardening the current Gemini Live experimentation stack and con
 - Exit gate: repeatable run behavior across at least 3 local runs.
 
 ### P3: Demo Narrative Pack
-- Tight 3-minute demo blueprint linked to actual outputs from P1/P2.
+- Tight 4-minute demo blueprint linked to actual outputs from P1/P2.
+- Enforce live-first split: first 3 minutes are only live + challenge proof.
+- Keep DNA/pose/chat controls in final minute; cut if unstable.
 - Submission scorecard updated with measurable proof points.
 - Exit gate: one-pass demo script with fallback branch.
 

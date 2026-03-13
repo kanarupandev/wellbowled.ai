@@ -72,6 +72,22 @@ final class BowlingDNATests: XCTestCase {
         XCTAssertEqual(matches[0].similarityPercent, 100.0, accuracy: 0.1)
     }
 
+    func testVaasDNAMatchesVaasFirst() {
+        let userDNA = FamousBowlerDatabase.vaas.dna
+        let matches = BowlingDNAMatcher.match(userDNA: userDNA, topN: 3)
+
+        XCTAssertEqual(matches[0].bowlerName, "Chaminda Vaas")
+        XCTAssertEqual(matches[0].similarityPercent, 100.0, accuracy: 0.1)
+    }
+
+    func testSteynDNAMatchesSteynFirst() {
+        let userDNA = FamousBowlerDatabase.steyn.dna
+        let matches = BowlingDNAMatcher.match(userDNA: userDNA, topN: 3)
+
+        XCTAssertEqual(matches[0].bowlerName, "Dale Steyn")
+        XCTAssertEqual(matches[0].similarityPercent, 100.0, accuracy: 0.1)
+    }
+
     func testTopNReturnsRequestedCount() {
         let userDNA = FamousBowlerDatabase.warne.dna
         let matches = BowlingDNAMatcher.match(userDNA: userDNA, topN: 5)

@@ -59,8 +59,12 @@ final class SessionViewModelPromptTests: XCTestCase {
     func testShouldEndSessionRecognizesExpectedCommands() {
         XCTAssertTrue(SessionViewModel.shouldEndSession(from: "end session"))
         XCTAssertTrue(SessionViewModel.shouldEndSession(from: "please end the session now"))
+        XCTAssertTrue(SessionViewModel.shouldEndSession(from: "can you end my session"))
         XCTAssertTrue(SessionViewModel.shouldEndSession(from: "stop session"))
+        XCTAssertTrue(SessionViewModel.shouldEndSession(from: "please stop this session now"))
         XCTAssertTrue(SessionViewModel.shouldEndSession(from: "finish session"))
+        XCTAssertTrue(SessionViewModel.shouldEndSession(from: "finish this session"))
+        XCTAssertTrue(SessionViewModel.shouldEndSession(from: "Could you wrap up the session?"))
         XCTAssertTrue(SessionViewModel.shouldEndSession(from: "session over"))
     }
 
@@ -68,5 +72,6 @@ final class SessionViewModelPromptTests: XCTestCase {
         XCTAssertFalse(SessionViewModel.shouldEndSession(from: "great ball keep going"))
         XCTAssertFalse(SessionViewModel.shouldEndSession(from: "switch camera"))
         XCTAssertFalse(SessionViewModel.shouldEndSession(from: "what is the plan"))
+        XCTAssertFalse(SessionViewModel.shouldEndSession(from: "weekend session was good"))
     }
 }

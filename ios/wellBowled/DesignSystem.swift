@@ -8,7 +8,7 @@ struct DesignSystem {
         
         // Electric Accents
         static let primary = Color(hex: "00E5FF") // Electric Cyan
-        static let secondary = Color(hex: "BD00FF") // Plasma Purple
+        static let secondary = Color(hex: "FF8A3D") // Ember Orange
         static let accent = Color(hex: "39FF14") // Neon Green
         
         // Semantic

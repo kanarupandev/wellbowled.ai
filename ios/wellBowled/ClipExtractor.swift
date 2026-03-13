@@ -10,15 +10,25 @@ final class ClipExtractor: ClipExtracting {
     func extractClip(
         from recordingURL: URL,
         at timestamp: Double,
-        preRoll: Double = WBConfig.clipPreRoll,
-        postRoll: Double = WBConfig.clipPostRoll
+        preRoll: Double,
+        postRoll: Double
     ) async throws -> URL {
         let asset = AVURLAsset(url: recordingURL)
         let duration = try await asset.load(.duration)
-        let totalSeconds = CMTimeGetSeconds(duration)
 
-        let startTime = max(0, timestamp - preRoll)
-        let endTime = min(totalSeconds, timestamp + postRoll)
+        // AVCaptureMovieFileOutput may preserve session-clock CMTimes (start > 0).
+        // Detect actual asset start so clip seek positions land correctly.
+        let tracks = try await asset.loadTracks(withMediaType: .video)
+        let trackTimeRange = try await tracks.first?.load(.timeRange)
+        let assetStart = CMTimeGetSeconds(trackTimeRange?.start ?? .zero)
+        let assetEnd = assetStart + CMTimeGetSeconds(duration)
+
+        // Shift the 0-based clip timestamp into the asset's time domain.
+        let seekTime = timestamp + assetStart
+        let startTime = max(assetStart, seekTime - preRoll)
+        let endTime = min(assetEnd, seekTime + postRoll)
+
+        log.debug("Clip seek: timestamp=\(timestamp), assetStart=\(assetStart), seekTime=\(seekTime), range=\(startTime)-\(endTime)")
 
         let timeRange = CMTimeRange(
             start: CMTime(seconds: startTime, preferredTimescale: 600),

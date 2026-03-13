@@ -54,8 +54,8 @@ App auto-clips each delivery (5s window)
     ↓
 Gemini Pro analyzes each clip
     ↓
-Delivery card: pace band, length, line, key observation
-Session summary: count, pace trend, challenge mode score
+Delivery card: Pace Score, Rough Speed Bucket, length, line, key observation
+Session summary: count, Pace Score trend, challenge mode score
 ```
 
 45 min of raw video → 36 bite-sized clips you'll actually watch.
@@ -65,7 +65,8 @@ Session summary: count, pace trend, challenge mode score
 | Attribute | Method | Accuracy | Status |
 |-----------|--------|----------|--------|
 | Delivery count | MediaPipe wrist spike + Gemini | High | Proven (4/4 nets) |
-| Pace band | Gemini Pro on clip | Classification only (no radar ground truth) | Exploratory |
+| Pace Score + Rough Speed Bucket | Delivery mechanics signal + Gemini clip context | Relative metric (not radar speed) | Canonical policy |
+| Estimated Speed (optional) | Personal calibration model + confidence gate | Shown only when calibration quality is sufficient | Conditional |
 | Length (yorker/full/good/short) | Gemini on clip (visual) | ~75-85% estimated | To validate |
 | Line (off/middle/leg) | Gemini on clip (visual) | ~60-70% estimated | To validate |
 | Type (seam/spin) | Gemini on clip (action) | ~80%+ estimated | To validate |
@@ -73,7 +74,7 @@ Session summary: count, pace trend, challenge mode score
 
 ## What It Doesn't Do
 
-- Precise speed ("127.4 kph") — unreliable, erodes trust. Shows ranges.
+- Exact/radar-grade speed claims — not supported in this product.
 - Legality assessment — 2D video can't measure 15° elbow extension
 - Broadcast video analysis — scene cuts break detection
 - Real-time video overlay — latency kills it
@@ -85,6 +86,7 @@ Session summary: count, pace trend, challenge mode score
 - **Voice conversation**: Gemini Live API (`gemini-2.5-flash-native-audio`) — AUDIO mode, bowler asks → mate answers (R17+R18+R19 validated on device, 8 personas)
 - **Challenge mode evaluation**: Gemini on clip (generateContent) — delivery type + success assessment
 - **Post-session analysis**: Gemini 3 Pro (`gemini-3-pro-preview`) via generateContent
+- **Pace/speed output model**: Pace Score (primary), Rough Speed Bucket (secondary), Estimated Speed only when calibrated with confidence
 - **iOS client**: Swift, camera capture + pose overlay
 - **Config**: Config E — temp=0.1, default thinking, simple prompt, File API >5MB
 
@@ -116,7 +118,7 @@ Gemini 3 hackathon (Feb 2026): https://www.youtube.com/watch?v=Gpif-vPtYTc
 See `research/README.md` for full index. Highlights:
 - **R9**: Config E is best (6/7 PASS at mixed thresholds)
 - **R11+R17**: Live API is conversational, not monitoring — revised to MediaPipe detection + iOS TTS + Live API conversation
-- **R12**: Gemini Pro speed: exploratory, uncalibrated (no radar ground truth). Type classification feasible
+- **R12+**: Pace Score metric model adopted — relative improvement tracking first, rough bucket context, calibrated estimated speed only
 - **R13**: MediaPipe wrist velocity spike: proven delivery trigger
 - **R14**: Delivery type detection feasible (length ~75-85%, line ~60-70%)
 - **R15**: Competitive landscape — nobody does live audio feedback

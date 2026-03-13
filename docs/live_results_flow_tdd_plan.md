@@ -7,6 +7,13 @@
 > Update note (2026-03-03): For the current on-demand deep-analysis architecture and latency-first async plan, use
 > `/Users/kanarupan/workspace/wellbowled.ai/docs/live_delivery_deep_analysis_requirements.md`
 > as canonical source-of-truth. This document remains historical context for the earlier results-flow slice.
+>
+> Update note (2026-03-05): Post-session entry behavior now uses a replay-first gate:
+> 1) auto-open full session replay,
+> 2) hold replay for `WBConfig.sessionResultsReplayHoldSeconds` (default 1s),
+> 3) show clip-prep spinner only if prep is still running,
+> 4) auto-transition to delivery carousel only when prep is complete and at least one delivery exists,
+> 5) if zero deliveries, stay on replay with `No deliveries found` overlay.
 
 ## 1. Requirement Summary (Confirmed)
 
@@ -20,7 +27,7 @@ Then app must auto-navigate to session results and present:
 2. Each delivery page shows:
    - 5s clip (3s run-up + release + 2s follow-through)
    - high-level note(s)
-   - estimated speed
+   - Pace Score + Rough Speed Bucket (Estimated Speed only when calibrated + confidence shown)
 3. User can swipe downward inside each delivery page to get deep analysis
 4. Deep analysis section includes phase-wise:
    - pros

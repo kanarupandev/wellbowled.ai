@@ -79,6 +79,9 @@ def load_config(config_path: str) -> dict[str, Any]:
         "mock_default_audio_duration_s": float(raw.get("mock_default_audio_duration_s", 0.1)),
         "output_dir": output_dir,
         "output_basename": output_basename,
+        "live_retry_max_attempts": int(raw.get("live_retry_max_attempts", 2)),
+        "live_retry_backoff_seconds": float(raw.get("live_retry_backoff_seconds", 1.5)),
+        "live_retry_backoff_multiplier": float(raw.get("live_retry_backoff_multiplier", 2.0)),
     }
 
     os.makedirs(output_dir, exist_ok=True)
@@ -200,9 +203,13 @@ def run_live_session(cfg: dict[str, Any]) -> dict[str, Any]:
     from validate_audio import run_experiment, save_wav
 
     start = time.time()
-    audio_chunks, transcripts, events, elapsed = asyncio.run(
-        run_experiment(cfg["video_path"], api_key)
-    )
+    (
+        audio_chunks,
+        transcripts,
+        events,
+        elapsed,
+        attempts_used,
+    ) = execute_live_attempts(cfg, api_key, run_experiment)
 
     transcript_segments = [
         t.get("text", "") for t in transcripts if isinstance(t, dict) and t.get("text")
@@ -234,10 +241,63 @@ def run_live_session(cfg: dict[str, Any]) -> dict[str, Any]:
         "parsed_updates": parsed_updates,
         "json_validation_errors": json_validation_errors,
         "events": events,
+        "retry_summary": {
+            "attempts_used": attempts_used,
+            "max_attempts": cfg["live_retry_max_attempts"],
+        },
         "outputs": cfg["outputs"],
     }
     _write_text(cfg["outputs"]["result_json"], json.dumps(result, indent=2))
     return result
+
+
+def execute_live_attempts(
+    cfg: dict[str, Any],
+    api_key: str,
+    attempt_runner: Any,
+) -> tuple[list[bytes], list[dict[str, Any]], list[dict[str, Any]], float, int]:
+    events: list[dict[str, Any]] = []
+    max_attempts = max(1, int(cfg["live_retry_max_attempts"]))
+    base_backoff = max(0.0, float(cfg["live_retry_backoff_seconds"]))
+    multiplier = max(1.0, float(cfg["live_retry_backoff_multiplier"]))
+
+    for attempt in range(1, max_attempts + 1):
+        events.append({"type": "attempt_start", "attempt": attempt, "ts": time.time()})
+        try:
+            result = attempt_runner(cfg["video_path"], api_key)
+            if asyncio.iscoroutine(result):
+                audio_chunks, transcripts, run_events, elapsed = asyncio.run(result)
+            else:
+                audio_chunks, transcripts, run_events, elapsed = result
+
+            events.extend(run_events if isinstance(run_events, list) else [])
+            events.append({"type": "attempt_success", "attempt": attempt, "ts": time.time()})
+            return audio_chunks, transcripts, events, elapsed, attempt
+        except Exception as exc:
+            events.append(
+                {
+                    "type": "attempt_error",
+                    "attempt": attempt,
+                    "error": str(exc),
+                    "ts": time.time(),
+                }
+            )
+            if attempt >= max_attempts:
+                raise
+
+            delay = base_backoff * (multiplier ** (attempt - 1))
+            events.append(
+                {
+                    "type": "retry_scheduled",
+                    "attempt": attempt + 1,
+                    "delay_s": round(delay, 3),
+                    "ts": time.time(),
+                }
+            )
+            if delay > 0:
+                time.sleep(delay)
+
+    raise RuntimeError("unreachable retry state")
 
 
 def run_from_config(config_path: str) -> dict[str, Any]:

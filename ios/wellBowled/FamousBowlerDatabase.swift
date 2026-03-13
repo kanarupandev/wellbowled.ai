@@ -11,13 +11,14 @@ struct FamousBowlerProfile {
     let signatureTraits: [String]
 }
 
-// MARK: - Database (10 Bowlers)
+// MARK: - Database (12 Bowlers)
 
 enum FamousBowlerDatabase {
 
     static let allBowlers: [FamousBowlerProfile] = [
         mcGrath, akram, warne, akhtar, muralitharan,
-        anderson, starc, ashwin, marshall, bumrah
+        anderson, starc, ashwin, marshall, bumrah,
+        vaas, steyn
     ]
 
     // 1. Glenn McGrath (AUS) — Classic side-on seam
@@ -237,6 +238,50 @@ enum FamousBowlerDatabase {
             "Unorthodox sling action — virtually impossible to pick up early",
             "Short run-up but generates 145+ kph through hyper-extension",
             "Deadly yorker specialist with late outswing from nowhere"
+        ]
+    )
+
+    // 11. Chaminda Vaas (SL) — Left-arm swing fast-medium
+    static let vaas = FamousBowlerProfile(
+        name: "Chaminda Vaas",
+        country: "SL",
+        era: "1994-2009",
+        style: "Left-arm fast-medium",
+        dna: BowlingDNA(
+            runUpStride: .medium, runUpSpeed: .fast, approachAngle: .angled,
+            gatherAlignment: .sideOn, backFootContact: .braced, trunkLean: .slight,
+            deliveryStrideLength: .normal, frontArmAction: .pull, headStability: .stable,
+            armPath: .high, releaseHeight: .high, wristPosition: .behind,
+            wristOmegaNormalized: 0.6, releaseWristYNormalized: 0.34,
+            seamOrientation: .upright, revolutions: .low,
+            followThroughDirection: .straight, balanceAtFinish: .balanced
+        ),
+        signatureTraits: [
+            "Elite left-arm swing control with relentless line and length",
+            "Compact, repeatable action built for discipline and seam position",
+            "New-ball threat with natural angle into right-handers"
+        ]
+    )
+
+    // 12. Dale Steyn (SA) — Right-arm fast
+    static let steyn = FamousBowlerProfile(
+        name: "Dale Steyn",
+        country: "SA",
+        era: "2004-2020",
+        style: "Right-arm fast",
+        dna: BowlingDNA(
+            runUpStride: .long, runUpSpeed: .explosive, approachAngle: .angled,
+            gatherAlignment: .sideOn, backFootContact: .jumping, trunkLean: .slight,
+            deliveryStrideLength: .normal, frontArmAction: .pull, headStability: .stable,
+            armPath: .high, releaseHeight: .high, wristPosition: .behind,
+            wristOmegaNormalized: 0.9, releaseWristYNormalized: 0.28,
+            seamOrientation: .upright, revolutions: .low,
+            followThroughDirection: .straight, balanceAtFinish: .balanced
+        ),
+        signatureTraits: [
+            "Explosive high-pace action with late outswing at full speed",
+            "Classical seam position enabling movement in all conditions",
+            "Aggressive strike bowler rhythm with relentless attacking intent"
         ]
     )
 }

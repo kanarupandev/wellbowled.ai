@@ -3,7 +3,7 @@ import Foundation
 
 /// Speaks delivery count, pace, and challenge info using AVSpeechSynthesizer.
 /// Zero-latency, on-device, no network dependency.
-final class TTSService: NSObject, SpeechAnnouncing, AVSpeechSynthesizerDelegate {
+final class TTSService: NSObject, SpeechAnnouncing, AVSpeechSynthesizerDelegate, @unchecked Sendable {
 
     private let synthesizer = AVSpeechSynthesizer()
 

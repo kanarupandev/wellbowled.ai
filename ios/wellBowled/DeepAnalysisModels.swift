@@ -41,6 +41,7 @@ struct DeliveryDeepAnalysisStatus: Equatable {
 
 struct DeliveryDeepAnalysisArtifacts {
     var poseFrames: [FramePoseLandmarks] = []
+    var poseFailureReason: String?
     var expertAnalysis: ExpertAnalysis?
     var chipReply: String?
 }

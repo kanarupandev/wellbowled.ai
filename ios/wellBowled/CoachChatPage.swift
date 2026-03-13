@@ -1,5 +1,8 @@
 import SwiftUI
 import AVKit
+import os
+
+private let coachLog = Logger(subsystem: "com.wellbowled", category: "CoachChat")
 
 // MARK: - Page 2: Coach Chat (Simplified with minimize/expand)
 struct CoachChatPage: View {
@@ -199,6 +202,7 @@ struct CoachChatPage: View {
             handleOverlayReady(oldURL: oldURL, newURL: newURL)
         }
         .onChange(of: liveDelivery.landmarksURL) { _, newURL in
+            coachLog.info("landmarksURL changed: \(newURL?.absoluteString ?? "nil", privacy: .public)")
             guard newURL != nil else { return }
             loadLandmarksIfAvailable()
         }

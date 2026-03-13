@@ -49,15 +49,36 @@ enum WBConfig {
 
     // MARK: - Detection Thresholds
 
-    /// Minimum angular velocity (rad/s) to trigger delivery detection.
-    /// Calibrated from experiment 003: bowling peaks 1000-1900, walking ~200.
-    static let wristVelocityThreshold: Double = 800.0
+    /// Minimum angular velocity (deg/s) to trigger delivery detection.
+    /// Calibrated from experiment 003: bowling peaks ~1000-1900, walking/jogging arm swings ~200-350.
+    static let wristVelocityThreshold: Double = 450.0
 
     /// Minimum seconds between detections (prevents double-counting).
     static let deliveryCooldown: Double = 5.0
 
     /// Process every Nth frame for MediaPipe (1 = every frame, 2 = every other)
     static let frameSkip: Int = 2
+
+    /// Number of concurrent poses to ask MediaPipe for in live detection.
+    static let deliveryPoseMaxPoses: Int = 3
+
+    /// Minimum shoulder width (normalized frame units) to treat a pose as a valid bowler candidate.
+    static let deliveryPoseMinShoulderSpan: Double = 0.08
+
+    /// Maximum shoulder-center drift per frame before lock is considered unstable.
+    static let deliveryPoseLockMaxCenterDrift: Double = 0.20
+
+    /// Lock smoothing factor for shoulder-center tracking (0-1, higher = faster lock movement).
+    static let deliveryPoseLockSmoothing: Double = 0.35
+
+    /// Frames without a valid pose before lock reset.
+    static let deliveryPoseLockResetMissFrames: Int = 20
+
+    /// Penalty applied to candidate score as lock-distance grows.
+    static let deliveryPoseLockDriftPenalty: Double = 0.35
+
+    /// Overarm sanity gate: wrist should be at least this much above shoulder at release.
+    static let deliveryOverarmWristAboveShoulderMargin: Double = 0.08
 
     // MARK: - Clip Extraction
 
@@ -81,8 +102,69 @@ enum WBConfig {
     /// Max duration for a live coaching session (hackathon demo cap)
     static let liveSessionMaxDurationSeconds: TimeInterval = 180
 
+    /// Minimum time to hold the full-session replay before switching to delivery carousel.
+    static let sessionResultsReplayHoldSeconds: TimeInterval = 1.0
+
+    /// Wait time for recording segments to finalize before post-session merge.
+    static let recordingSegmentFinalizeDelaySeconds: TimeInterval = 0.5
+
+    /// Rolling Gemini segment duration (seconds) for post-session release detection.
+    static let deliveryDetectionSegmentDurationSeconds: Double = 60.0
+
+    /// Segment overlap (seconds) for post-session release detection.
+    static let deliveryDetectionSegmentOverlapSeconds: Double = 5.0
+
+    /// Derived segment stride = duration - overlap.
+    static var deliveryDetectionSegmentStrideSeconds: Double {
+        max(deliveryDetectionSegmentDurationSeconds - deliveryDetectionSegmentOverlapSeconds, 1.0)
+    }
+
+    /// Fallback scan segment duration (seconds) used when the primary scan finds no releases.
+    static let deliveryDetectionFallbackSegmentDurationSeconds: Double = 20.0
+
+    /// Fallback scan overlap (seconds) used when the primary scan finds no releases.
+    static let deliveryDetectionFallbackSegmentOverlapSeconds: Double = 8.0
+
+    /// Derived fallback segment stride = duration - overlap.
+    static var deliveryDetectionFallbackSegmentStrideSeconds: Double {
+        max(deliveryDetectionFallbackSegmentDurationSeconds - deliveryDetectionFallbackSegmentOverlapSeconds, 1.0)
+    }
+
+    /// Dedupe window for merging live and Gemini release timestamps.
+    static let deliveryDetectionMergeWindowSeconds: Double = 0.6
+
+    /// Baseline confidence for live MediaPipe release detections.
+    static let liveDetectionConfidence: Double = 0.72
+
+    /// Baseline confidence boost when a release is confirmed by both live and Gemini paths.
+    static let hybridDetectionConfidenceBoost: Double = 0.08
+
+    /// Model used for segment-level release timestamp detection.
+    static let deliveryDetectionModel = "gemini-2.5-flash"
+
     /// Sampling FPS for offline pose extraction from 5s delivery clips.
     static let poseExtractionFPS: Double = 10.0
+
+    /// Target camera FPS for capture pipeline (device capabilities permitting).
+    static let cameraTargetFPS: Int = 60
+
+    /// Hard ceiling for requested camera FPS.
+    static let cameraMaxFPS: Int = 60
+
+    /// Fallback camera FPS when target/native format tuning is unavailable.
+    static let cameraFallbackFPS: Int = 30
+
+    /// Preferred minimum capture width for camera format selection.
+    static let cameraPreferredMinWidth: Int32 = 1280
+
+    /// Preferred minimum capture height for camera format selection.
+    static let cameraPreferredMinHeight: Int32 = 720
+
+    /// Keep disabled for production stability unless format tuning is being actively profiled.
+    static let enableAdvancedCameraTuning = false
+
+    /// If true, camera preview/output are forced to portrait to avoid orientation regressions.
+    static let forcePortraitCameraOrientation = true
 
     /// Voice for Live API audio responses (derived from persona)
     static var liveAPIVoice: String {

@@ -8,7 +8,7 @@ import Foundation
 /// 2. Unwrap theta to handle 2pi crossings
 /// 3. Compute angular velocity: omega = (theta[i+1] - theta[i-1]) / (2 * dt)
 /// 4. Detect spikes above threshold with cooldown
-final class WristVelocityTracker {
+struct WristVelocityTracker {
 
     struct Spike {
         let timestamp: Double
@@ -43,7 +43,7 @@ final class WristVelocityTracker {
 
     /// Add a wrist angle sample for both arms.
     /// Call this for every processed frame.
-    func addSample(
+    mutating func addSample(
         rightTheta: Double?,
         leftTheta: Double?,
         at time: Double
@@ -54,11 +54,11 @@ final class WristVelocityTracker {
     }
 
     /// Convenience: single-arm tracking (for tests or when only one arm visible)
-    func addSample(theta: Double?, at time: Double) {
+    mutating func addSample(theta: Double?, at time: Double) {
         addSample(rightTheta: theta, leftTheta: nil, at: time)
     }
 
-    func reset() {
+    mutating func reset() {
         rightThetas.removeAll()
         leftThetas.removeAll()
         detectedSpikes.removeAll()
@@ -67,7 +67,7 @@ final class WristVelocityTracker {
 
     // MARK: - Spike Detection
 
-    private func checkForSpike() {
+    private mutating func checkForSpike() {
         // Need at least 3 samples for central difference
         guard rightThetas.count >= 3 else { return }
 
@@ -77,8 +77,11 @@ final class WristVelocityTracker {
         let rOmega = computeOmegaAtIndex(n - 2, thetas: rightThetas)
         let lOmega = computeOmegaAtIndex(n - 2, thetas: leftThetas)
 
-        let absR = abs(rOmega)
-        let absL = abs(lOmega)
+        // App thresholds are tuned in degrees/sec from experiments.
+        // Convert internal rad/sec derivative to deg/sec before thresholding/classification.
+        let radToDeg = 180.0 / Double.pi
+        let absR = abs(rOmega) * radToDeg
+        let absL = abs(lOmega) * radToDeg
         let peakOmega = max(absR, absL)
         let arm: BowlingArm = absR >= absL ? .right : .left
         let time = rightThetas[n - 2].time

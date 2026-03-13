@@ -28,8 +28,12 @@ iOS TTS: "3."                      "Good length, seam up,
 ## Speed estimation
 
 - **Live API**: No (1fps, ball gone between frames)
-- **Gemini on 5s clip**: ±15-25 kph classification ("fast", "medium", "spin") — hackathon scope
-- **240fps ball tracking**: iPhone 15 shoots 240fps natively. Extract 2s post-delivery from original recording → 480 frames → ball tracking → ±5-10 kph. Needs camera calibration. Post-MVP.
+- **Product metric model**: Pace Score (0-100) + Rough Speed Bucket + optional calibrated Estimated Speed + Trend.
+- **Exact claim boundary**: relative improvement metric, not radar-grade absolute speed.
+- **Future path**: 240fps ball tracking + calibration remains post-MVP.
+
+Canonical reference:
+- `/Users/kanarupan/workspace/wellbowled.ai/docs/pace_score_metric_model.md`
 
 ## Key technical choices
 
@@ -51,18 +55,28 @@ Config E: temp=0.1, default thinking, simple prompt, File API >5MB, no downscali
 
 **Revised architecture**:
 - `[VALIDATED]` **Detection + count**: MediaPipe on-device (wrist velocity spike) — instant, proven 4/4
-- `[VALIDATED]` **Count announcement**: iOS TTS (AVSpeechSynthesizer) — count only, zero latency, local. Pace band requires post-clip Gemini analysis
+- `[VALIDATED]` **Count announcement**: iOS TTS (AVSpeechSynthesizer) — count only, zero latency, local. Pace metrics are post-clip/analysis-stage outputs.
 - `[VALIDATED R18]` **Conversation**: Live API — bowler asks "How was that?", mate answers with audio based on video context. Working on device with auto-reconnect.
 - `[DONE R24]` **Waterfall startup flow**: proactive greet → plan prompt → 5s natural reprompt if no answer → setup verification → pilot run → explicit "Session started".
 - `[DONE R24]` **Mode switch tool call path**: Live API can request `switch_session_mode` and app switches free/challenge dynamically with UI mode badge.
 - `[DONE R24]` **Session duration config**: live timeout increased to 3 minutes via `WBConfig.liveSessionMaxDurationSeconds = 180`.
+- `[DONE R25]` **Native camera tuning**: capture now prefers native formats at target 60fps with 720p+ minimum and safe fallback.
 - `[HYPOTHESIS]` **Post-session analysis**: generateContent (Gemini Pro) on auto-clipped deliveries — code written, untested end-to-end on device
 
 This is actually better: the core loop (detect → announce) has zero API dependency. The Live API does what it's best at — voice conversation with video understanding.
 
-## Speed Status (R12) — Exploratory, Uncalibrated
+Value contract reference:
+- `/Users/kanarupan/workspace/wellbowled.ai/docs/live_buddy_value_contract.md`
 
-Gemini Pro: 96-99 kph avg (4 clips, same bowler, **no radar ground truth**). Per-run ±10 kph spread, cross-delivery ±3 kph spread — but **uncalibrated** (no radar reference). Type classification (medium/slow/quick) is feasible but unvalidated. YOLO not viable at 30fps. Show pace bands, not kph numbers. Treat all speed numbers as rough classification only until radar ground truth is available.
+## Speed Status (R12+) — Relative Pace Model
+
+Speed output policy:
+1. primary metric is `Pace Score (0-100)`
+2. secondary metric is `Rough Speed Bucket`
+3. estimated km/h is shown only after calibration and always with confidence
+4. trends are reported as percent deltas over time.
+
+No radar-equivalent claim is made.
 
 ## Session Resumption (R18)
 
@@ -95,6 +109,7 @@ Gemini Pro: 96-99 kph avg (4 clips, same bowler, **no radar ground truth**). Per
 - `[DONE]` Brand: peacock blue #006D77 + grey blue #8DA9C4 + programmatic app icon
 - `[DONE]` Unit tests: Session, WBConfig, WristVelocityTracker, Enums, Delivery codable
 - `[DONE]` Integration tests: session lifecycle, wire protocol encode/decode, timestamp offset, resumption handle
+- `[DONE R25]` Camera pipeline uses native per-device format selection (`target 60fps`, `max 60fps`, fallback 30fps, preferred 1280x720+)
 - `[DONE R21]` **BowlingDNA Action Signature feature** — 20-dimension bowling action fingerprint
 - `[DONE R21]` **BowlingDNA model** — 18 categorical + 2 continuous dimensions across 6 bowling phases
 - `[DONE R21]` **Vector encoder + weighted matcher** — ordinal encoding, weighted Euclidean distance (release 2x)
@@ -104,6 +119,9 @@ Gemini Pro: 96-99 kph avg (4 clips, same bowler, **no radar ground truth**). Per
 - `[DONE R21]` **wristOmega + releaseWristY** captured from MediaPipe at delivery detection, stored on Delivery
 - `[DONE R21]` **pose_landmarker.task in iOS source of truth** — auto-syncs and auto-bundles
 - `[DONE R21]` **BowlingDNA unit tests** — vector encoding, matching, partial DNA, normalization, codable round-trip
+- `[DONE R27]` **Live detection subject lock hardening** — MediaPipe multi-pose candidate scoring + lock-center drift control for multi-person scenes
+- `[DONE R27]` **Overarm release posture gate** — suppresses false delivery spikes when wrist posture is inconsistent with release
+- `[DONE R27]` **Config-tunable reliability controls** — max poses, shoulder-span minimum, drift thresholds, smoothing, lock reset
 
 ## Road Map
 
@@ -117,7 +135,7 @@ Gemini Pro: 96-99 kph avg (4 clips, same bowler, **no radar ground truth**). Per
 
 ### Tier 2: Demo-worthy polish — DONE
 5. `[DONE]` Mate persona tuning — 4 language styles × 2 genders, dynamic system instructions
-6. `[DONE]` Pace band classification — returned from Gemini Pro analysis, displayed in delivery cards
+6. `[DONE - LEGACY UI]` Pace band classification currently displayed in delivery cards (migration target is Pace Score model in `pace_score_metric_model.md`)
 7. `[DONE]` Session summary — generated after analysis, displayed in SessionResultsView
 8. `[DONE]` Session resumption handle — sent on reconnect via setup message
 
