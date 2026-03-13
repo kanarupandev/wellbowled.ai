@@ -1,7 +1,9 @@
 import SwiftUI
 import AVFoundation
+import os
 
 private let peacockBlue = Color(red: 0, green: 0.427, blue: 0.467)
+private let liveViewLog = Logger(subsystem: "com.wellbowled", category: "LiveSessionView")
 
 /// Full-screen camera with Live API voice session + delivery detection overlay.
 struct LiveSessionView: View {
@@ -11,6 +13,7 @@ struct LiveSessionView: View {
     @State private var deliveryFlashCount: Int?
     @State private var didAttemptAutoStart = false
     @State private var isAutoStarting = false
+    @State private var isExitingToHome = false
     let initialMode: SessionMode
 
     init(initialMode: SessionMode = .freePlay) {
@@ -20,8 +23,15 @@ struct LiveSessionView: View {
     var body: some View {
         ZStack {
             // Camera preview (full screen)
-            CameraPreviewLayer(previewLayer: viewModel.cameraService.previewLayer)
+            GeometryReader { proxy in
+                CameraPreview(previewLayer: viewModel.cameraService.previewLayer)
+                    .frame(
+                        width: max(proxy.size.width, 1),
+                        height: max(proxy.size.height, 1)
+                    )
+            }
                 .ignoresSafeArea()
+                .allowsHitTesting(false)
 
             // Delivery flash overlay (large centered count that fades)
             if let count = deliveryFlashCount {
@@ -175,6 +185,7 @@ struct LiveSessionView: View {
                     Button {
                         Task {
                             await viewModel.endSession()
+                            liveViewLog.debug("Close button tapped: ending session and dismissing live view")
                             dismiss()
                         }
                     } label: {
@@ -182,18 +193,20 @@ struct LiveSessionView: View {
                             .font(.title3)
                             .foregroundColor(.white)
                             .frame(width: 50, height: 50)
-                            .background(Circle().fill(Color.white.opacity(0.2)))
+                            .background(Circle().fill(Color.black.opacity(0.55)))
+                            .overlay(Circle().stroke(Color.white.opacity(0.35), lineWidth: 1))
                     }
 
                     // Main action button
                     Button {
                         Task {
                             if isSessionActive {
+                                liveViewLog.debug("Main action tapped in active session: ending session")
                                 await viewModel.endSession()
-                                if viewModel.session.deliveryCount > 0 {
-                                    showResults = true
-                                }
+                                showResults = true
+                                liveViewLog.debug("Opening results sheet after manual end")
                             } else if !isAutoStarting {
+                                liveViewLog.debug("Main action tapped in inactive session: restarting session")
                                 await viewModel.startSession(mode: initialMode)
                             }
                         }
@@ -208,16 +221,19 @@ struct LiveSessionView: View {
                     }
                     .disabled(isAutoStarting)
 
-                    // Camera flip button
+                    // Camera flip button (one flip per session)
                     Button {
+                        liveViewLog.debug("Camera flip button tapped")
                         viewModel.toggleCamera()
                     } label: {
                         Image(systemName: "arrow.triangle.2.circlepath.camera")
                             .font(.title3)
-                            .foregroundColor(.white)
+                            .foregroundColor(viewModel.cameraFlipDisabled ? .gray : .white)
                             .frame(width: 50, height: 50)
-                            .background(Circle().fill(Color.white.opacity(0.2)))
+                            .background(Circle().fill(Color.black.opacity(0.55)))
+                            .overlay(Circle().stroke(Color.white.opacity(0.35), lineWidth: 1))
                     }
+                    .disabled(viewModel.cameraFlipDisabled)
                 }
                 .padding(.bottom, 30)
                 .padding(.top, 12)
@@ -225,6 +241,7 @@ struct LiveSessionView: View {
                 // Results button (floats above controls when available)
                 if viewModel.session.deliveryCount > 0 && !viewModel.session.isActive && !viewModel.isAnalyzing {
                     Button {
+                        liveViewLog.debug("View Results button tapped")
                         showResults = true
                     } label: {
                         Label("View Results", systemImage: "list.bullet")
@@ -240,17 +257,26 @@ struct LiveSessionView: View {
         }
         .statusBarHidden(true)
         .sheet(isPresented: $showResults) {
-            SessionResultsView(viewModel: viewModel)
+            SessionResultsView(
+                viewModel: viewModel,
+                onExitToHome: {
+                    Task { await exitToHome() }
+                }
+            )
+            .interactiveDismissDisabled(true)
+        }
+        .onChange(of: showResults) { _, isPresented in
+            liveViewLog.debug("Results sheet visibility changed: isPresented=\(isPresented)")
         }
         .onChange(of: viewModel.session.isActive) { wasActive, isActive in
             guard wasActive, !isActive else { return }
-            if viewModel.session.deliveryCount > 0 && !viewModel.isAnalyzing {
-                showResults = true
-            }
+            liveViewLog.debug("Auto-opening results on session transition to inactive")
+            showResults = true
         }
         .onChange(of: viewModel.isAnalyzing) { wasAnalyzing, isAnalyzing in
             guard wasAnalyzing, !isAnalyzing else { return }
             if viewModel.session.deliveryCount > 0 && !viewModel.session.isActive {
+                liveViewLog.debug("Auto-opening results after analysis completion")
                 showResults = true
             }
         }
@@ -271,12 +297,14 @@ struct LiveSessionView: View {
             guard !didAttemptAutoStart else { return }
             didAttemptAutoStart = true
             isAutoStarting = true
+            liveViewLog.debug("LiveSessionView appeared: auto-starting session with mode=\(initialMode.rawValue, privacy: .public)")
             Task {
                 await viewModel.startSession(mode: initialMode)
                 isAutoStarting = false
             }
         }
         .onDisappear {
+            liveViewLog.debug("LiveSessionView disappeared: ensuring session is ended")
             Task { await viewModel.endSession() }
         }
     }
@@ -337,76 +365,380 @@ struct LiveSessionView: View {
     private var mainActionTextColor: Color {
         isSessionActive ? .white : .black
     }
+
+    private func exitToHome() async {
+        guard !isExitingToHome else { return }
+        isExitingToHome = true
+        defer { isExitingToHome = false }
+
+        showResults = false
+        await viewModel.endSession()
+        liveViewLog.debug("Exiting to Home from LiveSessionView")
+        dismiss()
+    }
 }
 
 // MARK: - Session Results
 
 struct SessionResultsView: View {
     @ObservedObject var viewModel: SessionViewModel
+    let onExitToHome: () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var selectedDeliveryIndex = 0
+    @State private var showDeliveryCarousel = false
+    @State private var hasHeldFullReplay = false
+    @State private var replayHoldTask: Task<Void, Never>?
+
+    private var shouldShowSpinner: Bool {
+        SessionResultsPlanner.shouldShowClipPreparationSpinner(
+            hasHeldFullReplay: hasHeldFullReplay,
+            isPreparingClips: viewModel.isPreparingClips
+        )
+    }
+
+    private var shouldShowNoDeliveriesOverlay: Bool {
+        SessionResultsPlanner.shouldShowNoDeliveriesOverlay(
+            hasHeldFullReplay: hasHeldFullReplay,
+            isPreparingClips: viewModel.isPreparingClips,
+            deliveryCount: viewModel.session.deliveryCount
+        )
+    }
+
+    private var clipPreparationTelemetry: String {
+        if !viewModel.clipPreparationStatusMessage.isEmpty {
+            if viewModel.isPreparingClips {
+                let progressPercent = Int((viewModel.clipPreparationProgress * 100).rounded())
+                return "\(viewModel.clipPreparationStatusMessage) \(progressPercent)%"
+            }
+            return viewModel.clipPreparationStatusMessage
+        }
+        return viewModel.isPreparingClips ? "Detecting and clipping deliveries..." : "Preparing session replay..."
+    }
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 12) {
-                SessionResultsHeaderCard(session: viewModel.session)
-                    .padding(.horizontal, 12)
-                    .padding(.top, 12)
+            ZStack {
+                LinearGradient(
+                    colors: [Color(hex: "050910"), Color(hex: "0A141D"), Color.black],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
 
-                if let topMatch = viewModel.session.deliveries
-                    .compactMap(\.dnaMatches)
-                    .first?
-                    .first {
-                    SessionDNASummaryCard(match: topMatch)
+                VStack(spacing: 12) {
+                    SessionResultsHeaderCard(session: viewModel.session)
                         .padding(.horizontal, 12)
-                }
+                        .padding(.top, 12)
 
-                if viewModel.isPreparingClips {
-                    HStack(spacing: 8) {
-                        ProgressView(value: viewModel.clipPreparationProgress)
-                            .tint(peacockBlue)
-                        Text("Preparing delivery clips...")
-                            .font(.caption2)
-                            .foregroundColor(.white.opacity(0.75))
+                    if viewModel.lastSessionRecordingURL != nil {
+                        SessionSaveRecordingCard(
+                            status: viewModel.sessionVideoSaveStatus,
+                            onSaveTap: {
+                                Task { await viewModel.saveLastSessionVideoToPhotos() }
+                            }
+                        )
+                        .padding(.horizontal, 12)
                     }
-                    .padding(.horizontal, 12)
-                }
 
-                if viewModel.session.deliveries.isEmpty {
-                    ContentUnavailableView(
-                        "No Deliveries",
-                        systemImage: "figure.cricket",
-                        description: Text("Run a short session to generate delivery clips.")
-                    )
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    TabView(selection: $selectedDeliveryIndex) {
-                        ForEach(Array(viewModel.session.deliveries.enumerated()), id: \.element.id) { index, delivery in
-                            SessionDeliveryResultPage(viewModel: viewModel, deliveryID: delivery.id)
-                                .padding(.horizontal, 12)
-                                .padding(.bottom, 20)
-                                .tag(index)
+                    if let topMatch = viewModel.session.deliveries
+                        .compactMap(\.dnaMatches)
+                        .first?
+                        .first {
+                        SessionDNASummaryCard(match: topMatch)
+                            .padding(.horizontal, 12)
+                    }
+
+                    if showDeliveryCarousel && !viewModel.session.deliveries.isEmpty {
+                        HStack {
+                            Label(
+                                "Delivery \(selectedDeliveryIndex + 1) of \(viewModel.session.deliveries.count)",
+                                systemImage: "rectangle.stack.fill.badge.person.crop"
+                            )
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.white.opacity(0.84))
+                            Spacer()
                         }
+                        .padding(.horizontal, 14)
                     }
-                    .tabViewStyle(.page(indexDisplayMode: .always))
-                    .indexViewStyle(.page(backgroundDisplayMode: .always))
+
+                    if !showDeliveryCarousel {
+                        if let recordingURL = viewModel.lastSessionRecordingURL {
+                            SessionFullRecordingReplayCard(
+                                recordingURL: recordingURL,
+                                showSpinner: shouldShowSpinner,
+                                telemetryMessage: clipPreparationTelemetry,
+                                showNoDeliveriesOverlay: shouldShowNoDeliveriesOverlay
+                            )
+                            .padding(.horizontal, 12)
+                            .padding(.bottom, 8)
+                        } else {
+                            ContentUnavailableView(
+                                "Session Replay Unavailable",
+                                systemImage: "video.slash",
+                                description: Text("Recording was unavailable for this session.")
+                            )
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        }
+                    } else {
+                        TabView(selection: $selectedDeliveryIndex) {
+                            ForEach(Array(viewModel.session.deliveries.enumerated()), id: \.element.id) { index, delivery in
+                                SessionDeliveryResultPage(viewModel: viewModel, deliveryID: delivery.id)
+                                    .padding(.horizontal, 12)
+                                    .padding(.bottom, 12)
+                                    .tag(index)
+                            }
+                        }
+                        .tabViewStyle(.page(indexDisplayMode: .never))
+
+                        HStack(spacing: 6) {
+                            ForEach(Array(viewModel.session.deliveries.enumerated()), id: \.offset) { index, _ in
+                                Capsule()
+                                    .fill(index == selectedDeliveryIndex ? peacockBlue : Color.white.opacity(0.28))
+                                    .frame(width: index == selectedDeliveryIndex ? 20 : 7, height: 7)
+                            }
+                        }
+                        .animation(.easeInOut(duration: 0.2), value: selectedDeliveryIndex)
+                        .padding(.bottom, 2)
+                    }
                 }
             }
-            .background(Color.black.ignoresSafeArea())
+            .onAppear {
+                startReplayHoldTimer()
+                evaluateAutoNavigationToCarousel()
+            }
+            .onDisappear {
+                replayHoldTask?.cancel()
+                replayHoldTask = nil
+            }
+            .onChange(of: viewModel.isPreparingClips) { _, _ in
+                evaluateAutoNavigationToCarousel()
+            }
+            .onChange(of: viewModel.session.deliveryCount) { _, _ in
+                evaluateAutoNavigationToCarousel()
+            }
             .navigationTitle("Session Results")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { dismiss() }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
+                    Button("Home") { onExitToHome() }
                 }
             }
         }
+        .interactiveDismissDisabled(true)
+    }
+
+    private func startReplayHoldTimer() {
+        replayHoldTask?.cancel()
+        showDeliveryCarousel = false
+        hasHeldFullReplay = false
+
+        replayHoldTask = Task {
+            let holdNanoseconds = UInt64(max(WBConfig.sessionResultsReplayHoldSeconds, 0) * 1_000_000_000)
+            if holdNanoseconds > 0 {
+                try? await Task.sleep(nanoseconds: holdNanoseconds)
+            }
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                hasHeldFullReplay = true
+                evaluateAutoNavigationToCarousel()
+            }
+        }
+    }
+
+    private func evaluateAutoNavigationToCarousel() {
+        let shouldNavigate = SessionResultsPlanner.shouldAutoNavigateToDeliveryCarousel(
+            hasHeldFullReplay: hasHeldFullReplay,
+            isPreparingClips: viewModel.isPreparingClips,
+            deliveryCount: viewModel.session.deliveryCount
+        )
+        guard shouldNavigate else { return }
+        showDeliveryCarousel = true
+        selectedDeliveryIndex = 0
+    }
+}
+
+private struct SessionFullRecordingReplayCard: View {
+    let recordingURL: URL
+    let showSpinner: Bool
+    let telemetryMessage: String
+    let showNoDeliveriesOverlay: Bool
+
+    @State private var player: AVQueuePlayer?
+    @State private var looper: AVPlayerLooper?
+
+    var body: some View {
+        ZStack {
+            if let player {
+                CustomVideoPlayer(player: player)
+            } else {
+                Color.black
+                    .overlay { ProgressView().tint(.white) }
+            }
+
+            VStack {
+                HStack {
+                    Text("Full session replay")
+                        .font(.caption.bold())
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Capsule().fill(Color.black.opacity(0.6)))
+                    Spacer()
+                }
+                .padding(10)
+                Spacer()
+            }
+
+            if showSpinner {
+                VStack(spacing: 10) {
+                    ProgressView()
+                        .tint(peacockBlue)
+                    Text(telemetryMessage)
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 12)
+                }
+                .padding(14)
+                .background(RoundedRectangle(cornerRadius: 12).fill(Color.black.opacity(0.72)))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.white.opacity(0.14), lineWidth: 1)
+                )
+            }
+
+            if showNoDeliveriesOverlay {
+                VStack(spacing: 6) {
+                    Image(systemName: "figure.cricket")
+                        .font(.title3)
+                        .foregroundColor(.white.opacity(0.85))
+                    Text("No deliveries found")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(.white)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(RoundedRectangle(cornerRadius: 12).fill(Color.black.opacity(0.7)))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.white.opacity(0.16), lineWidth: 1)
+                )
+                .padding(.top, 120)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .aspectRatio(9.0 / 16.0, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.white.opacity(0.14), lineWidth: 1)
+        )
+        .onAppear { setupPlayer() }
+        .onDisappear { teardownPlayer() }
+    }
+
+    private func setupPlayer() {
+        guard player == nil else { return }
+        let item = AVPlayerItem(url: recordingURL)
+        let queuePlayer = AVQueuePlayer(playerItem: item)
+        queuePlayer.isMuted = true
+        queuePlayer.actionAtItemEnd = .none
+        looper = AVPlayerLooper(player: queuePlayer, templateItem: item)
+        player = queuePlayer
+        queuePlayer.play()
+    }
+
+    private func teardownPlayer() {
+        player?.pause()
+        looper = nil
+        player = nil
+    }
+}
+
+private struct SessionSaveRecordingCard: View {
+    let status: SessionViewModel.SessionVideoSaveStatus
+    let onSaveTap: () -> Void
+
+    private var isSaving: Bool {
+        if case .saving = status { return true }
+        return false
+    }
+
+    private var isSaved: Bool {
+        if case .saved = status { return true }
+        return false
+    }
+
+    private var errorMessage: String? {
+        if case .failed(let message) = status { return message }
+        return nil
+    }
+
+    private var buttonLabel: String {
+        if isSaving { return "Saving..." }
+        if isSaved { return "Saved to Photos" }
+        return "Save Full Session to Photos"
+    }
+
+    private var buttonIcon: String {
+        if isSaving { return "hourglass" }
+        if isSaved { return "checkmark.circle.fill" }
+        return "square.and.arrow.down"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button(action: onSaveTap) {
+                HStack(spacing: 8) {
+                    if isSaving {
+                        ProgressView()
+                            .tint(.black)
+                    } else {
+                        Image(systemName: buttonIcon)
+                    }
+
+                    Text(buttonLabel)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                    Spacer()
+                }
+                .foregroundColor(.black)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Capsule().fill(isSaved ? Color.green.opacity(0.85) : peacockBlue))
+            }
+            .disabled(isSaving)
+
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(.caption2)
+                    .foregroundColor(.red.opacity(0.9))
+            } else if isSaved {
+                Text("Saved successfully. Open Photos to view the full session clip.")
+                    .font(.caption2)
+                    .foregroundColor(.green.opacity(0.9))
+            }
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.06)))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+        )
     }
 }
 
 private struct SessionResultsHeaderCard: View {
     let session: Session
+    
+    private var analyzedPaceCount: Int {
+        guard let summary = session.summary else { return 0 }
+        return summary.paceDistribution.values.reduce(0, +)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -426,9 +758,15 @@ private struct SessionResultsHeaderCard: View {
 
             if let summary = session.summary {
                 HStack {
-                    Text(summary.dominantPace.label)
-                        .font(.caption.weight(.semibold))
-                        .foregroundColor(peacockBlue)
+                    if analyzedPaceCount > 0 {
+                        Text(summary.dominantPace.label)
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(peacockBlue)
+                    } else {
+                        Text("Pace pending")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.white.opacity(0.75))
+                    }
                     Spacer()
                     if let challengeScore = summary.challengeScore {
                         Text(challengeScore)
@@ -502,6 +840,7 @@ private struct SessionDeliveryResultPage: View {
     @State private var focusWindow: ClosedRange<Double>?
     @State private var isPlaybackPaused = false
     @State private var isSlowMotion = false
+    @State private var slowMotionRate: Float = 0.45
     @State private var showCoachChips = false
     @State private var chipReply = ""
 
@@ -524,6 +863,10 @@ private struct SessionDeliveryResultPage: View {
 
     private var deepAnalysisReady: Bool {
         deepStatus.stage == .ready && !phases.isEmpty
+    }
+
+    private var chatControlsEnabled: Bool {
+        deepAnalysisReady && player != nil
     }
 
     private var chatChips: [String] {
@@ -573,7 +916,12 @@ private struct SessionDeliveryResultPage: View {
                     refreshArtifactsFromViewModel()
                 }
                 .onReceive(viewModel.$deepAnalysisArtifactsByDelivery) { _ in
-                    refreshArtifactsFromViewModel()
+                    // @Published fires on willSet (before value is stored).
+                    // DispatchQueue.main.async guarantees deferral past willSet.
+                    DispatchQueue.main.async { refreshArtifactsFromViewModel() }
+                }
+                .onReceive(viewModel.$session) { _ in
+                    DispatchQueue.main.async { refreshArtifactsFromViewModel() }
                 }
                 .onChange(of: delivery.videoURL) { _, _ in
                     setupPlayerIfNeeded()
@@ -599,6 +947,7 @@ private struct SessionDeliveryResultPage: View {
             if delivery.videoURL != nil {
                 Button {
                     Task {
+                        liveViewLog.debug("Run Deep Analysis tapped: deliveryID=\(deliveryID.uuidString, privacy: .public)")
                         await viewModel.runDeepAnalysisIfNeeded(for: deliveryID)
                     }
                 } label: {
@@ -629,6 +978,7 @@ private struct SessionDeliveryResultPage: View {
                     .foregroundColor(.red.opacity(0.9))
                 Button {
                     Task {
+                        liveViewLog.debug("Retry Deep Analysis tapped: deliveryID=\(deliveryID.uuidString, privacy: .public)")
                         await viewModel.runDeepAnalysisIfNeeded(for: deliveryID)
                     }
                 } label: {
@@ -723,6 +1073,7 @@ private struct SessionDeliveryResultPage: View {
             }
 
             Button {
+                guard chatControlsEnabled else { return }
                 withAnimation(.easeInOut(duration: 0.2)) {
                     showCoachChips.toggle()
                 }
@@ -733,6 +1084,14 @@ private struct SessionDeliveryResultPage: View {
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
                     .background(Capsule().fill(peacockBlue))
+            }
+            .disabled(!chatControlsEnabled)
+            .opacity(chatControlsEnabled ? 1 : 0.6)
+
+            if !chatControlsEnabled {
+                Text("Run deep analysis to enable chat controls.")
+                    .font(.caption2)
+                    .foregroundColor(.white.opacity(0.7))
             }
 
             if showCoachChips {
@@ -747,11 +1106,13 @@ private struct SessionDeliveryResultPage: View {
 
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
-                            ForEach(chatChips, id: \.self) { chip in
+                            ForEach(Array(chatChips.enumerated()), id: \.offset) { _, chip in
                                 Button {
                                     Task {
+                                        guard chatControlsEnabled else { return }
+                                        liveViewLog.debug("Chat chip tapped: chip=\(chip, privacy: .public), deliveryID=\(deliveryID.uuidString, privacy: .public)")
                                         let guidance = await viewModel.requestChipGuidance(for: deliveryID, chip: chip)
-                                        await apply(guidance: guidance)
+                                        apply(guidance: guidance)
                                     }
                                 } label: {
                                     Text(chip)
@@ -798,27 +1159,41 @@ private struct SessionDeliveryResultPage: View {
     }
 
     private func refreshArtifactsFromViewModel() {
+        print("🦴 [LiveSession] refreshArtifacts called: deliveryID=\(deliveryID.uuidString.prefix(8)), phases=\(phases.count), deepStatus=\(deepStatus.stage), artifactKeys=\(viewModel.deepAnalysisArtifactsByDelivery.keys.map { String($0.uuidString.prefix(8)) })")
         guard let artifacts = viewModel.deepAnalysisArtifacts(for: deliveryID) else {
+            liveViewLog.debug("refreshArtifacts: no artifacts for delivery \(self.deliveryID.uuidString.prefix(8), privacy: .public), phases=\(self.phases.count)")
             if phases.isEmpty {
                 poseNote = "Run Deep Analysis to generate pose annotation."
             } else {
+                // Deep analysis completed but no artifacts found — likely ID mismatch
+                poseNote = "Pose data not linked. Re-run deep analysis."
+                liveViewLog.warning("Phases exist (\(self.phases.count)) but no artifacts for deliveryID=\(self.deliveryID.uuidString.prefix(8), privacy: .public). Available artifact keys: \(self.viewModel.deepAnalysisArtifactsByDelivery.keys.map { $0.uuidString.prefix(8) }, privacy: .public)")
+                print("🦴 [LiveSession] BUG: phases=\(self.phases.count) but artifacts nil for \(self.deliveryID.uuidString.prefix(8)). Keys: \(self.viewModel.deepAnalysisArtifactsByDelivery.keys.map { String($0.uuidString.prefix(8)) })")
                 expertAnalysis = ExpertAnalysisBuilder.build(from: phases)
             }
             rebuildSyncControllerIfPossible()
             return
         }
 
+        liveViewLog.info("refreshArtifacts: delivery \(self.deliveryID.uuidString.prefix(8), privacy: .public) — poseFrames=\(artifacts.poseFrames.count), hasExpertAnalysis=\(artifacts.expertAnalysis != nil), hasChipReply=\(artifacts.chipReply != nil)")
+        print("🦴 [LiveSession] refreshArtifacts: poseFrames=\(artifacts.poseFrames.count)")
+
         if !artifacts.poseFrames.isEmpty {
             poseFrames = artifacts.poseFrames
             poseNote = "Pose overlay generated from local MediaPipe extraction."
+            liveViewLog.debug("Pose frames loaded: \(artifacts.poseFrames.count) frames")
         } else if deepStatus.stage == .ready {
-            poseNote = "Pose overlay unavailable for this delivery."
+            poseNote = artifacts.poseFailureReason ?? "Pose overlay unavailable for this delivery."
+            liveViewLog.warning("Deep analysis ready but 0 pose frames for delivery \(self.deliveryID.uuidString.prefix(8), privacy: .public). reason=\(artifacts.poseFailureReason ?? "-", privacy: .public)")
+            print("🦴 [LiveSession] WARNING: 0 pose frames despite deep analysis ready")
         }
 
         if let analysis = artifacts.expertAnalysis {
             expertAnalysis = analysis
+            liveViewLog.debug("Expert analysis loaded: \(analysis.phases.count) phases")
         } else {
             expertAnalysis = ExpertAnalysisBuilder.build(from: phases)
+            liveViewLog.debug("Expert analysis built from delivery phases: \(self.phases.count) phases")
         }
 
         if let reply = artifacts.chipReply {
@@ -850,6 +1225,7 @@ private struct SessionDeliveryResultPage: View {
             clipDuration: clipDurationSeconds
         )
         focusWindow = window
+        liveViewLog.debug("Focus chip selected: phase=\(suggestion.phaseName, privacy: .public), window=\(window.lowerBound, privacy: .public)-\(window.upperBound, privacy: .public)")
         seek(to: window.lowerBound)
         applyPlaybackMode()
         startFocusLoop()
@@ -860,6 +1236,7 @@ private struct SessionDeliveryResultPage: View {
         focusWindow = nil
         focusLoopTask?.cancel()
         focusLoopTask = nil
+        liveViewLog.debug("Focus loop cleared for deliveryID=\(deliveryID.uuidString, privacy: .public)")
         applyPlaybackMode()
     }
 
@@ -885,6 +1262,7 @@ private struct SessionDeliveryResultPage: View {
 
     private func togglePause() {
         isPlaybackPaused.toggle()
+        liveViewLog.debug("Pause toggled: isPaused=\(isPlaybackPaused)")
         if isPlaybackPaused {
             focusLoopTask?.cancel()
         } else if focusWindow != nil {
@@ -895,6 +1273,10 @@ private struct SessionDeliveryResultPage: View {
 
     private func toggleSlowMotion() {
         isSlowMotion.toggle()
+        if !isSlowMotion {
+            slowMotionRate = 0.45
+        }
+        liveViewLog.debug("Slow-motion toggled: enabled=\(isSlowMotion), rate=\(slowMotionRate, privacy: .public)")
         applyPlaybackMode()
     }
 
@@ -905,7 +1287,7 @@ private struct SessionDeliveryResultPage: View {
             return
         }
 
-        let rate: Float = isSlowMotion ? 0.45 : 1.0
+        let rate: Float = isSlowMotion ? slowMotionRate : 1.0
         player.playImmediately(atRate: rate)
     }
 
@@ -929,13 +1311,18 @@ private struct SessionDeliveryResultPage: View {
     }
 
     private func rebuildSyncControllerIfPossible() {
-        guard let player, !poseFrames.isEmpty else { return }
+        guard let player, !poseFrames.isEmpty else {
+            liveViewLog.debug("rebuildSyncController skipped: hasPlayer=\(self.player != nil), poseFrames=\(self.poseFrames.count)")
+            return
+        }
         syncController?.cleanup()
         syncController = SkeletonSyncController(
             player: player,
             frames: poseFrames,
             expertAnalysis: expertAnalysis
         )
+        liveViewLog.info("Skeleton sync controller rebuilt: frames=\(self.poseFrames.count), hasExpertAnalysis=\(self.expertAnalysis != nil)")
+        print("🦴 [LiveSession] Skeleton rebuilt: \(self.poseFrames.count) frames")
     }
 
     private func feedbackForPhase(_ phase: AnalysisPhase) -> ExpertAnalysis.Phase.Feedback? {
@@ -964,6 +1351,7 @@ private struct SessionDeliveryResultPage: View {
     private func apply(guidance: ChipGuidanceResponse) {
         chipReply = guidance.reply
         let action = guidance.action.lowercased()
+        liveViewLog.debug("Applying chip guidance: action=\(action, privacy: .public), phase=\(guidance.phaseName ?? "-", privacy: .public)")
 
         switch action {
         case "pause":
@@ -972,13 +1360,20 @@ private struct SessionDeliveryResultPage: View {
         case "slow_mo":
             isPlaybackPaused = false
             isSlowMotion = true
+            if let requestedRate = guidance.playbackRate, requestedRate.isFinite {
+                slowMotionRate = Float(min(max(requestedRate, 0.35), 0.6))
+            } else {
+                slowMotionRate = 0.45
+            }
             applyPlaybackMode()
         case "focus":
             isPlaybackPaused = false
-            let start = max(guidance.focusStart ?? 2.0, 0)
-            let end = min(guidance.focusEnd ?? (start + 0.8), clipDurationSeconds)
+            let start = min(max(guidance.focusStart ?? 2.0, 0), clipDurationSeconds)
+            let end = min(max(guidance.focusEnd ?? (start + 0.8), start + 0.2), clipDurationSeconds)
             focusWindow = start...max(end, start + 0.2)
-            selectedFocusChipID = guidance.phaseName?.lowercased()
+            selectedFocusChipID = focusSuggestions.first {
+                normalized($0.phaseName) == normalized(guidance.phaseName ?? "")
+            }?.id
             seek(to: focusWindow?.lowerBound ?? start)
             applyPlaybackMode()
             startFocusLoop()
@@ -1026,6 +1421,10 @@ private struct SessionDeliveryClipCard: View {
 
             if let syncController {
                 SyncedSkeletonOverlayView(syncController: syncController)
+                    .onAppear {
+                        liveViewLog.info("SessionDeliveryClipCard: skeleton overlay VISIBLE for delivery #\(delivery.sequence)")
+                        print("🦴 [LiveSession] Skeleton overlay VISIBLE for delivery #\(delivery.sequence)")
+                    }
             }
 
             VStack {
@@ -1091,7 +1490,8 @@ private struct SessionDeliveryClipCard: View {
             }
             .padding(10)
         }
-        .frame(height: 250)
+        .aspectRatio(9/16, contentMode: .fit)
+        .frame(maxWidth: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay(
             RoundedRectangle(cornerRadius: 14)
@@ -1407,25 +1807,6 @@ private struct SessionFeedbackLine: View {
                     .foregroundColor(.white.opacity(0.78))
                     .fixedSize(horizontal: false, vertical: true)
             }
-        }
-    }
-}
-
-// MARK: - Camera Preview
-
-struct CameraPreviewLayer: UIViewRepresentable {
-    let previewLayer: AVCaptureVideoPreviewLayer
-
-    func makeUIView(context: Context) -> UIView {
-        let view = UIView(frame: .zero)
-        previewLayer.videoGravity = .resizeAspectFill
-        view.layer.addSublayer(previewLayer)
-        return view
-    }
-
-    func updateUIView(_ uiView: UIView, context: Context) {
-        DispatchQueue.main.async {
-            previewLayer.frame = uiView.bounds
         }
     }
 }

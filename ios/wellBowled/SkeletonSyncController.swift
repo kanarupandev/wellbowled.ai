@@ -2,6 +2,9 @@ import Foundation
 import AVFoundation
 import Combine
 import QuartzCore
+import os
+
+private let skeletonLog = Logger(subsystem: "com.wellbowled", category: "SkeletonSync")
 
 // MARK: - Skeleton Sync Controller
 
@@ -20,8 +23,12 @@ class SkeletonSyncController: ObservableObject {
     private let expertAnalysis: ExpertAnalysis?
     private let mapper: ExpertAnalysisMapper?
 
+    /// Video natural size for aspect-fit mapping. Updated asynchronously.
+    @Published var videoNaturalSize: CGSize = .zero
+
     private var displayLink: CADisplayLink?
     private var lastUpdateTime: CFTimeInterval = 0
+    private var frameUpdateCount = 0
 
     // MARK: - Initialization
 
@@ -31,7 +38,37 @@ class SkeletonSyncController: ObservableObject {
         self.expertAnalysis = expertAnalysis
         self.mapper = nil  // ExpertAnalysisMapper is now static
 
+        skeletonLog.info("SkeletonSyncController created: frames=\(frames.count), hasExpertAnalysis=\(expertAnalysis != nil)")
+        print("🦴 [SkeletonSync] Created: frames=\(frames.count), hasExpertAnalysis=\(expertAnalysis != nil)")
+        if let first = frames.first, let last = frames.last {
+            skeletonLog.debug("Frame range: \(first.timestamp)s → \(last.timestamp)s, landmarks/frame=\(first.landmarks.count)")
+        }
+        if let ea = expertAnalysis {
+            skeletonLog.debug("ExpertAnalysis phases=\(ea.phases.count)")
+            for phase in ea.phases {
+                let goodCount = phase.feedback.good.count
+                let slowCount = phase.feedback.slow.count
+                let riskCount = phase.feedback.injuryRisk.count
+                skeletonLog.debug("  Phase '\(phase.phaseName, privacy: .public)': good=\(goodCount) slow=\(slowCount) risk=\(riskCount)")
+            }
+        }
+
         setupDisplayLink()
+        loadVideoNaturalSize()
+    }
+
+    private func loadVideoNaturalSize() {
+        guard let asset = (player.currentItem?.asset) else { return }
+        Task { @MainActor in
+            if let tracks = try? await asset.loadTracks(withMediaType: .video),
+               let track = tracks.first,
+               let size = try? await track.load(.naturalSize),
+               let transform = try? await track.load(.preferredTransform) {
+                let transformed = size.applying(transform)
+                self.videoNaturalSize = CGSize(width: abs(transformed.width), height: abs(transformed.height))
+                print("🦴 [SkeletonSync] Video natural size: \(self.videoNaturalSize)")
+            }
+        }
     }
 
     // MARK: - Lifecycle
@@ -44,15 +81,18 @@ class SkeletonSyncController: ObservableObject {
 
     func startSync() {
         displayLink?.isPaused = false
+        skeletonLog.debug("SkeletonSync started (displayLink unpaused)")
     }
 
     func stopSync() {
         displayLink?.isPaused = true
+        skeletonLog.debug("SkeletonSync stopped (displayLink paused), totalFrameUpdates=\(self.frameUpdateCount)")
     }
 
     func cleanup() {
         displayLink?.invalidate()
         displayLink = nil
+        skeletonLog.debug("SkeletonSync cleaned up, totalFrameUpdates=\(self.frameUpdateCount)")
     }
 
     // MARK: - Private Methods
@@ -83,6 +123,14 @@ class SkeletonSyncController: ObservableObject {
         // Only update if frame changed
         if currentFrame?.frameNumber != closestFrame.frameNumber {
             currentFrame = closestFrame
+            frameUpdateCount += 1
+
+            if frameUpdateCount == 1 {
+                skeletonLog.info("First skeleton frame rendered: frame#\(closestFrame.frameNumber) t=\(currentTime)s landmarks=\(closestFrame.landmarks.count)")
+                print("🦴 [SkeletonSync] First frame rendered: frame#\(closestFrame.frameNumber) t=\(currentTime)s")
+            } else if frameUpdateCount % 120 == 0 {
+                skeletonLog.debug("Skeleton frame update #\(self.frameUpdateCount): frame#\(closestFrame.frameNumber) t=\(currentTime)s")
+            }
 
             // Update color map based on Expert analysis
             updateColorMap(for: closestFrame, at: currentTime)
@@ -157,15 +205,33 @@ struct SyncedSkeletonOverlayView: View {
             }
         }
         .onAppear {
+            skeletonLog.info("SyncedSkeletonOverlayView appeared — starting sync")
+            print("🦴 [SkeletonSync] Overlay view APPEARED")
             syncController.startSync()
         }
         .onDisappear {
+            skeletonLog.info("SyncedSkeletonOverlayView disappeared — stopping sync")
+            print("🦴 [SkeletonSync] Overlay view DISAPPEARED")
             syncController.stopSync()
         }
         .allowsHitTesting(false)
     }
 
     // MARK: - Drawing Methods
+
+    private var videoAspectRatio: CGFloat {
+        let ns = syncController.videoNaturalSize
+        guard ns.width > 0, ns.height > 0 else { return 0 }
+        return ns.width / ns.height
+    }
+
+    private func toScreen(_ landmark: PoseLandmark, size: CGSize) -> CGPoint {
+        let ar = videoAspectRatio
+        if ar > 0 {
+            return SkeletonRenderer.toScreenCoordinates(landmark, containerSize: size, videoAspectRatio: ar)
+        }
+        return SkeletonRenderer.toScreenCoordinates(landmark, size: size)
+    }
 
     private func drawConnections(context: GraphicsContext, size: CGSize, frame: FramePoseLandmarks) {
         let visibleLandmarks = SkeletonRenderer.filterVisible(
@@ -180,8 +246,13 @@ struct SyncedSkeletonOverlayView: View {
                 continue
             }
 
-            let p1 = SkeletonRenderer.toScreenCoordinates(startLandmark, size: size)
-            let p2 = SkeletonRenderer.toScreenCoordinates(endLandmark, size: size)
+            let p1 = toScreen(startLandmark, size: size)
+            let p2 = toScreen(endLandmark, size: size)
+
+            // Color the connection based on the joint colors
+            let startColor = syncController.currentColorMap[startLandmark.name] ?? .white
+            let endColor = syncController.currentColorMap[endLandmark.name] ?? .white
+            let lineColor = (startColor == endColor) ? startColor : .white
 
             var path = Path()
             path.move(to: p1)
@@ -189,20 +260,20 @@ struct SyncedSkeletonOverlayView: View {
 
             context.stroke(
                 path,
-                with: .color(.white.opacity(config.lineOpacity)),
+                with: .color(lineColor.opacity(config.lineOpacity)),
                 lineWidth: config.lineWidth
             )
         }
     }
 
     private func drawJoints(context: GraphicsContext, size: CGSize, frame: FramePoseLandmarks) {
-        let visibleLandmarks = SkeletonRenderer.filterVisible(
+        let keyJoints = SkeletonRenderer.filterKeyJoints(
             frame.landmarks,
             threshold: config.visibilityThreshold
         )
 
-        for landmark in visibleLandmarks {
-            let point = SkeletonRenderer.toScreenCoordinates(landmark, size: size)
+        for landmark in keyJoints {
+            let point = toScreen(landmark, size: size)
             let color = syncController.currentColorMap[landmark.name] ?? .white
 
             let circle = Path(ellipseIn: CGRect(

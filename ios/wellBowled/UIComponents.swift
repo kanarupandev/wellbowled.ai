@@ -23,7 +23,7 @@ class PlayerUIView: UIView {
         didSet {
             if playerLayer == nil {
                 let layer = AVPlayerLayer()
-                layer.videoGravity = .resizeAspect
+                layer.videoGravity = .resizeAspectFill
                 self.layer.addSublayer(layer)
                 playerLayer = layer
             }

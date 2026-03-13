@@ -277,6 +277,80 @@ final class SessionViewModel: ObservableObject {
         }
     }
 
+    /// Reuses the same post-session detection/clip pipeline for a user-picked recording.
+    func prepareImportedSessionReplay(recordingURL: URL, mode: SessionMode = .freePlay) async {
+        log.debug("Preparing imported session replay: file=\(recordingURL.lastPathComponent, privacy: .public), mode=\(mode.rawValue, privacy: .public)")
+
+        sessionTimerTask?.cancel()
+        sessionTimerTask = nil
+        proactiveRepromptTask?.cancel()
+        proactiveRepromptTask = nil
+        clipPreparationTask?.cancel()
+        clipPreparationTask = nil
+        cancelAllDeepAnalysisTasks(resetState: true)
+
+        cameraService.onVideoFrame = nil
+        cameraService.onAudioSample = nil
+        detector.stop()
+        tts.stop()
+        await liveService.disconnect()
+        audioManager.stopLiveInputCapture()
+        audioManager.stopPlaybackEngine()
+        audioManager.deactivateSession()
+        cameraService.stopRecording()
+        cameraService.stopSession()
+
+        session.start(mode: mode)
+        session.end()
+        session.deliveries.removeAll()
+        session.summary = nil
+
+        challengeTargetBySequence = [:]
+        currentChallengeTarget = nil
+        challengeEngine.reset(shuffle: true)
+        challengeEvaluatedDeliveries = []
+        shouldSendProactiveGreeting = false
+        didSendProactiveGreeting = false
+        flowPhase = .greeting
+        hasBowlerPlanResponse = false
+        hasPilotRun = false
+        liveAudioChunkCounter = 0
+        liveMicChunkCounter = 0
+        useCameraAudioFallback = false
+
+        errorMessage = nil
+        lastTranscript = ""
+        isMateSpeaking = false
+        sessionRemainingSeconds = 0
+        isAnalyzing = false
+        analysisProgress = 0
+        isPreparingClips = false
+        clipPreparationProgress = 0
+        clipPreparationStatusMessage = "Scanning uploaded recording for deliveries..."
+        livePreviewImage = nil
+        cameraFlipDisabled = false
+        sessionVideoSaveStatus = .idle
+        recordingOffsetStore.reset()
+
+        guard FileManager.default.fileExists(atPath: recordingURL.path) else {
+            lastSessionRecordingURL = nil
+            clipPreparationStatusMessage = "Uploaded recording is unavailable."
+            log.error("Imported replay failed: recording missing at path=\(recordingURL.path, privacy: .public)")
+            return
+        }
+
+        lastSessionRecordingURL = recordingURL
+        startClipPreparation(recordingURL: recordingURL)
+    }
+
+    func cancelReplayPreparation() {
+        log.debug("Cancel replay preparation requested")
+        clipPreparationTask?.cancel()
+        clipPreparationTask = nil
+        isPreparingClips = false
+        cancelAllDeepAnalysisTasks(resetState: false)
+    }
+
     private func resolveRecordingURLForPostSession(fallback: URL?) async -> URL? {
         // When camera was flipped, the last segment needs extra time to finalize.
         // Poll until it appears (up to 3s) instead of a fixed 0.5s wait.
@@ -750,42 +824,90 @@ final class SessionViewModel: ObservableObject {
         recordingDuration: Double,
         sourceSessionStart: Date?
     ) async -> [DeliveryTimestampCandidate] {
+        let primaryCandidates = await runGeminiSegmentScan(
+            recordingURL: recordingURL,
+            recordingDuration: recordingDuration,
+            sourceSessionStart: sourceSessionStart,
+            segmentDuration: WBConfig.deliveryDetectionSegmentDurationSeconds,
+            segmentOverlap: WBConfig.deliveryDetectionSegmentOverlapSeconds,
+            highRecall: false,
+            exportPresetName: AVAssetExportPresetMediumQuality,
+            progressStart: 0.0,
+            progressEnd: 0.45,
+            label: "primary"
+        )
+        guard primaryCandidates.isEmpty else {
+            return primaryCandidates
+        }
+
+        log.warning("Primary Gemini segment scan returned zero deliveries. Running high-recall fallback scan.")
+        clipPreparationStatusMessage = "No clear releases in pass 1. Running high-recall scan..."
+        return await runGeminiSegmentScan(
+            recordingURL: recordingURL,
+            recordingDuration: recordingDuration,
+            sourceSessionStart: sourceSessionStart,
+            segmentDuration: WBConfig.deliveryDetectionFallbackSegmentDurationSeconds,
+            segmentOverlap: WBConfig.deliveryDetectionFallbackSegmentOverlapSeconds,
+            highRecall: true,
+            exportPresetName: AVAssetExportPresetHighestQuality,
+            progressStart: 0.12,
+            progressEnd: 0.45,
+            label: "fallback"
+        )
+    }
+
+    private func runGeminiSegmentScan(
+        recordingURL: URL,
+        recordingDuration: Double,
+        sourceSessionStart: Date?,
+        segmentDuration: Double,
+        segmentOverlap: Double,
+        highRecall: Bool,
+        exportPresetName: String,
+        progressStart: Double,
+        progressEnd: Double,
+        label: String
+    ) async -> [DeliveryTimestampCandidate] {
         let windows = DeliveryBatchPlanner.scheduleSegments(
             totalDuration: recordingDuration,
-            segmentDuration: WBConfig.deliveryDetectionSegmentDurationSeconds,
-            segmentOverlap: WBConfig.deliveryDetectionSegmentOverlapSeconds
+            segmentDuration: segmentDuration,
+            segmentOverlap: segmentOverlap
         )
         log.debug(
-            "Gemini segment scan scheduled: windows=\(windows.count), duration=\(recordingDuration, privacy: .public)s, segment=\(WBConfig.deliveryDetectionSegmentDurationSeconds, privacy: .public)s, overlap=\(WBConfig.deliveryDetectionSegmentOverlapSeconds, privacy: .public)s"
+            "Gemini \(label, privacy: .public) segment scan scheduled: windows=\(windows.count), duration=\(recordingDuration, privacy: .public)s, segment=\(segmentDuration, privacy: .public)s, overlap=\(segmentOverlap, privacy: .public)s, highRecall=\(highRecall)"
         )
 
         guard !windows.isEmpty else {
-            log.warning("Gemini segment scan skipped: no windows scheduled")
+            log.warning("Gemini \(label, privacy: .public) segment scan skipped: no windows scheduled")
             return []
         }
 
         var rawCandidates: [DeliveryTimestampCandidate] = []
         let totalSegments = windows.count
+        let progressSpan = max(progressEnd - progressStart, 0)
 
         for window in windows {
             if Task.isCancelled || session.startedAt != sourceSessionStart {
                 return []
             }
 
-            clipPreparationStatusMessage = "Detecting deliveries in segment \(window.index + 1) of \(totalSegments)..."
-            clipPreparationProgress = min(Double(window.index) / Double(max(totalSegments, 1)) * 0.45, 0.45)
+            clipPreparationStatusMessage = "Detecting deliveries (\(label)) segment \(window.index + 1) of \(totalSegments)..."
+            let segmentProgress = Double(window.index) / Double(max(totalSegments, 1))
+            clipPreparationProgress = min(progressStart + (segmentProgress * progressSpan), progressEnd)
 
             do {
                 let segmentURL = try await exportDetectionSegment(
                     from: recordingURL,
                     startTime: window.start,
-                    duration: window.duration
+                    duration: window.duration,
+                    presetName: exportPresetName
                 )
                 defer { try? FileManager.default.removeItem(at: segmentURL) }
 
                 let detections = try await analysisService.detectDeliveryTimestampsInSegment(
                     segmentURL: segmentURL,
-                    segmentDuration: window.duration
+                    segmentDuration: window.duration,
+                    highRecall: highRecall
                 )
                 let mapped = detections.map { detection in
                     DeliveryTimestampCandidate(
@@ -797,23 +919,23 @@ final class SessionViewModel: ObservableObject {
                 rawCandidates.append(contentsOf: mapped)
                 let mappedPreview = Self.formatCandidateTimeline(mapped)
                 log.debug(
-                    "Segment \(window.index + 1)/\(totalSegments) detection complete: releases=\(mapped.count), window=[\(window.start, privacy: .public), \(window.end, privacy: .public)], candidates=[\(mappedPreview, privacy: .public)]"
+                    "Gemini \(label, privacy: .public) segment \(window.index + 1)/\(totalSegments) detection complete: releases=\(mapped.count), window=[\(window.start, privacy: .public), \(window.end, privacy: .public)], candidates=[\(mappedPreview, privacy: .public)]"
                 )
             } catch {
                 log.error(
-                    "Segment \(window.index + 1)/\(totalSegments) detection failed: \(error.localizedDescription, privacy: .public)"
+                    "Gemini \(label, privacy: .public) segment \(window.index + 1)/\(totalSegments) detection failed: \(error.localizedDescription, privacy: .public)"
                 )
             }
         }
 
-        clipPreparationProgress = 0.45
+        clipPreparationProgress = progressEnd
         let merged = DeliveryBatchPlanner.mergeCandidates(
             candidates: rawCandidates,
             dedupeWindow: WBConfig.deliveryDetectionMergeWindowSeconds,
             sessionDuration: recordingDuration
         )
         log.debug(
-            "Gemini segment scan merged: raw=\(rawCandidates.count), merged=\(merged.count), timeline=[\(Self.formatCandidateTimeline(merged), privacy: .public)]"
+            "Gemini \(label, privacy: .public) segment scan merged: raw=\(rawCandidates.count), merged=\(merged.count), timeline=[\(Self.formatCandidateTimeline(merged), privacy: .public)]"
         )
         return merged
     }
@@ -924,20 +1046,22 @@ final class SessionViewModel: ObservableObject {
     private func exportDetectionSegment(
         from recordingURL: URL,
         startTime: Double,
-        duration: Double
+        duration: Double,
+        presetName: String = AVAssetExportPresetMediumQuality
     ) async throws -> URL {
         let asset = AVURLAsset(url: recordingURL)
         let safeDuration = max(duration, 0.5)
+        let outputFileType: AVFileType = presetName == AVAssetExportPresetHighestQuality ? .mov : .mp4
         let outputURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("segment_\(UUID().uuidString)")
-            .appendingPathExtension("mp4")
+            .appendingPathExtension(outputFileType == .mov ? "mov" : "mp4")
 
-        guard let exportSession = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetMediumQuality) else {
+        guard let exportSession = AVAssetExportSession(asset: asset, presetName: presetName) else {
             throw ClipError.exportSessionCreationFailed
         }
 
         exportSession.outputURL = outputURL
-        exportSession.outputFileType = .mp4
+        exportSession.outputFileType = outputFileType
         exportSession.timeRange = CMTimeRange(
             start: CMTime(seconds: startTime, preferredTimescale: 600),
             duration: CMTime(seconds: safeDuration, preferredTimescale: 600)
@@ -957,7 +1081,11 @@ final class SessionViewModel: ObservableObject {
     }
 
     func deepAnalysisArtifacts(for deliveryID: UUID) -> DeliveryDeepAnalysisArtifacts? {
-        deepAnalysisArtifactsByDelivery[deliveryID]
+        let result = deepAnalysisArtifactsByDelivery[deliveryID]
+        if result == nil {
+            print("🦴 [Artifacts] MISS for \(deliveryID.uuidString.prefix(8)). Available: \(deepAnalysisArtifactsByDelivery.keys.map { String($0.uuidString.prefix(8)) })")
+        }
+        return result
     }
 
     func runDeepAnalysisIfNeeded(for deliveryID: UUID) async {
@@ -1049,6 +1177,7 @@ final class SessionViewModel: ObservableObject {
         var detailedResult: DeliveryDeepAnalysisResult?
         var dnaResult: BowlingDNA?
         var poseFrames: [FramePoseLandmarks] = []
+        var poseFailureReason: String?
         var challengeText: String?
 
         let challengeTarget: String? = {
@@ -1114,8 +1243,10 @@ final class SessionViewModel: ObservableObject {
                     log.debug("DNA extraction failed for D\(index + 1): \(error.localizedDescription, privacy: .public)")
                 case .pose(.success(let frames)):
                     poseFrames = frames
+                    poseFailureReason = nil
                     log.debug("Deep analysis component ready: pose delivery=\(index + 1), frames=\(frames.count)")
                 case .pose(.failure(let error)):
+                    poseFailureReason = error.localizedDescription
                     log.debug("Pose extraction failed for D\(index + 1): \(error.localizedDescription, privacy: .public)")
                 case .challenge(.success(let result), let target):
                     self.session.recordChallengeResult(hit: result.matchesTarget)
@@ -1160,8 +1291,16 @@ final class SessionViewModel: ObservableObject {
 
         var artifacts = deepAnalysisArtifactsByDelivery[deliveryID] ?? DeliveryDeepAnalysisArtifacts()
         artifacts.poseFrames = poseFrames
+        if poseFrames.isEmpty {
+            artifacts.poseFailureReason = poseFailureReason ?? "No confident pose landmarks detected in the delivery clip. Try closer framing and stronger lighting."
+            print("🦴 [DeepAnalysis] Pose FAILED for D\(index + 1): \(artifacts.poseFailureReason!)")
+        } else {
+            artifacts.poseFailureReason = nil
+            print("🦴 [DeepAnalysis] Pose SUCCESS for D\(index + 1): \(poseFrames.count) frames")
+        }
         artifacts.expertAnalysis = detailedResult.expertAnalysis ?? ExpertAnalysisBuilder.build(from: detailedResult.phases)
         deepAnalysisArtifactsByDelivery[deliveryID] = artifacts
+        print("🦴 [DeepAnalysis] Stored artifacts for deliveryID=\(deliveryID.uuidString.prefix(8)), poseFrames=\(poseFrames.count), poseFailure=\(poseFailureReason ?? "none")")
 
         deepAnalysisStatusByDelivery[deliveryID] = DeliveryDeepAnalysisStatus(
             stage: .ready,
@@ -1171,7 +1310,7 @@ final class SessionViewModel: ObservableObject {
         )
 
         deepAnalysisTasksByDelivery[deliveryID] = nil
-        log.debug("Deep analysis completed: delivery=\(index + 1), phases=\(detailedResult.phases.count), poseFrames=\(poseFrames.count), dnaAvailable=\(dnaResult != nil)")
+        log.debug("Deep analysis completed: delivery=\(index + 1), phases=\(detailedResult.phases.count), poseFrames=\(poseFrames.count), dnaAvailable=\(dnaResult != nil), poseFailureReason=\(poseFailureReason ?? "-", privacy: .public)")
         refreshSessionSummary()
     }
 

@@ -3,6 +3,9 @@ import CoreTransferable
 import UniformTypeIdentifiers
 import UIKit
 import SwiftUI
+import os
+
+nonisolated(unsafe) private let modelsLog = Logger(subsystem: "com.wellbowled", category: "Models")
 
 struct MovieFile: Transferable {
     let url: URL
@@ -12,7 +15,7 @@ struct MovieFile: Transferable {
             SentTransferredFile(movie.url)
         } importing: { received in
             let startTime = CACurrentMediaTime()
-            print("📦 [PERF] MovieFile: Import initiated at \(received.file.lastPathComponent)")
+            modelsLog.debug("Movie import initiated: \(received.file.lastPathComponent, privacy: .public)")
             
             let fileName = "upload_\(UUID().uuidString).mov"
             let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
@@ -23,13 +26,13 @@ struct MovieFile: Transferable {
                 // PhotoPicker usually provides a temporary file we can 'claim'
                 try FileManager.default.moveItem(at: received.file, to: destinationURL)
                 let elapsed = CACurrentMediaTime() - startTime
-                print("✅ [PERF] MovieFile: Import Complete (Move). Elapsed: \(String(format: "%.3f", elapsed))s")
+                modelsLog.debug("Movie import complete via move. Elapsed=\(elapsed, privacy: .public)s")
                 return Self(url: destinationURL)
             } catch {
-                print("⚠️ [PERF] MovieFile: Move failed (\(error.localizedDescription)). Retrying with Copy...")
+                modelsLog.debug("Movie import move failed. Retrying copy. Error=\(error.localizedDescription, privacy: .public)")
                 try? FileManager.default.copyItem(at: received.file, to: destinationURL)
                 let elapsed = CACurrentMediaTime() - startTime
-                print("✅ [PERF] MovieFile: Import Complete (Copy Fallback). Elapsed: \(String(format: "%.3f", elapsed))s")
+                modelsLog.debug("Movie import complete via copy fallback. Elapsed=\(elapsed, privacy: .public)s")
                 return Self(url: destinationURL)
             }
         }
@@ -448,7 +451,7 @@ struct SkeletonRenderer {
         let visibilityThreshold: Float
         let lineOpacity: Double
 
-        init(jointRadius: CGFloat = 5.0, lineWidth: CGFloat = 2.0, minVisibility: Float = 0.5, visibilityThreshold: Float = 0.5, lineOpacity: Double = 0.7) {
+        init(jointRadius: CGFloat = 1.75, lineWidth: CGFloat = 1.0, minVisibility: Float = 0.5, visibilityThreshold: Float = 0.5, lineOpacity: Double = 0.7) {
             self.jointRadius = jointRadius
             self.lineWidth = lineWidth
             self.minVisibility = minVisibility
@@ -481,14 +484,45 @@ struct SkeletonRenderer {
         [26, 28]   // RIGHT_KNEE → RIGHT_ANKLE
     ]
 
+    /// Key joint indices for dot rendering (6 joints only):
+    /// LEFT_SHOULDER(11), RIGHT_SHOULDER(12), LEFT_WRIST(15), RIGHT_WRIST(16), LEFT_KNEE(25), RIGHT_KNEE(26)
+    static let keyJointIndices: Set<Int> = [11, 12, 15, 16, 25, 26]
+
     static func filterVisible(_ landmarks: [PoseLandmark], threshold: Float) -> [PoseLandmark] {
         return landmarks.filter { $0.visibility >= threshold }
+    }
+
+    static func filterKeyJoints(_ landmarks: [PoseLandmark], threshold: Float) -> [PoseLandmark] {
+        return landmarks.filter { $0.visibility >= threshold && keyJointIndices.contains($0.index) }
     }
 
     static func toScreenCoordinates(_ landmark: PoseLandmark, size: CGSize) -> CGPoint {
         return CGPoint(
             x: CGFloat(landmark.x) * size.width,
             y: CGFloat(landmark.y) * size.height
+        )
+    }
+
+    /// Map normalized landmark coordinates into the aspect-fit video rect within the container.
+    static func toScreenCoordinates(_ landmark: PoseLandmark, containerSize: CGSize, videoAspectRatio: CGFloat) -> CGPoint {
+        let containerAR = containerSize.width / containerSize.height
+        let displayRect: CGRect
+        if videoAspectRatio > containerAR {
+            // Video wider than container — pillarboxed (black bars top/bottom)
+            let displayWidth = containerSize.width
+            let displayHeight = displayWidth / videoAspectRatio
+            let yOffset = (containerSize.height - displayHeight) / 2
+            displayRect = CGRect(x: 0, y: yOffset, width: displayWidth, height: displayHeight)
+        } else {
+            // Video taller than container — letterboxed (black bars left/right)
+            let displayHeight = containerSize.height
+            let displayWidth = displayHeight * videoAspectRatio
+            let xOffset = (containerSize.width - displayWidth) / 2
+            displayRect = CGRect(x: xOffset, y: 0, width: displayWidth, height: displayHeight)
+        }
+        return CGPoint(
+            x: displayRect.origin.x + CGFloat(landmark.x) * displayRect.width,
+            y: displayRect.origin.y + CGFloat(landmark.y) * displayRect.height
         )
     }
 }
