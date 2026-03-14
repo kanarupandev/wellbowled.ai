@@ -57,7 +57,7 @@ final class BowlingDNATests: XCTestCase {
 
     func testBumrahDNAMatchesBumrahFirst() {
         let userDNA = FamousBowlerDatabase.bumrah.dna
-        let matches = BowlingDNAMatcher.match(userDNA: userDNA, topN: 3)
+        let matches = BowlingDNAMatcher.match(userDNA: userDNA, topN: 1)
 
         XCTAssertFalse(matches.isEmpty)
         XCTAssertEqual(matches[0].bowlerName, "Jasprit Bumrah")
@@ -66,7 +66,7 @@ final class BowlingDNATests: XCTestCase {
 
     func testMcGrathDNAMatchesMcGrathFirst() {
         let userDNA = FamousBowlerDatabase.mcGrath.dna
-        let matches = BowlingDNAMatcher.match(userDNA: userDNA, topN: 3)
+        let matches = BowlingDNAMatcher.match(userDNA: userDNA, topN: 1)
 
         XCTAssertEqual(matches[0].bowlerName, "Glenn McGrath")
         XCTAssertEqual(matches[0].similarityPercent, 100.0, accuracy: 0.1)
@@ -74,7 +74,7 @@ final class BowlingDNATests: XCTestCase {
 
     func testVaasDNAMatchesVaasFirst() {
         let userDNA = FamousBowlerDatabase.vaas.dna
-        let matches = BowlingDNAMatcher.match(userDNA: userDNA, topN: 3)
+        let matches = BowlingDNAMatcher.match(userDNA: userDNA, topN: 1)
 
         XCTAssertEqual(matches[0].bowlerName, "Chaminda Vaas")
         XCTAssertEqual(matches[0].similarityPercent, 100.0, accuracy: 0.1)
@@ -82,7 +82,7 @@ final class BowlingDNATests: XCTestCase {
 
     func testSteynDNAMatchesSteynFirst() {
         let userDNA = FamousBowlerDatabase.steyn.dna
-        let matches = BowlingDNAMatcher.match(userDNA: userDNA, topN: 3)
+        let matches = BowlingDNAMatcher.match(userDNA: userDNA, topN: 1)
 
         XCTAssertEqual(matches[0].bowlerName, "Dale Steyn")
         XCTAssertEqual(matches[0].similarityPercent, 100.0, accuracy: 0.1)
@@ -111,15 +111,35 @@ final class BowlingDNATests: XCTestCase {
         dna.armPath = .sling
         dna.releaseHeight = .low
 
-        let matches = BowlingDNAMatcher.match(userDNA: dna, topN: 3)
+        let matches = BowlingDNAMatcher.match(userDNA: dna, topN: 1)
         XCTAssertFalse(matches.isEmpty, "Partial DNA should still produce matches")
     }
 
     func testEmptyDNAStillProducesMatches() {
         let dna = BowlingDNA()
-        let matches = BowlingDNAMatcher.match(userDNA: dna, topN: 3)
+        let matches = BowlingDNAMatcher.match(userDNA: dna, topN: 1)
         // With all sentinels, no valid dimensions — but should not crash
-        XCTAssertEqual(matches.count, 3)
+        XCTAssertEqual(matches.count, 1)
+    }
+
+    // MARK: - Honest Similarity (no inflated percentages)
+
+    func testDifferentBowlerTypesHaveLowSimilarity() {
+        // Warne (leg-spinner) vs Shoaib Akhtar (express pace) should be well below 70%
+        let spinnerDNA = FamousBowlerDatabase.warne.dna
+        let matches = BowlingDNAMatcher.match(userDNA: spinnerDNA, topN: 12)
+
+        // Find the Shoaib Akhtar match
+        let shoaibMatch = matches.first { $0.bowlerName == "Shoaib Akhtar" }
+        XCTAssertNotNil(shoaibMatch)
+        XCTAssertLessThan(shoaibMatch!.similarityPercent, 70.0,
+            "A leg-spinner should NOT match 70%+ with an express fast bowler")
+    }
+
+    func testBestMatchDefaultsToTopOne() {
+        // Default topN is 1
+        let matches = BowlingDNAMatcher.match(userDNA: FamousBowlerDatabase.bumrah.dna)
+        XCTAssertEqual(matches.count, 1)
     }
 
     // MARK: - Match Metadata

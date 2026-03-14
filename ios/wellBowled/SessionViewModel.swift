@@ -1286,7 +1286,7 @@ final class SessionViewModel: ObservableObject {
 
         if let dna = dnaResult {
             session.deliveries[index].dna = dna
-            session.deliveries[index].dnaMatches = BowlingDNAMatcher.match(userDNA: dna, topN: 3)
+            session.deliveries[index].dnaMatches = BowlingDNAMatcher.match(userDNA: dna)
         }
 
         var artifacts = deepAnalysisArtifactsByDelivery[deliveryID] ?? DeliveryDeepAnalysisArtifacts()

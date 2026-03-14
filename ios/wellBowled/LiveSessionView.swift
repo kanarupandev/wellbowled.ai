@@ -1170,56 +1170,143 @@ private struct SessionDeepAnalysisPendingCard: View {
 private struct SessionDNAMatchCarousel: View {
     let matches: [BowlingDNAMatch]
 
+    private var match: BowlingDNAMatch? { matches.first }
+
+    private var ringColor: Color {
+        guard let pct = match?.similarityPercent else { return peacockBlue }
+        if pct >= 70 { return Color(hex: "34C759") }   // green — strong match
+        if pct >= 45 { return peacockBlue }              // teal — moderate
+        return Color(hex: "FF8A3D")                      // ember — weak but honest
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Action signature match")
-                .font(.subheadline.weight(.semibold))
-                .foregroundColor(.white)
+        if let match {
+            VStack(spacing: 0) {
+                // Header
+                Text("YOUR ACTION ARCHETYPE")
+                    .font(.system(size: 10, weight: .heavy))
+                    .tracking(2)
+                    .foregroundColor(peacockBlue.opacity(0.8))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.bottom, 14)
 
-            ForEach(matches.prefix(3)) { match in
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 10) {
-                        ZStack {
-                            Circle()
-                                .stroke(Color.white.opacity(0.2), lineWidth: 4)
-                                .frame(width: 44, height: 44)
-                            Circle()
-                                .trim(from: 0, to: CGFloat(match.similarityPercent / 100.0))
-                                .stroke(peacockBlue, style: StrokeStyle(lineWidth: 4, lineCap: .round))
-                                .frame(width: 44, height: 44)
-                                .rotationEffect(.degrees(-90))
-                            Text("\(Int(match.similarityPercent))%")
-                                .font(.caption2.weight(.semibold))
+                // Hero row: ring + name
+                HStack(spacing: 16) {
+                    // Similarity ring — large and proud
+                    ZStack {
+                        Circle()
+                            .stroke(Color.white.opacity(0.1), lineWidth: 5)
+                            .frame(width: 68, height: 68)
+                        Circle()
+                            .trim(from: 0, to: CGFloat(match.similarityPercent / 100.0))
+                            .stroke(ringColor, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                            .frame(width: 68, height: 68)
+                            .rotationEffect(.degrees(-90))
+                        VStack(spacing: 0) {
+                            Text("\(Int(match.similarityPercent))")
+                                .font(.system(size: 22, weight: .black, design: .rounded))
                                 .foregroundColor(.white)
+                            Text("%")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.6))
                         }
-
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(match.bowlerName)
-                                .font(.caption.weight(.semibold))
-                                .foregroundColor(.white)
-                            Text("\(match.country) • \(match.style)")
-                                .font(.caption2)
-                                .foregroundColor(.white.opacity(0.7))
-                            Text("Closest phase: \(match.closestPhase)")
-                                .font(.caption2)
-                                .foregroundColor(peacockBlue)
-                        }
-                        Spacer()
                     }
 
-                    if !match.signatureTraits.isEmpty {
-                        Text(match.signatureTraits.prefix(2).joined(separator: " • "))
-                            .font(.caption2)
-                            .foregroundColor(.white.opacity(0.78))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(match.bowlerName)
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundColor(.white)
+                        Text("\(countryFlag(match.country)) \(match.country) • \(match.era)")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.white.opacity(0.6))
+                        Text(match.style)
+                            .font(.system(size: 11))
+                            .foregroundColor(peacockBlue)
+                    }
+                    Spacer()
+                }
+                .padding(.bottom, 14)
+
+                // Divider
+                Rectangle()
+                    .fill(Color.white.opacity(0.08))
+                    .frame(height: 1)
+                    .padding(.bottom, 12)
+
+                // Phase match + difference
+                HStack(spacing: 0) {
+                    // Closest phase
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 11))
+                            .foregroundColor(Color(hex: "34C759"))
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Closest")
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundColor(.white.opacity(0.45))
+                            Text(match.closestPhase)
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(.white)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    // Biggest difference
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.left.arrow.right")
+                            .font(.system(size: 11))
+                            .foregroundColor(Color(hex: "FF8A3D"))
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Work on")
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundColor(.white.opacity(0.45))
+                            Text(match.biggestDifference)
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(.white)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(.bottom, 12)
+
+                // Signature traits
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(match.signatureTraits, id: \.self) { trait in
+                        HStack(alignment: .top, spacing: 8) {
+                            Circle()
+                                .fill(peacockBlue.opacity(0.6))
+                                .frame(width: 4, height: 4)
+                                .padding(.top, 5)
+                            Text(trait)
+                                .font(.system(size: 11))
+                                .foregroundColor(.white.opacity(0.75))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                 }
-                .padding(10)
-                .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.07)))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.white.opacity(0.14), lineWidth: 1)
-                )
             }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color.white.opacity(0.06))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(ringColor.opacity(0.25), lineWidth: 1)
+            )
+        }
+    }
+
+    private func countryFlag(_ code: String) -> String {
+        switch code {
+        case "AUS": return "🇦🇺"
+        case "PAK": return "🇵🇰"
+        case "IND": return "🇮🇳"
+        case "ENG": return "🇬🇧"
+        case "SL":  return "🇱🇰"
+        case "SA":  return "🇿🇦"
+        case "WI":  return "🏴‍☠️"
+        default:    return "🏏"
         }
     }
 }

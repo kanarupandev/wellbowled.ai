@@ -1,7 +1,6 @@
 import SwiftUI
 
 private let peacockBlue = Color(red: 0, green: 0.427, blue: 0.467)
-private let greyBlue = Color(red: 0.55, green: 0.66, blue: 0.77)
 
 // MARK: - DNA Section for SessionResultsView
 
@@ -9,8 +8,8 @@ struct BowlingDNASection: View {
     let matches: [BowlingDNAMatch]
 
     var body: some View {
-        Section("Action Signature") {
-            ForEach(matches) { match in
+        if let match = matches.first {
+            Section("Action Signature") {
                 BowlingDNAMatchCard(match: match)
             }
         }
@@ -22,29 +21,41 @@ struct BowlingDNASection: View {
 struct BowlingDNAMatchCard: View {
     let match: BowlingDNAMatch
 
+    private var ringColor: Color {
+        if match.similarityPercent >= 70 { return Color(hex: "34C759") }
+        if match.similarityPercent >= 45 { return peacockBlue }
+        return Color(hex: "FF8A3D")
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
             // Header: name + similarity ring
-            HStack(spacing: 12) {
+            HStack(spacing: 14) {
                 // Similarity ring
                 ZStack {
                     Circle()
-                        .stroke(greyBlue.opacity(0.2), lineWidth: 4)
-                        .frame(width: 48, height: 48)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 5)
+                        .frame(width: 56, height: 56)
                     Circle()
                         .trim(from: 0, to: match.similarityPercent / 100)
-                        .stroke(peacockBlue, style: StrokeStyle(lineWidth: 4, lineCap: .round))
-                        .frame(width: 48, height: 48)
+                        .stroke(ringColor, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                        .frame(width: 56, height: 56)
                         .rotationEffect(.degrees(-90))
-                    Text("\(Int(match.similarityPercent))%")
-                        .font(.caption2.bold().monospacedDigit())
-                        .foregroundColor(peacockBlue)
+                    VStack(spacing: 0) {
+                        Text("\(Int(match.similarityPercent))")
+                            .font(.system(size: 18, weight: .black, design: .rounded))
+                            .foregroundColor(ringColor)
+                        Text("%")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(ringColor.opacity(0.6))
+                    }
                 }
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(match.bowlerName)
                         .font(.headline)
                     HStack(spacing: 6) {
+                        Text(countryFlag(match.country))
                         Text(match.country)
                             .font(.caption)
                             .foregroundColor(.secondary)
@@ -54,7 +65,7 @@ struct BowlingDNAMatchCard: View {
                     }
                     Text(match.style)
                         .font(.caption2)
-                        .foregroundColor(greyBlue)
+                        .foregroundColor(peacockBlue)
                 }
 
                 Spacer()
@@ -62,22 +73,43 @@ struct BowlingDNAMatchCard: View {
 
             // Phase match info
             HStack(spacing: 16) {
-                Label(match.closestPhase, systemImage: "checkmark.circle")
-                    .font(.caption)
-                    .foregroundColor(peacockBlue)
-                Label(match.biggestDifference, systemImage: "arrow.left.arrow.right")
-                    .font(.caption)
-                    .foregroundColor(.orange)
+                Label {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Closest")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundColor(.secondary)
+                        Text(match.closestPhase)
+                            .font(.caption.weight(.semibold))
+                    }
+                } icon: {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                        .font(.system(size: 12))
+                }
+
+                Label {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Work on")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundColor(.secondary)
+                        Text(match.biggestDifference)
+                            .font(.caption.weight(.semibold))
+                    }
+                } icon: {
+                    Image(systemName: "arrow.left.arrow.right")
+                        .foregroundColor(.orange)
+                        .font(.system(size: 12))
+                }
             }
 
             // Signature traits
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 4) {
                 ForEach(match.signatureTraits, id: \.self) { trait in
-                    HStack(alignment: .top, spacing: 6) {
-                        Image(systemName: "cricket.ball")
-                            .font(.system(size: 8))
-                            .foregroundColor(greyBlue)
-                            .padding(.top, 3)
+                    HStack(alignment: .top, spacing: 8) {
+                        Circle()
+                            .fill(peacockBlue.opacity(0.6))
+                            .frame(width: 4, height: 4)
+                            .padding(.top, 5)
                         Text(trait)
                             .font(.caption)
                             .foregroundColor(.secondary)
@@ -86,6 +118,19 @@ struct BowlingDNAMatchCard: View {
             }
         }
         .padding(.vertical, 4)
+    }
+
+    private func countryFlag(_ code: String) -> String {
+        switch code {
+        case "AUS": return "🇦🇺"
+        case "PAK": return "🇵🇰"
+        case "IND": return "🇮🇳"
+        case "ENG": return "🇬🇧"
+        case "SL":  return "🇱🇰"
+        case "SA":  return "🇿🇦"
+        case "WI":  return "🏴‍☠️"
+        default:    return "🏏"
+        }
     }
 }
 

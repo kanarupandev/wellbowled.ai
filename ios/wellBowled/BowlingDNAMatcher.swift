@@ -124,7 +124,8 @@ struct BowlingDNAMatcher {
 
     /// Match user DNA against the famous bowler database.
     /// Returns top-N matches sorted by similarity (highest first).
-    static func match(userDNA: BowlingDNA, topN: Int = 3) -> [BowlingDNAMatch] {
+    /// Similarity is honest — best match may be 40-60% for a casual bowler.
+    static func match(userDNA: BowlingDNA, topN: Int = 1) -> [BowlingDNAMatch] {
         let userVec = BowlingDNAVectorEncoder.encode(userDNA)
         let database = FamousBowlerDatabase.allBowlers
 
@@ -132,11 +133,10 @@ struct BowlingDNAMatcher {
 
         for bowler in database {
             let bowlerVec = BowlingDNAVectorEncoder.encode(bowler.dna)
-            let (distance, closestIdx, biggestIdx) = weightedEuclidean(userVec, bowlerVec)
+            let (normalisedDistance, closestIdx, biggestIdx) = weightedEuclidean(userVec, bowlerVec)
 
-            // Convert distance to similarity % (0 distance = 100%, max reasonable distance ~5 → 0%)
-            let maxDistance = 5.0
-            let similarity = max(0, min(100, (1.0 - distance / maxDistance) * 100))
+            // normalisedDistance is 0…1 (0 = identical, 1 = maximally different)
+            let similarity = max(0, min(100, (1.0 - normalisedDistance) * 100))
             results.append((bowler, similarity, closestIdx, biggestIdx))
         }
 
@@ -159,15 +159,17 @@ struct BowlingDNAMatcher {
 
     // MARK: - Distance Calculation
 
-    /// Returns (total weighted distance, index of closest dimension, index of biggest difference).
+    /// Returns (normalised distance 0…1, index of closest dimension, index of biggest difference).
     /// Skips dimensions where either vector has sentinel (-1).
+    /// Distance is normalised against the theoretical maximum so 0 = identical, 1 = maximally different.
     private static func weightedEuclidean(_ a: [Double], _ b: [Double]) -> (Double, Int, Int) {
         var sumSq = 0.0
-        var validDims = 0
+        var maxSumSq = 0.0
         var minDiff = Double.infinity
         var maxDiff = 0.0
         var closestIdx = 0
         var biggestIdx = 0
+        var validDims = 0
 
         for i in 0..<min(a.count, b.count) {
             let w = BowlingDNAVectorEncoder.weights[i]
@@ -176,6 +178,8 @@ struct BowlingDNAMatcher {
             let diff = abs(a[i] - b[i])
             let weighted = diff * w
             sumSq += weighted * weighted
+            // Max possible diff per dimension is 1.0 (values are in [0,1])
+            maxSumSq += w * w
             validDims += 1
 
             if diff < minDiff {
@@ -188,10 +192,12 @@ struct BowlingDNAMatcher {
             }
         }
 
-        guard validDims > 0 else { return (Double.infinity, 0, 0) }
+        guard validDims > 0, maxSumSq > 0 else { return (Double.infinity, 0, 0) }
 
-        // Normalize by number of valid dimensions
+        // Normalise distance to [0, 1] using theoretical maximum for the valid dimensions
         let distance = sqrt(sumSq / Double(validDims))
-        return (distance, closestIdx, biggestIdx)
+        let theoreticalMax = sqrt(maxSumSq / Double(validDims))
+        let normalised = distance / theoreticalMax
+        return (normalised, closestIdx, biggestIdx)
     }
 }
