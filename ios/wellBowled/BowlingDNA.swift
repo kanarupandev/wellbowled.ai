@@ -129,4 +129,5 @@ struct BowlingDNAMatch: Codable, Equatable, Identifiable {
     let closestPhase: String          // e.g. "Release Action"
     let biggestDifference: String     // e.g. "Body alignment"
     let signatureTraits: [String]     // 3 bullet points
+    let bowlerDNA: BowlingDNA         // reference bowler DNA for comparison
 }

@@ -199,7 +199,8 @@ final class BowlingDNATests: XCTestCase {
             similarityPercent: 87.5,
             closestPhase: "Release",
             biggestDifference: "Arm path",
-            signatureTraits: ["Trait 1", "Trait 2", "Trait 3"]
+            signatureTraits: ["Trait 1", "Trait 2", "Trait 3"],
+            bowlerDNA: FamousBowlerDatabase.mcGrath.dna
         )
         let data = try JSONEncoder().encode(match)
         let decoded = try JSONDecoder().decode(BowlingDNAMatch.self, from: data)

@@ -14,7 +14,8 @@ final class ModelsCodableAndUtilityTests: XCTestCase {
             similarityPercent: 88.4,
             closestPhase: "Release",
             biggestDifference: "Run-up speed",
-            signatureTraits: ["High arm", "Seam control", "Balance"]
+            signatureTraits: ["High arm", "Seam control", "Balance"],
+            bowlerDNA: FamousBowlerDatabase.mcGrath.dna
         )
 
         let original = Delivery(

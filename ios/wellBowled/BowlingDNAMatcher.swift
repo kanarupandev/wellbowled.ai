@@ -152,7 +152,8 @@ struct BowlingDNAMatcher {
                 similarityPercent: (item.similarity * 10).rounded() / 10,
                 closestPhase: BowlingDNAVectorEncoder.dimensionPhases[item.closestPhaseIdx],
                 biggestDifference: BowlingDNAVectorEncoder.dimensionLabels[item.biggestDiffIdx],
-                signatureTraits: item.bowler.signatureTraits
+                signatureTraits: item.bowler.signatureTraits,
+                bowlerDNA: item.bowler.dna
             )
         }
     }

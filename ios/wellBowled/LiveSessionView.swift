@@ -767,7 +767,6 @@ private struct SessionDeliveryResultPage: View {
             if let delivery {
                 dnaSection(for: delivery)
             }
-            poseAndControlSection
         }
     }
 
@@ -854,7 +853,7 @@ private struct SessionDeliveryResultPage: View {
     @ViewBuilder
     private func dnaSection(for delivery: Delivery) -> some View {
         if let matches = delivery.dnaMatches, !matches.isEmpty {
-            SessionDNAMatchCarousel(matches: matches)
+            SessionDNAMatchCarousel(matches: matches, userDNA: delivery.dna)
         } else if deepStatus.stage == .running {
             Text("Compiling action signature vector and matching bowler profiles...")
                 .font(.caption2)
@@ -866,15 +865,7 @@ private struct SessionDeliveryResultPage: View {
         }
     }
 
-    private var poseAndControlSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(poseNote)
-                .font(.caption2)
-                .foregroundColor(.white.opacity(0.65))
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.bottom, 18)
-        }
-    }
+    // poseNote kept as internal state for logging; removed from UI display
 
     private func setupPlayerIfNeeded() {
         guard player == nil, let url = delivery?.videoURL else { return }
@@ -1169,30 +1160,42 @@ private struct SessionDeepAnalysisPendingCard: View {
 
 private struct SessionDNAMatchCarousel: View {
     let matches: [BowlingDNAMatch]
+    let userDNA: BowlingDNA?
+
+    @State private var showComparison = false
 
     private var match: BowlingDNAMatch? { matches.first }
 
     private var ringColor: Color {
         guard let pct = match?.similarityPercent else { return peacockBlue }
-        if pct >= 70 { return Color(hex: "34C759") }   // green — strong match
-        if pct >= 45 { return peacockBlue }              // teal — moderate
-        return Color(hex: "FF8A3D")                      // ember — weak but honest
+        if pct >= 70 { return Color(hex: "34C759") }
+        if pct >= 45 { return peacockBlue }
+        return Color(hex: "FF8A3D")
     }
 
     var body: some View {
         if let match {
             VStack(spacing: 0) {
                 // Header
-                Text("YOUR ACTION ARCHETYPE")
-                    .font(.system(size: 10, weight: .heavy))
-                    .tracking(2)
-                    .foregroundColor(peacockBlue.opacity(0.8))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.bottom, 14)
+                HStack {
+                    Text("YOUR ACTION ARCHETYPE")
+                        .font(.system(size: 10, weight: .heavy))
+                        .tracking(2)
+                        .foregroundColor(peacockBlue.opacity(0.8))
+                    Spacer()
+                    if userDNA != nil {
+                        Text("Compare")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(peacockBlue)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundColor(peacockBlue.opacity(0.6))
+                    }
+                }
+                .padding(.bottom, 14)
 
                 // Hero row: ring + name
                 HStack(spacing: 16) {
-                    // Similarity ring — large and proud
                     ZStack {
                         Circle()
                             .stroke(Color.white.opacity(0.1), lineWidth: 5)
@@ -1235,7 +1238,6 @@ private struct SessionDNAMatchCarousel: View {
 
                 // Phase match + difference
                 HStack(spacing: 0) {
-                    // Closest phase
                     HStack(spacing: 6) {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.system(size: 11))
@@ -1251,7 +1253,6 @@ private struct SessionDNAMatchCarousel: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                    // Biggest difference
                     HStack(spacing: 6) {
                         Image(systemName: "arrow.left.arrow.right")
                             .font(.system(size: 11))
@@ -1294,6 +1295,14 @@ private struct SessionDNAMatchCarousel: View {
                 RoundedRectangle(cornerRadius: 16)
                     .stroke(ringColor.opacity(0.25), lineWidth: 1)
             )
+            .onTapGesture {
+                if userDNA != nil { showComparison = true }
+            }
+            .fullScreenCover(isPresented: $showComparison) {
+                if let dna = userDNA {
+                    DNAComparisonSheet(userDNA: dna, match: match)
+                }
+            }
         }
     }
 
@@ -1422,5 +1431,30 @@ private struct SessionFeedbackLine: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+}
+
+// MARK: - DNA Comparison Full-Screen Sheet
+
+private struct DNAComparisonSheet: View {
+    let userDNA: BowlingDNA
+    let match: BowlingDNAMatch
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            DNAComparisonPage(userDNA: userDNA, match: match)
+
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 28))
+                    .foregroundStyle(.white.opacity(0.6), .white.opacity(0.15))
+            }
+            .padding(.trailing, 16)
+            .padding(.top, 12)
+        }
+        .background(Color(hex: "0D1117"))
     }
 }
