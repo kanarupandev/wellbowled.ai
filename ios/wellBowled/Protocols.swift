@@ -84,15 +84,15 @@ protocol VoiceMateDelegate: AnyObject {
     /// WebSocket closed unexpectedly with reason (for diagnostics)
     func voiceMate(didDisconnect reason: String)
 
-    /// Model requested app-level mode switch via function/tool call.
+    /// Model requested session end via tool call.
     @MainActor
-    func voiceMate(didRequestModeSwitch mode: SessionMode) async -> Bool
+    func voiceMate(didRequestEndSession reason: String) async
 }
 
 extension VoiceMateDelegate {
     func voiceMate(didTranscribeUser text: String) {}
     @MainActor
-    func voiceMate(didRequestModeSwitch mode: SessionMode) async -> Bool { false }
+    func voiceMate(didRequestEndSession reason: String) async {}
 }
 
 // MARK: - Clip Extraction

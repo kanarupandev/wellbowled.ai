@@ -13,9 +13,7 @@ private let log = Logger(subsystem: "com.wellbowled", category: "SessionVM")
 final class SessionViewModel: ObservableObject {
 
     private enum LiveFlowPhase {
-        case greeting
-        case planning
-        case pilotRun
+        case starting
         case active
     }
 
@@ -70,10 +68,8 @@ final class SessionViewModel: ObservableObject {
     private var challengeTargetBySequence: [Int: String] = [:]
     private var shouldSendProactiveGreeting = false
     private var didSendProactiveGreeting = false
-    private var flowPhase: LiveFlowPhase = .greeting
-    private var hasBowlerPlanResponse = false
-    private var proactiveRepromptTask: Task<Void, Never>?
-    private var hasPilotRun = false
+    private var flowPhase: LiveFlowPhase = .starting
+    private var sessionStartTime: Date?
     private var clipPreparationTask: Task<Void, Never>?
     private var deepAnalysisTasksByDelivery: [UUID: Task<Void, Never>] = [:]
     private var telemetryTasksByDelivery: [UUID: Task<Void, Never>] = [:]
@@ -109,6 +105,7 @@ final class SessionViewModel: ObservableObject {
             log.debug("startSession ignored: session already active")
             return
         }
+        sessionStartTime = Date()
 
         let cameraStatus = AVCaptureDevice.authorizationStatus(for: .video)
         if cameraStatus == .notDetermined {
@@ -131,11 +128,8 @@ final class SessionViewModel: ObservableObject {
         challengeEngine.reset(shuffle: true)
         shouldSendProactiveGreeting = true
         didSendProactiveGreeting = false
-        flowPhase = .greeting
-        hasBowlerPlanResponse = false
-        hasPilotRun = false
-        proactiveRepromptTask?.cancel()
-        proactiveRepromptTask = nil
+        flowPhase = .starting
+        sessionStartTime = nil
         sessionRemainingSeconds = WBConfig.liveSessionMaxDurationSeconds
         lastSessionRecordingURL = nil
         sessionVideoSaveStatus = .idle
@@ -255,11 +249,8 @@ final class SessionViewModel: ObservableObject {
         errorMessage = nil
         shouldSendProactiveGreeting = false
         didSendProactiveGreeting = false
-        proactiveRepromptTask?.cancel()
-        proactiveRepromptTask = nil
-        flowPhase = .greeting
-        hasBowlerPlanResponse = false
-        hasPilotRun = false
+        flowPhase = .starting
+        sessionStartTime = nil
         livePreviewImage = nil
         log.debug("Session ended. Deliveries: \(self.session.deliveryCount)")
 
@@ -283,8 +274,6 @@ final class SessionViewModel: ObservableObject {
 
         sessionTimerTask?.cancel()
         sessionTimerTask = nil
-        proactiveRepromptTask?.cancel()
-        proactiveRepromptTask = nil
         clipPreparationTask?.cancel()
         clipPreparationTask = nil
         cancelAllDeepAnalysisTasks(resetState: true)
@@ -311,9 +300,8 @@ final class SessionViewModel: ObservableObject {
         challengeEvaluatedDeliveries = []
         shouldSendProactiveGreeting = false
         didSendProactiveGreeting = false
-        flowPhase = .greeting
-        hasBowlerPlanResponse = false
-        hasPilotRun = false
+        flowPhase = .starting
+        sessionStartTime = nil
         liveAudioChunkCounter = 0
         liveMicChunkCounter = 0
         useCameraAudioFallback = false
@@ -466,8 +454,6 @@ final class SessionViewModel: ObservableObject {
         log.error("\(reason, privacy: .public)")
         sessionTimerTask?.cancel()
         sessionTimerTask = nil
-        proactiveRepromptTask?.cancel()
-        proactiveRepromptTask = nil
         clipPreparationTask?.cancel()
         clipPreparationTask = nil
         cancelAllDeepAnalysisTasks(resetState: true)
@@ -491,9 +477,8 @@ final class SessionViewModel: ObservableObject {
         analysisProgress = 0
         shouldSendProactiveGreeting = false
         didSendProactiveGreeting = false
-        flowPhase = .greeting
-        hasBowlerPlanResponse = false
-        hasPilotRun = false
+        flowPhase = .starting
+        sessionStartTime = nil
         lastSessionRecordingURL = nil
         sessionVideoSaveStatus = .idle
         livePreviewImage = nil
@@ -570,6 +555,7 @@ final class SessionViewModel: ObservableObject {
     private func startSessionTimer() {
         sessionTimerTask?.cancel()
         let startedAt = session.startedAt ?? Date()
+        sessionStartTime = startedAt
 
         sessionTimerTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -784,6 +770,9 @@ final class SessionViewModel: ObservableObject {
                         failureMessage: nil
                     )
                     log.debug("Clip prepared for D\(index + 1): file=\(clipURL.lastPathComponent, privacy: .public)")
+                    if self.liveService.isConnected {
+                        await self.liveService.sendContext("[CLIP READY for delivery \(index + 1)] Video clip extracted and ready for analysis.")
+                    }
                 } else {
                     self.session.deliveries[index].status = .failed
                     let message = error?.localizedDescription ?? "Clip preparation failed."
@@ -1174,6 +1163,11 @@ final class SessionViewModel: ObservableObject {
         startTelemetry(for: deliveryID)
         session.deliveries[index].status = .analyzing
 
+        // Inform the buddy that analysis is starting
+        if liveService.isConnected {
+            await liveService.sendContext("[ANALYZING delivery \(index + 1)] Deep analysis in progress — will share results when ready.")
+        }
+
         var detailedResult: DeliveryDeepAnalysisResult?
         var dnaResult: BowlingDNA?
         var poseFrames: [FramePoseLandmarks] = []
@@ -1311,6 +1305,32 @@ final class SessionViewModel: ObservableObject {
 
         deepAnalysisTasksByDelivery[deliveryID] = nil
         log.debug("Deep analysis completed: delivery=\(index + 1), phases=\(detailedResult.phases.count), poseFrames=\(poseFrames.count), dnaAvailable=\(dnaResult != nil), poseFailureReason=\(poseFailureReason ?? "-", privacy: .public)")
+
+        // Feed analysis results back to the buddy for natural spoken debrief
+        if liveService.isConnected {
+            var feedbackParts: [String] = ["[ANALYSIS COMPLETE for delivery \(index + 1)]"]
+            feedbackParts.append("Summary: \(detailedResult.summary)")
+            if !detailedResult.paceEstimate.isEmpty {
+                feedbackParts.append("Pace: \(detailedResult.paceEstimate)")
+            }
+            let goodPhases = detailedResult.phases.filter { $0.isGood }.map(\.name)
+            let needsWorkPhases = detailedResult.phases.filter { !$0.isGood }.map(\.name)
+            if !goodPhases.isEmpty {
+                feedbackParts.append("Good phases: \(goodPhases.joined(separator: ", "))")
+            }
+            if !needsWorkPhases.isEmpty {
+                feedbackParts.append("Needs work: \(needsWorkPhases.joined(separator: ", "))")
+            }
+            if let dna = dnaResult, let match = BowlingDNAMatcher.match(userDNA: dna).first {
+                feedbackParts.append("DNA match: \(match.bowlerName) (\(match.country)) at \(match.similarityPercent)%. Closest phase: \(match.closestPhase). Biggest difference: \(match.biggestDifference).")
+            }
+            if let challengeText {
+                feedbackParts.append("Challenge result: \(challengeText)")
+            }
+            feedbackParts.append("Give the bowler a natural spoken debrief — what was good, what needs work, one actionable fix for next ball.")
+            await liveService.sendContext(feedbackParts.joined(separator: " "))
+        }
+
         refreshSessionSummary()
     }
 
@@ -1428,133 +1448,17 @@ final class SessionViewModel: ObservableObject {
         guard shouldSendProactiveGreeting, !didSendProactiveGreeting else { return }
         guard liveService.isConnected else { return }
 
-        let prompt = Self.proactiveGreetingPrompt(
-            mode: session.mode,
-            challengeTarget: currentChallengeTarget
-        )
-        await liveService.sendContext(prompt)
         didSendProactiveGreeting = true
-        flowPhase = .planning
-        hasBowlerPlanResponse = false
-        proactiveRepromptTask?.cancel()
-        proactiveRepromptTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 5_000_000_000)
-            await self?.sendPlanningRepromptIfNeeded()
-        }
-    }
+        flowPhase = .starting
 
-    static func proactiveGreetingPrompt(mode: SessionMode, challengeTarget: String?) -> String {
-        if mode == .challenge {
-            let targetLine: String
-            if let challengeTarget, !challengeTarget.isEmpty {
-                targetLine = "Current target (if asked): \(challengeTarget)."
-            } else {
-                targetLine = "No target yet. Set first target only after pilot run."
-            }
-            return """
-            Start now with a proactive greeting in one short sentence.
-            Keep every response brief, natural, and non-robotic.
-            Then do this exact sequence:
-            1) Ask: "What's the plan for today?"
-            2) Wait about 5 seconds for an answer. If no answer, ask once again naturally.
-            3) Say this is challenge mode and ask if the bowler wants to stay in challenge or switch to free mode.
-            4) If bowler asks to switch, call tool switch_session_mode with mode=free.
-            5) Verify setup quickly (phone angle, full run-up/release visibility, lighting, distance).
-            6) Ask for one pilot run to calibrate.
-            7) After a good pilot run, explicitly say "Session started", then continue live feedback.
-            \(targetLine)
-            """
-        }
-        return """
-        Start now with a proactive greeting in one short sentence.
-        Keep every response brief, natural, and non-robotic.
-        Then do this exact sequence:
-        1) Ask: "What's the plan for today?"
-        2) Wait about 5 seconds for an answer. If no answer, ask once again naturally.
-        3) Ask if bowler wants free mode or challenge mode for this session.
-        4) If bowler asks challenge, call tool switch_session_mode with mode=challenge.
-        5) Verify setup quickly (phone angle, full run-up/release visibility, lighting, distance).
-        6) Ask for one pilot run to calibrate.
-        7) After a good pilot run, explicitly say "Session started", then continue live feedback.
-        """
-    }
-
-    static func planningRepromptPrompt(mode: SessionMode) -> String {
-        let modeLine = mode == .challenge ? "You are in challenge mode currently." : "You are in free mode currently."
-        return """
-        \(modeLine)
-        No clear plan response yet. Ask again in one short natural sentence:
-        "What's the plan for today?"
-        """
-    }
-
-    static func setupVerificationPrompt(mode: SessionMode) -> String {
-        let modeLine = mode == .challenge
-        ? "Confirm this is challenge mode and remind they can switch to free mode anytime."
-        : "Confirm this is free mode and remind they can switch to challenge mode anytime."
-        return """
-        Thanks for the plan. \(modeLine)
-        Now verify setup quickly in one short line (angle, full run-up/release visibility, lighting, distance),
-        then ask for one pilot run.
-        """
-    }
-
-    static func postPilotPrompt(mode: SessionMode, target: String?) -> String {
-        if mode == .challenge, let target, !target.isEmpty {
-            return """
-            Pilot run received. If setup is good, say "Session started" now.
-            Then announce the challenge target briefly: \(target).
-            """
-        }
-        return """
-        Pilot run received. If setup is good, say "Session started" now
-        and invite the next ball in one short line.
-        """
-    }
-
-    private func sendPlanningRepromptIfNeeded() async {
-        guard session.isActive else { return }
-        guard liveService.isConnected else { return }
-        guard flowPhase == .planning else { return }
-        guard !hasBowlerPlanResponse else { return }
-        await liveService.sendContext(Self.planningRepromptPrompt(mode: session.mode))
-    }
-
-    private func markPlanResponseAndContinueSetupIfNeeded() async {
-        guard session.isActive else { return }
-        guard liveService.isConnected else { return }
-        guard !hasBowlerPlanResponse else { return }
-        hasBowlerPlanResponse = true
-        proactiveRepromptTask?.cancel()
-        proactiveRepromptTask = nil
-        flowPhase = .pilotRun
-        await liveService.sendContext(Self.setupVerificationPrompt(mode: session.mode))
-    }
-
-    private func switchSessionMode(to mode: SessionMode) async -> Bool {
-        guard session.isActive else { return false }
-        guard session.mode != mode else { return true }
-
-        session.mode = mode
-        if mode == .freePlay {
-            session.currentChallenge = nil
-            currentChallengeTarget = nil
-            await liveService.sendContext("Mode switched to free mode. Continue brief live feedback.")
-            return true
-        }
-
-        challengeEngine.reset(shuffle: true)
-        session.currentChallenge = nil
-        currentChallengeTarget = nil
-        challengeTargetBySequence = [:]
-
-        if hasPilotRun {
-            await issueNextChallengeTarget(isInitial: true)
-            await liveService.sendContext("Mode switched to challenge mode. Challenge target is active.")
-        } else {
-            await liveService.sendContext("Mode switched to challenge mode. We will set challenge target after pilot run.")
-        }
-        return true
+        // Single natural greeting — no waterfall, no scripted sequence.
+        // The system prompt handles all conversational flow autonomously.
+        await liveService.sendContext("""
+        [SESSION STARTED] The bowler just opened the app and is at the nets. \
+        Greet them naturally and start the conversation. \
+        Ask what they want to work on and how long they have. \
+        Check you can see their full action in the video feed.
+        """)
     }
 
     static func cameraSwitchContext(for position: AVCaptureDevice.Position) -> String {
@@ -1679,9 +1583,7 @@ extension SessionViewModel: VoiceMateDelegate {
             if Self.shouldEndSession(from: text) {
                 log.debug("End-session intent detected from user transcript")
                 await endSession()
-                return
             }
-            await markPlanResponseAndContinueSetupIfNeeded()
         }
     }
 
@@ -1730,8 +1632,9 @@ extension SessionViewModel: VoiceMateDelegate {
         }
     }
 
-    func voiceMate(didRequestModeSwitch mode: SessionMode) async -> Bool {
-        await switchSessionMode(to: mode)
+    func voiceMate(didRequestEndSession reason: String) async {
+        log.debug("Mate requested session end: \(reason, privacy: .public)")
+        await endSession()
     }
 }
 
@@ -1747,7 +1650,6 @@ extension SessionViewModel: DeliveryDetectionDelegate {
     ) {
         Task { @MainActor in
             let count = session.deliveryCount + 1
-            let isPilotDelivery = !hasPilotRun
             var challengeTarget: String?
             if session.mode == .challenge {
                 challengeTarget = session.currentChallenge
@@ -1774,38 +1676,21 @@ extension SessionViewModel: DeliveryDetectionDelegate {
 
             log.debug("Delivery #\(count) detected at \(timestamp)s (\(bowlingArm.rawValue, privacy: .public) arm, \(paceBand.label, privacy: .public))")
 
-            // TTS: announce count only (pace is post-clip, per codex P1)
+            // TTS: announce count only
             tts.speak("\(count).")
 
-            // Send context to Live API mate (enriches its understanding)
+            flowPhase = .active
+
+            // Inform the mate about the delivery
             if liveService.isConnected {
-                var context = "Delivery \(count) just happened at \(String(format: "%.1f", timestamp)) seconds. " +
-                "Bowling arm: \(bowlingArm.rawValue)."
+                let elapsed = Int(Date().timeIntervalSince(sessionStartTime ?? Date()))
+                let remaining = max(0, Int(WBConfig.liveSessionMaxDurationSeconds) - elapsed)
+                var context = "[DELIVERY \(count) detected] Bowling arm: \(bowlingArm.rawValue). " +
+                    "Pace band: \(paceBand.label). Session time: \(elapsed)s elapsed, ~\(remaining)s remaining."
                 if let challengeTarget {
-                    context += " Challenge target for this ball: \(challengeTarget)."
+                    context += " Active challenge: \(challengeTarget)."
                 }
-                await liveService.sendContext(
-                    context
-                )
-            }
-
-            if isPilotDelivery {
-                hasPilotRun = true
-                flowPhase = .active
-
-                if session.mode == .challenge {
-                    await issueNextChallengeTarget(isInitial: true)
-                    if liveService.isConnected {
-                        await liveService.sendContext(
-                            Self.postPilotPrompt(mode: .challenge, target: currentChallengeTarget)
-                        )
-                    }
-                } else if liveService.isConnected {
-                    await liveService.sendContext(
-                        Self.postPilotPrompt(mode: .freePlay, target: nil)
-                    )
-                }
-                return
+                await liveService.sendContext(context)
             }
 
             if session.mode == .challenge {

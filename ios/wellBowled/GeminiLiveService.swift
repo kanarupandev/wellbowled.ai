@@ -225,22 +225,22 @@ final class GeminiLiveService: NSObject, VoiceMateService {
     // Server sends camelCase — match directly, no conversion needed
     private let decoder = JSONDecoder()
 
-    private static let modeSwitchTools: [LiveTool] = [
+    private static let mateTools: [LiveTool] = [
         LiveTool(
             functionDeclarations: [
                 LiveFunctionDeclaration(
-                    name: "switch_session_mode",
-                    description: "Switch between free and challenge mode during planning or live session.",
+                    name: "end_session",
+                    description: "End the bowling session when the player asks to stop or time is up.",
                     parameters: LiveFunctionParameters(
                         type: "OBJECT",
                         properties: [
-                            "mode": LiveFunctionProperty(
+                            "reason": LiveFunctionProperty(
                                 type: "STRING",
-                                description: "Target mode",
-                                enum: ["free", "challenge"]
+                                description: "Why the session is ending",
+                                enum: nil
                             )
                         ],
-                        required: ["mode"]
+                        required: ["reason"]
                     )
                 )
             ]
@@ -419,7 +419,7 @@ final class GeminiLiveService: NSObject, VoiceMateService {
                     triggerTokens: 25600,
                     slidingWindow: LiveSlidingWindow(targetTokens: 12800)
                 ),
-                tools: Self.modeSwitchTools,
+                tools: Self.mateTools,
                 sessionResumption: resumption
             )
         )
@@ -552,48 +552,27 @@ final class GeminiLiveService: NSObject, VoiceMateService {
 
     private func handleToolCall(_ toolCall: LiveToolCall) {
         for functionCall in toolCall.functionCalls {
-            guard functionCall.name == "switch_session_mode" else {
-                sendModeSwitchToolResponse(
+            switch functionCall.name {
+            case "end_session":
+                let reason = functionCall.args["reason"] ?? "Player requested"
+                Task { [weak self] in
+                    guard let self else { return }
+                    await self.delegate?.voiceMate(didRequestEndSession: reason)
+                    self.sendToolResponse(
+                        for: functionCall,
+                        message: "Session ending: \(reason)"
+                    )
+                }
+            default:
+                sendToolResponse(
                     for: functionCall,
-                    success: false,
-                    mode: nil,
                     message: "Unknown tool: \(functionCall.name)"
-                )
-                continue
-            }
-
-            guard let rawMode = functionCall.args["mode"],
-                  let mode = SessionMode.fromToolArgument(rawMode) else {
-                sendModeSwitchToolResponse(
-                    for: functionCall,
-                    success: false,
-                    mode: nil,
-                    message: "Invalid mode argument. Use free or challenge."
-                )
-                continue
-            }
-
-            Task { [weak self] in
-                guard let self else { return }
-                let switched = await self.delegate?.voiceMate(didRequestModeSwitch: mode) ?? false
-                self.sendModeSwitchToolResponse(
-                    for: functionCall,
-                    success: switched,
-                    mode: mode,
-                    message: switched
-                    ? "Session mode switched to \(mode.rawValue)."
-                    : "Session mode switch was ignored."
                 )
             }
         }
     }
 
-    private func sendModeSwitchToolResponse(
-        for functionCall: LiveFunctionCall,
-        success: Bool,
-        mode: SessionMode?,
-        message: String
-    ) {
+    private func sendToolResponse(for functionCall: LiveFunctionCall, message: String) {
         let response = LiveToolResponseMessage(
             toolResponse: LiveToolResponse(
                 functionResponses: [
@@ -601,8 +580,8 @@ final class GeminiLiveService: NSObject, VoiceMateService {
                         id: functionCall.id,
                         name: functionCall.name,
                         response: LiveFunctionResponsePayload(
-                            status: success ? "ok" : "error",
-                            mode: mode?.rawValue,
+                            status: "ok",
+                            mode: nil,
                             message: message
                         )
                     )
