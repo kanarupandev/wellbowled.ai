@@ -190,7 +190,9 @@ struct DNAComparisonPage: View {
     }
 
     private func comparisonRow(label: String, userValue: String?, proValue: String?, isEven: Bool) -> some View {
-        let isMatch = userValue != nil && proValue != nil && userValue == proValue
+        let bothPresent = userValue != nil && proValue != nil
+        let isMatch = bothPresent && userValue == proValue
+        let isMismatch = bothPresent && userValue != proValue
 
         return HStack {
             Text(label)
@@ -200,20 +202,20 @@ struct DNAComparisonPage: View {
 
             Text(displayValue(userValue))
                 .font(.system(size: 12, weight: .semibold, design: .rounded))
-                .foregroundColor(peacockBlue)
+                .foregroundColor(isMatch ? Color(hex: "34C759") : (isMismatch ? Color(hex: "FF6B6B") : peacockBlue))
                 .frame(width: 80, alignment: .center)
 
             Text(displayValue(proValue))
                 .font(.system(size: 12, weight: .semibold, design: .rounded))
-                .foregroundColor(ringColor)
+                .foregroundColor(isMatch ? Color(hex: "34C759") : (isMismatch ? Color(hex: "FF6B6B") : ringColor))
                 .frame(width: 80, alignment: .center)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
         .background(
             isMatch
-                ? Color(hex: "34C759").opacity(0.08)
-                : (isEven ? Color.clear : Color.white.opacity(0.02))
+                ? Color(hex: "34C759").opacity(0.10)
+                : (isMismatch ? Color(hex: "FF6B6B").opacity(0.06) : (isEven ? Color.clear : Color.white.opacity(0.02)))
         )
     }
 

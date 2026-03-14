@@ -38,15 +38,23 @@ struct BowlingDNAVectorEncoder {
         "Reserved", "Reserved"
     ]
 
-    /// Per-dimension weights. Release fields (indices 9-13) weighted 2x.
+    /// Per-dimension weights — tuned for "naked eye" similarity.
+    /// What makes two bowlers look alike to a cricket watcher?
+    ///
+    /// 3.0x  Action identity — arm path, body alignment
+    /// 2.5x  Strongly distinctive — release height, run-up speed, follow-through dir
+    /// 2.0x  Clearly visible — stride length, front arm, wrist pos, balance
+    /// 1.5x  Noticeable — run-up stride, head stability, trunk lean, revolutions
+    /// 1.0x  Subtle — back-foot, approach angle, seam, wrist omega
+    /// 0.75x Derived — release wrist Y (correlated with arm path)
     static let weights: [Double] = [
-        1.0, 1.0, 1.0,  // Run-Up
-        1.0, 1.0, 1.0,  // Gather
-        1.0, 1.0, 1.0,  // Delivery Stride
-        2.0, 2.0, 2.0, 2.0, 2.0,  // Release (2x)
-        1.0, 1.0,        // Seam/Spin
-        1.0, 1.0,        // Follow-Through
-        0.0, 0.0         // Reserved (ignored)
+        1.5, 2.5, 1.0,                    // Run-Up: stride, speed, approach angle
+        3.0, 1.0, 1.5,                    // Gather: alignment, back-foot, trunk lean
+        2.0, 2.0, 1.5,                    // Delivery Stride: length, front arm, head stability
+        3.0, 2.5, 2.0, 1.0, 0.75,         // Release: arm path, height, wrist pos, omega, wristY
+        1.0, 1.5,                          // Seam/Spin: orientation, revolutions
+        2.5, 2.0,                          // Follow-Through: direction, balance
+        0.0, 0.0                           // Reserved (ignored)
     ]
 
     private static let sentinel: Double = -1.0
