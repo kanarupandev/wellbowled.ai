@@ -59,8 +59,9 @@ final class WBConfigTests: XCTestCase {
             UserDefaults.standard.set(persona.rawValue, forKey: "mate_persona")
 
             let instruction = WBConfig.mateSystemInstruction
-            XCTAssertTrue(instruction.contains("expert cricket mate"), "\(persona.rawValue) instruction missing base content")
-            XCTAssertTrue(instruction.contains("STYLE"), "\(persona.rawValue) instruction missing style section")
+            XCTAssertTrue(instruction.contains("expert cricket bowling coach"), "\(persona.rawValue) instruction missing base content")
+            XCTAssertTrue(instruction.contains("HOW YOU SPEAK"), "\(persona.rawValue) instruction missing speaking section")
+            XCTAssertTrue(instruction.contains("ACTION-ONLY challenges"), "\(persona.rawValue) instruction missing challenge guidance")
 
             // Restore
             UserDefaults.standard.set(oldRaw, forKey: "mate_persona")
@@ -183,15 +184,15 @@ final class WBConfigTests: XCTestCase {
         defer { UserDefaults.standard.set(oldRaw, forKey: "mate_persona") }
 
         UserDefaults.standard.set(WBConfig.MatePersona.aussieMale.rawValue, forKey: "mate_persona")
-        XCTAssertTrue(WBConfig.mateSystemInstruction.contains("casual Australian English"))
+        XCTAssertTrue(WBConfig.mateSystemInstruction.contains("Casual Australian"))
 
         UserDefaults.standard.set(WBConfig.MatePersona.englishFemale.rawValue, forKey: "mate_persona")
-        XCTAssertTrue(WBConfig.mateSystemInstruction.contains("clear, standard English"))
+        XCTAssertTrue(WBConfig.mateSystemInstruction.contains("Clear, standard English"))
 
         UserDefaults.standard.set(WBConfig.MatePersona.tamilMale.rawValue, forKey: "mate_persona")
         XCTAssertTrue(WBConfig.mateSystemInstruction.contains("SPEAK ENTIRELY IN TAMIL"))
 
         UserDefaults.standard.set(WBConfig.MatePersona.tanglishFemale.rawValue, forKey: "mate_persona")
-        XCTAssertTrue(WBConfig.mateSystemInstruction.contains("Speak in Tanglish"))
+        XCTAssertTrue(WBConfig.mateSystemInstruction.contains("Tanglish"))
     }
 }

@@ -229,6 +229,21 @@ final class GeminiLiveService: NSObject, VoiceMateService {
         LiveTool(
             functionDeclarations: [
                 LiveFunctionDeclaration(
+                    name: "switch_session_mode",
+                    description: "Switch between free and challenge mode during a live session.",
+                    parameters: LiveFunctionParameters(
+                        type: "OBJECT",
+                        properties: [
+                            "mode": LiveFunctionProperty(
+                                type: "STRING",
+                                description: "Target mode",
+                                enum: ["free", "challenge"]
+                            )
+                        ],
+                        required: ["mode"]
+                    )
+                ),
+                LiveFunctionDeclaration(
                     name: "end_session",
                     description: "End the bowling session when the player asks to stop or time is up.",
                     parameters: LiveFunctionParameters(
@@ -553,6 +568,29 @@ final class GeminiLiveService: NSObject, VoiceMateService {
     private func handleToolCall(_ toolCall: LiveToolCall) {
         for functionCall in toolCall.functionCalls {
             switch functionCall.name {
+            case "switch_session_mode":
+                guard let rawMode = functionCall.args["mode"],
+                      let mode = SessionMode.fromToolArgument(rawMode) else {
+                    sendToolResponse(
+                        for: functionCall,
+                        status: "error",
+                        mode: nil,
+                        message: "Invalid mode argument. Use free or challenge."
+                    )
+                    continue
+                }
+                Task { [weak self] in
+                    guard let self else { return }
+                    let switched = await self.delegate?.voiceMate(didRequestModeSwitch: mode) ?? false
+                    self.sendToolResponse(
+                        for: functionCall,
+                        status: switched ? "ok" : "error",
+                        mode: mode.rawValue,
+                        message: switched
+                            ? "Session mode switched to \(mode.rawValue)."
+                            : "Session mode switch was ignored."
+                    )
+                }
             case "end_session":
                 let reason = functionCall.args["reason"] ?? "Player requested"
                 Task { [weak self] in
@@ -560,19 +598,28 @@ final class GeminiLiveService: NSObject, VoiceMateService {
                     await self.delegate?.voiceMate(didRequestEndSession: reason)
                     self.sendToolResponse(
                         for: functionCall,
+                        status: "ok",
+                        mode: nil,
                         message: "Session ending: \(reason)"
                     )
                 }
             default:
                 sendToolResponse(
                     for: functionCall,
+                    status: "error",
+                    mode: nil,
                     message: "Unknown tool: \(functionCall.name)"
                 )
             }
         }
     }
 
-    private func sendToolResponse(for functionCall: LiveFunctionCall, message: String) {
+    private func sendToolResponse(
+        for functionCall: LiveFunctionCall,
+        status: String,
+        mode: String?,
+        message: String
+    ) {
         let response = LiveToolResponseMessage(
             toolResponse: LiveToolResponse(
                 functionResponses: [
@@ -580,8 +627,8 @@ final class GeminiLiveService: NSObject, VoiceMateService {
                         id: functionCall.id,
                         name: functionCall.name,
                         response: LiveFunctionResponsePayload(
-                            status: "ok",
-                            mode: nil,
+                            status: status,
+                            mode: mode,
                             message: message
                         )
                     )
