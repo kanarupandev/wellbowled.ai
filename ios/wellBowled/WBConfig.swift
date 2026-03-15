@@ -264,10 +264,16 @@ enum WBConfig {
     static let enablePostSessionAnalysis = true
     static let enableLiveAutoAnalysis = true
 
-    // MARK: - Live Auto-Analysis
+    // MARK: - Live Segment Detection Queues
 
-    /// Delay after delivery detection before extracting clip (allows postRoll to complete).
-    static let liveAutoAnalysisDelaySeconds: Double = 2.5
+    /// Duration (seconds) of each segment sent to Gemini Flash for live delivery detection.
+    static let liveSegmentDurationSeconds: Double = 30.0
+
+    /// Minimum confidence from Gemini Flash detection to trigger deep analysis.
+    static let liveSegmentConfidenceThreshold: Double = 0.9
+
+    /// Timestamp proximity (seconds) for deduplicating detections across segments and MediaPipe.
+    static let liveDedupeWindowSeconds: Double = 3.0
 
     // MARK: - Challenge Mode
 

@@ -78,6 +78,15 @@ final class SessionViewModel: ObservableObject {
     private var liveMicChunkCounter = 0
     private var useCameraAudioFallback = false
 
+    // Live segment detection queues
+    private var liveSegmentTimerTask: Task<Void, Never>?
+    private var liveDetectionQueue: [(url: URL, startTime: Double)] = []
+    private var liveDeepAnalysisQueue: [UUID] = []
+    private var liveDetectionTask: Task<Void, Never>?
+    private var liveDeepAnalysisTask: Task<Void, Never>?
+    private var liveScannedUpTo: Double = 0
+    private var liveDetectedTimestamps: [Double] = []
+
     // MARK: - Init
 
     init() {
@@ -184,6 +193,11 @@ final class SessionViewModel: ObservableObject {
             log.debug("Recording start failed (session continues without clip extraction): \(error.localizedDescription, privacy: .public)")
         }
 
+        // 3b. Start live segment detection queues
+        if WBConfig.enableLiveAutoAnalysis {
+            startLiveSegmentDetection()
+        }
+
         // 4. Start delivery detection
         detector.start()
         log.debug("Delivery detection started")
@@ -227,6 +241,7 @@ final class SessionViewModel: ObservableObject {
         // Stop detection
         detector.stop()
         tts.stop()
+        stopLiveSegmentDetection()
 
         // Disconnect Live API
         await liveService.disconnect()
@@ -277,6 +292,7 @@ final class SessionViewModel: ObservableObject {
         clipPreparationTask?.cancel()
         clipPreparationTask = nil
         cancelAllDeepAnalysisTasks(resetState: true)
+        stopLiveSegmentDetection()
 
         cameraService.onVideoFrame = nil
         cameraService.onAudioSample = nil
@@ -457,6 +473,7 @@ final class SessionViewModel: ObservableObject {
         clipPreparationTask?.cancel()
         clipPreparationTask = nil
         cancelAllDeepAnalysisTasks(resetState: true)
+        stopLiveSegmentDetection()
 
         cameraService.onVideoFrame = nil
         cameraService.onAudioSample = nil
@@ -695,24 +712,31 @@ final class SessionViewModel: ObservableObject {
         let recordingDurationTime = (try? await recordingAsset.load(.duration)) ?? .zero
         let recordingDuration = max(CMTimeGetSeconds(recordingDurationTime), 0)
 
-        let batchCandidates = await detectDeliveryCandidatesWithGemini(
-            recordingURL: recordingURL,
-            recordingDuration: recordingDuration,
-            sourceSessionStart: sourceSessionStart
-        )
-        if Task.isCancelled || session.startedAt != sourceSessionStart {
-            log.debug("Clip preparation stopped after segment scan: task cancelled or session changed")
-            isPreparingClips = false
-            return
-        }
+        // Skip post-session Gemini segment scan if live scanning already found deliveries
+        let liveFoundDeliveries = session.deliveries.contains { $0.videoURL != nil }
+        if liveFoundDeliveries {
+            log.info("Post-session scan skipped: live segment detection already found \(self.session.deliveryCount) deliveries with clips")
+            clipPreparationProgress = 0.5
+        } else {
+            let batchCandidates = await detectDeliveryCandidatesWithGemini(
+                recordingURL: recordingURL,
+                recordingDuration: recordingDuration,
+                sourceSessionStart: sourceSessionStart
+            )
+            if Task.isCancelled || session.startedAt != sourceSessionStart {
+                log.debug("Clip preparation stopped after segment scan: task cancelled or session changed")
+                isPreparingClips = false
+                return
+            }
 
-        clipPreparationStatusMessage = "Merging live and batch detections..."
-        clipPreparationProgress = 0.5
-        rebuildDeliveriesFromDetectionCandidates(
-            batchCandidates: batchCandidates,
-            recordingOffset: recordingOffset,
-            recordingDuration: recordingDuration
-        )
+            clipPreparationStatusMessage = "Merging live and batch detections..."
+            clipPreparationProgress = 0.5
+            rebuildDeliveriesFromDetectionCandidates(
+                batchCandidates: batchCandidates,
+                recordingOffset: recordingOffset,
+                recordingDuration: recordingDuration
+            )
+        }
 
         guard !session.deliveries.isEmpty else {
             clipPreparationProgress = 1
@@ -1652,6 +1676,20 @@ extension SessionViewModel: DeliveryDetectionDelegate {
         releaseWristY: Double?
     ) {
         Task { @MainActor in
+            // When live segment detection is active, MediaPipe is cosmetic only —
+            // the Gemini Flash segment scanner is the source of truth for deliveries.
+            if WBConfig.enableLiveAutoAnalysis {
+                log.debug("MediaPipe spike at \(timestamp)s (\(bowlingArm.rawValue, privacy: .public) arm, \(paceBand.label, privacy: .public)) — cosmetic only")
+                flowPhase = .active
+
+                if liveService.isConnected {
+                    let elapsed = Int(Date().timeIntervalSince(sessionStartTime ?? Date()))
+                    await liveService.sendContext("[MEDIAPIPE SPIKE at \(String(format: "%.1f", timestamp))s] Bowling arm: \(bowlingArm.rawValue). Pace band: \(paceBand.label). Elapsed: \(elapsed)s. Gemini Flash will confirm this detection shortly.")
+                }
+                return
+            }
+
+            // Fallback: when live segment detection is disabled, MediaPipe creates deliveries
             let count = session.deliveryCount + 1
             var challengeTarget: String?
             if session.mode == .challenge {
@@ -1661,7 +1699,6 @@ extension SessionViewModel: DeliveryDetectionDelegate {
                 }
             }
 
-            // Create delivery with MediaPipe-derived fields
             let delivery = Delivery(
                 timestamp: timestamp,
                 status: .clipping,
@@ -1678,13 +1715,9 @@ extension SessionViewModel: DeliveryDetectionDelegate {
             )
 
             log.debug("Delivery #\(count) detected at \(timestamp)s (\(bowlingArm.rawValue, privacy: .public) arm, \(paceBand.label, privacy: .public))")
-
-            // TTS: announce count only
             tts.speak("\(count).")
-
             flowPhase = .active
 
-            // Inform the mate about the delivery
             if liveService.isConnected {
                 let elapsed = Int(Date().timeIntervalSince(sessionStartTime ?? Date()))
                 let remaining = max(0, Int(WBConfig.liveSessionMaxDurationSeconds) - elapsed)
@@ -1699,78 +1732,205 @@ extension SessionViewModel: DeliveryDetectionDelegate {
             if session.mode == .challenge {
                 await issueNextChallengeTarget()
             }
-
-            // Live auto-analysis: extract clip and run deep analysis in background
-            if WBConfig.enableLiveAutoAnalysis {
-                scheduleLiveClipAndAnalysis(for: delivery.id, deliveryTimestamp: timestamp, sequence: count)
-            }
         }
     }
 }
 
-// MARK: - Live Background Analysis
+// MARK: - Live Segment Detection Queues
 
 extension SessionViewModel {
 
-    /// Extract clip from the live recording and auto-run deep analysis in background.
-    private func scheduleLiveClipAndAnalysis(for deliveryID: UUID, deliveryTimestamp: Double, sequence: Int) {
-        let task: Task<Void, Never> = Task { [weak self] in
-            guard let self else { return }
+    /// Start the two-queue live detection system.
+    /// Queue A: 30s segments → Gemini Flash detection (serial)
+    /// Queue B: 5s clips → deep analysis (serial)
+    /// Both run concurrently.
+    func startLiveSegmentDetection() {
+        liveScannedUpTo = 0
+        liveDetectedTimestamps = []
+        liveDetectionQueue = []
+        liveDeepAnalysisQueue = []
 
-            // Wait for postRoll to complete so clip has full content
-            let delayNanos = UInt64(WBConfig.liveAutoAnalysisDelaySeconds * 1_000_000_000)
-            try? await Task.sleep(nanoseconds: delayNanos)
+        // Start Queue A processor
+        liveDetectionTask = Task { [weak self] in
+            await self?.processDetectionQueue()
+        }
 
-            guard !Task.isCancelled, self.session.isActive else { return }
+        // Start Queue B processor
+        liveDeepAnalysisTask = Task { [weak self] in
+            await self?.processDeepAnalysisQueue()
+        }
 
-            // Get recording URL from the live camera
-            guard let recordingURL = self.cameraService.currentRecordingURL else {
-                log.debug("Live auto-analysis skipped D\(sequence): no recording URL")
-                return
-            }
+        // Start segment production timer
+        let segmentDuration = WBConfig.liveSegmentDurationSeconds
+        liveSegmentTimerTask = Task { [weak self] in
+            // Wait for first full segment to accumulate
+            try? await Task.sleep(nanoseconds: UInt64(segmentDuration * 1_000_000_000))
 
-            // Compute recording-relative timestamp
-            let recordingOffset = self.recordingOffsetStore.startSeconds()
-            let clipTimestamp = max(deliveryTimestamp - recordingOffset, 0)
-
-            // Extract clip from the live recording
-            do {
-                let clipURL = try await self.clipExtractor.extractClip(
-                    from: recordingURL,
-                    at: clipTimestamp,
-                    preRoll: WBConfig.clipPreRoll,
-                    postRoll: WBConfig.clipPostRoll
-                )
-
-                guard !Task.isCancelled, self.session.isActive else { return }
-
-                // Store clip on the delivery
-                guard let index = self.session.deliveries.firstIndex(where: { $0.id == deliveryID }) else { return }
-                self.session.deliveries[index].videoURL = clipURL
-                self.session.deliveries[index].thumbnail = ClipThumbnailGenerator.releaseThumbnail(
-                    from: clipURL,
-                    releaseOffset: WBConfig.clipPreRoll
-                )
-                self.session.deliveries[index].status = .queued
-                self.deepAnalysisStatusByDelivery[deliveryID] = DeliveryDeepAnalysisStatus(
-                    stage: .idle,
-                    elapsedSeconds: 0,
-                    statusMessage: "",
-                    failureMessage: nil
-                )
-                log.debug("Live clip extracted for D\(sequence): \(clipURL.lastPathComponent, privacy: .public)")
-
-                if self.liveService.isConnected {
-                    await self.liveService.sendContext("[CLIP READY for delivery \(sequence)] Video clip extracted — starting analysis.")
+            while !Task.isCancelled {
+                guard let self, self.session.isActive else { break }
+                guard let recordingURL = self.cameraService.currentRecordingURL else {
+                    try? await Task.sleep(nanoseconds: 5_000_000_000)
+                    continue
                 }
 
-                // Auto-trigger deep analysis
-                await self.runDeepAnalysis(for: deliveryID)
+                let recordingOffset = self.recordingOffsetStore.startSeconds()
+                let currentRecordingTime = Date().timeIntervalSince(self.sessionStartTime ?? Date())
+                let segmentEnd = max(currentRecordingTime - recordingOffset, 0)
+                let segmentStart = max(segmentEnd - segmentDuration, self.liveScannedUpTo)
+                let duration = segmentEnd - segmentStart
 
-            } catch {
-                log.error("Live auto-analysis clip extraction failed for D\(sequence): \(error.localizedDescription, privacy: .public)")
+                guard duration >= 5.0 else {
+                    try? await Task.sleep(nanoseconds: 5_000_000_000)
+                    continue
+                }
+
+                do {
+                    let segmentURL = try await self.exportDetectionSegment(
+                        from: recordingURL,
+                        startTime: segmentStart,
+                        duration: duration
+                    )
+                    self.liveScannedUpTo = segmentEnd
+                    self.liveDetectionQueue.append((url: segmentURL, startTime: segmentStart))
+                    log.debug("Live segment queued: [\(String(format: "%.1f", segmentStart))s-\(String(format: "%.1f", segmentEnd))s] (\(String(format: "%.1f", duration))s)")
+                } catch {
+                    log.error("Live segment export failed: \(error.localizedDescription, privacy: .public)")
+                }
+
+                // Wait for next segment interval
+                try? await Task.sleep(nanoseconds: UInt64(segmentDuration * 1_000_000_000))
             }
         }
-        deepAnalysisTasksByDelivery[deliveryID] = task
+
+        log.debug("Live segment detection started: \(segmentDuration)s segments, confidence threshold \(WBConfig.liveSegmentConfidenceThreshold)")
+    }
+
+    /// Stop all live detection queues and clean up.
+    func stopLiveSegmentDetection() {
+        liveSegmentTimerTask?.cancel()
+        liveSegmentTimerTask = nil
+        liveDetectionTask?.cancel()
+        liveDetectionTask = nil
+        liveDeepAnalysisTask?.cancel()
+        liveDeepAnalysisTask = nil
+
+        // Clean up queued segment files
+        for entry in liveDetectionQueue {
+            try? FileManager.default.removeItem(at: entry.url)
+        }
+        liveDetectionQueue = []
+        liveDeepAnalysisQueue = []
+        liveDetectedTimestamps = []
+
+        log.debug("Live segment detection stopped")
+    }
+
+    /// Queue A processor: detect deliveries in segments serially.
+    private func processDetectionQueue() async {
+        while !Task.isCancelled {
+            guard !liveDetectionQueue.isEmpty else {
+                // Poll for new segments
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                continue
+            }
+
+            let entry = liveDetectionQueue.removeFirst()
+            let segmentURL = entry.url
+            let segmentStartTime = entry.startTime
+            defer { try? FileManager.default.removeItem(at: segmentURL) }
+
+            guard session.isActive else { break }
+
+            do {
+                let asset = AVURLAsset(url: segmentURL)
+                let segmentDuration = try await asset.load(.duration).seconds
+
+                let detections = try await analysisService.detectDeliveryTimestampsInSegment(
+                    segmentURL: segmentURL,
+                    segmentDuration: segmentDuration
+                )
+
+                for detection in detections {
+                    guard detection.confidence >= WBConfig.liveSegmentConfidenceThreshold else {
+                        log.debug("Live detection skipped: confidence \(String(format: "%.2f", detection.confidence)) < \(WBConfig.liveSegmentConfidenceThreshold)")
+                        continue
+                    }
+
+                    // Global timestamp = segment start in recording + local detection offset
+                    let globalTimestamp = segmentStartTime + detection.localTimestamp
+                    let isDuplicate = liveDetectedTimestamps.contains { abs($0 - globalTimestamp) < WBConfig.liveDedupeWindowSeconds }
+                    if isDuplicate {
+                        log.debug("Live detection deduplicated at \(String(format: "%.1f", globalTimestamp))s")
+                        continue
+                    }
+
+                    liveDetectedTimestamps.append(globalTimestamp)
+
+                    // Extract 5s clip (extractClip handles preRoll/postRoll internally)
+                    guard let recordingURL = cameraService.currentRecordingURL else { continue }
+
+                    do {
+                        let clipURL = try await clipExtractor.extractClip(
+                            from: recordingURL,
+                            at: globalTimestamp,
+                            preRoll: WBConfig.clipPreRoll,
+                            postRoll: WBConfig.clipPostRoll
+                        )
+
+                        // Create delivery
+                        let count = session.deliveryCount + 1
+                        let delivery = Delivery(
+                            timestamp: globalTimestamp,
+                            status: .queued,
+                            sequence: count,
+                            wristOmega: nil,
+                            releaseWristY: nil
+                        )
+                        session.addDelivery(delivery)
+                        session.deliveries[count - 1].videoURL = clipURL
+                        session.deliveries[count - 1].thumbnail = ClipThumbnailGenerator.releaseThumbnail(
+                            from: clipURL,
+                            releaseOffset: WBConfig.clipPreRoll
+                        )
+                        deepAnalysisStatusByDelivery[delivery.id] = DeliveryDeepAnalysisStatus(
+                            stage: .idle, elapsedSeconds: 0, statusMessage: "", failureMessage: nil
+                        )
+
+                        log.debug("Live delivery detected: D\(count) at \(String(format: "%.1f", globalTimestamp))s, confidence \(String(format: "%.2f", detection.confidence))")
+
+                        // TTS announce
+                        tts.speak("\(count).")
+
+                        // Notify buddy
+                        if liveService.isConnected {
+                            await liveService.sendContext("[DELIVERY \(count) detected at \(String(format: "%.1f", globalTimestamp))s] Confidence: \(String(format: "%.0f", detection.confidence * 100))%. Clip ready — queued for deep analysis.")
+                        }
+
+                        // Enqueue for deep analysis
+                        liveDeepAnalysisQueue.append(delivery.id)
+
+                    } catch {
+                        log.error("Live clip extraction failed at \(String(format: "%.1f", globalTimestamp))s: \(error.localizedDescription, privacy: .public)")
+                    }
+                }
+            } catch {
+                log.error("Live segment detection failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
+    /// Queue B processor: deep analysis serially.
+    private func processDeepAnalysisQueue() async {
+        while !Task.isCancelled {
+            guard !liveDeepAnalysisQueue.isEmpty else {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                continue
+            }
+
+            let deliveryID = liveDeepAnalysisQueue.removeFirst()
+            guard session.isActive else { break }
+
+            await runDeepAnalysis(for: deliveryID)
+        }
     }
 }
