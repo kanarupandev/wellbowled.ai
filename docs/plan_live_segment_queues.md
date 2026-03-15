@@ -1,6 +1,8 @@
 # Plan: Live Segment Detection Queues
 
-**Goal:** Replace MediaPipe-only live detection with concurrent Gemini Flash segment scanning during the session. Two serial queues process segments and deep analysis independently, giving reliable delivery detection with automatic deep analysis — all while the session is live.
+**Goal:** Replace MediaPipe with Gemini Flash as the **sole** delivery detector. MediaPipe is fully silenced (too many false positives). Two serial queues process 30s segments with 5s overlap and deep analysis independently — all while the session is live. By session end, deliveries are already detected and analyzed.
+
+**Status: COMPLETE** — MediaPipe silenced, overlapping segments, deduplication, buddy feedback all wired.
 
 ## Architecture
 

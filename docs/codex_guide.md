@@ -163,7 +163,7 @@ git branch: codex/dev
 |------|---------|
 | `BowlingDNA.swift` | DNA struct (20 fields) + all enums (18 categorical types) + `BowlingDNAMatch` |
 | `BowlingDNAMatcher.swift` | `BowlingDNAVectorEncoder` (ordinal encoding) + `BowlingDNAMatcher` (weighted Euclidean) |
-| `FamousBowlerDatabase.swift` | 10 bowler profiles: McGrath, Akram, Warne, Akhtar, Murali, Anderson, Starc, Ashwin, Marshall, Bumrah |
+| `FamousBowlerDatabase.swift` | 103 bowler profiles across countries, eras, and styles |
 | `BowlingDNAView.swift` | UI: similarity ring, closest phase, biggest difference, signature traits |
 
 **Models & Config**
@@ -409,7 +409,7 @@ wellbowled.ai/ios/wellBowled/
 ├── BowlingDNA.swift              # DNA struct + 18 enum types + BowlingDNAMatch
 ├── BowlingDNAMatcher.swift       # Vector encoder + weighted Euclidean matcher
 ├── BowlingDNAView.swift          # DNA UI cards (similarity ring, traits)
-├── FamousBowlerDatabase.swift    # 10 famous bowler profiles
+├── FamousBowlerDatabase.swift    # 103 famous bowler profiles
 ├── DeliveryDetector.swift        # MediaPipe pose → wrist spike detection
 ├── WristVelocityTracker.swift    # Angular velocity algorithm
 ├── GeminiLiveService.swift       # WebSocket Live API

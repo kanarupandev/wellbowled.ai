@@ -113,7 +113,7 @@ No radar-equivalent claim is made.
 - `[DONE R21]` **BowlingDNA Action Signature feature** — 20-dimension bowling action fingerprint
 - `[DONE R21]` **BowlingDNA model** — 18 categorical + 2 continuous dimensions across 6 bowling phases
 - `[DONE R21]` **Vector encoder + weighted matcher** — ordinal encoding, weighted Euclidean distance (release 2x)
-- `[DONE R21]` **Famous bowler database** — 10 international bowlers spanning all styles (McGrath, Akram, Warne, Akhtar, Murali, Anderson, Starc, Ashwin, Marshall, Bumrah)
+- `[DONE R21]` **Famous bowler database** — 103 international bowler profiles spanning eras, countries, and styles
 - `[DONE R21]` **Gemini DNA extraction** — vision prompt extracts 16 categorical fields from clip, merged with MediaPipe wristOmega + releaseWristY
 - `[DONE R21]` **DNA results UI** — similarity ring, closest phase, biggest difference, signature traits in SessionResultsView
 - `[DONE R21]` **wristOmega + releaseWristY** captured from MediaPipe at delivery detection, stored on Delivery
@@ -142,7 +142,7 @@ No radar-equivalent claim is made.
 ### Tier 3: BowlingDNA Action Signature — DONE
 9. `[DONE]` BowlingDNA 20-dimension model (6 phases, 18 categorical + 2 continuous)
 10. `[DONE]` Vector encoder + weighted Euclidean matcher (release fields 2x weight)
-11. `[DONE]` Famous bowler database (10 international bowlers)
+11. `[DONE]` Famous bowler database (103 international bowler profiles)
 12. `[DONE]` Gemini DNA extraction prompt + MediaPipe wrist field merge
 13. `[DONE]` DNA results UI in SessionResultsView (similarity ring, traits, closest phase)
 14. `[DONE]` Unit tests for encoding, matching, normalization

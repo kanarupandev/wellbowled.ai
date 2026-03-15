@@ -27,7 +27,7 @@ This section records the exact required behavior for implementation.
 - DNA matching vector profile
 - MediaPipe pose extraction/annotation pipeline.
 9. DNA output:
-- top 1-3 international bowler matches (current DB of 10 bowlers)
+- top 1-3 international bowler matches (current DB of 103 bowlers)
 - compelling presentation of action signature / mixture.
 10. Next downward section: MediaPipe pose annotated, color-coded overlay video.
 11. Below overlay section: chat entry area with suggestion chips.

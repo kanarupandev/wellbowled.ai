@@ -264,7 +264,10 @@ enum WBConfig {
     /// Minimum confidence from Gemini Flash detection to trigger deep analysis.
     static let liveSegmentConfidenceThreshold: Double = 0.9
 
-    /// Timestamp proximity (seconds) for deduplicating detections across segments and MediaPipe.
+    /// Overlap (seconds) between consecutive live segments to catch deliveries at boundaries.
+    static let liveSegmentOverlapSeconds: Double = 5.0
+
+    /// Timestamp proximity (seconds) for deduplicating detections across overlapping segments.
     static let liveDedupeWindowSeconds: Double = 3.0
 
     // MARK: - Challenge Mode

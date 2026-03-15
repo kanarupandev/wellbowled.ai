@@ -1676,16 +1676,11 @@ extension SessionViewModel: DeliveryDetectionDelegate {
         releaseWristY: Double?
     ) {
         Task { @MainActor in
-            // When live segment detection is active, MediaPipe is cosmetic only —
-            // the Gemini Flash segment scanner is the source of truth for deliveries.
+            // When live segment detection is active, MediaPipe is fully silent —
+            // Gemini Flash segment scanner is the sole source of truth for deliveries.
+            // MediaPipe has too many false positives to notify the buddy.
             if WBConfig.enableLiveAutoAnalysis {
-                log.debug("MediaPipe spike at \(timestamp)s (\(bowlingArm.rawValue, privacy: .public) arm, \(paceBand.label, privacy: .public)) — cosmetic only")
-                flowPhase = .active
-
-                if liveService.isConnected {
-                    let elapsed = Int(Date().timeIntervalSince(sessionStartTime ?? Date()))
-                    await liveService.sendContext("[MEDIAPIPE SPIKE at \(String(format: "%.1f", timestamp))s] Bowling arm: \(bowlingArm.rawValue). Pace band: \(paceBand.label). Elapsed: \(elapsed)s. Gemini Flash will confirm this detection shortly.")
-                }
+                log.debug("MediaPipe spike at \(timestamp)s — ignored (Gemini Flash is sole detector)")
                 return
             }
 
@@ -1762,6 +1757,8 @@ extension SessionViewModel {
 
         // Start segment production timer
         let segmentDuration = WBConfig.liveSegmentDurationSeconds
+        let segmentOverlap = WBConfig.liveSegmentOverlapSeconds
+        let segmentStride = max(segmentDuration - segmentOverlap, 10.0)
         liveSegmentTimerTask = Task { [weak self] in
             // Wait for first full segment to accumulate
             try? await Task.sleep(nanoseconds: UInt64(segmentDuration * 1_000_000_000))
@@ -1776,7 +1773,8 @@ extension SessionViewModel {
                 let recordingOffset = self.recordingOffsetStore.startSeconds()
                 let currentRecordingTime = Date().timeIntervalSince(self.sessionStartTime ?? Date())
                 let segmentEnd = max(currentRecordingTime - recordingOffset, 0)
-                let segmentStart = max(segmentEnd - segmentDuration, self.liveScannedUpTo)
+                // Step back by overlap to catch deliveries at segment boundaries
+                let segmentStart = max(segmentEnd - segmentDuration, 0)
                 let duration = segmentEnd - segmentStart
 
                 guard duration >= 5.0 else {
@@ -1790,19 +1788,18 @@ extension SessionViewModel {
                         startTime: segmentStart,
                         duration: duration
                     )
-                    self.liveScannedUpTo = segmentEnd
                     self.liveDetectionQueue.append((url: segmentURL, startTime: segmentStart))
                     log.debug("Live segment queued: [\(String(format: "%.1f", segmentStart))s-\(String(format: "%.1f", segmentEnd))s] (\(String(format: "%.1f", duration))s)")
                 } catch {
                     log.error("Live segment export failed: \(error.localizedDescription, privacy: .public)")
                 }
 
-                // Wait for next segment interval
-                try? await Task.sleep(nanoseconds: UInt64(segmentDuration * 1_000_000_000))
+                // Wait for next stride (segment minus overlap)
+                try? await Task.sleep(nanoseconds: UInt64(segmentStride * 1_000_000_000))
             }
         }
 
-        log.debug("Live segment detection started: \(segmentDuration)s segments, confidence threshold \(WBConfig.liveSegmentConfidenceThreshold)")
+        log.debug("Live segment detection started: \(segmentDuration)s segments, \(segmentOverlap)s overlap, stride \(segmentStride)s, confidence threshold \(WBConfig.liveSegmentConfidenceThreshold)")
     }
 
     /// Stop all live detection queues and clean up.
