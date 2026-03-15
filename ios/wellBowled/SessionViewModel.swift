@@ -1501,7 +1501,10 @@ final class SessionViewModel: ObservableObject {
             ["finish", "this", "session"],
             ["wrap", "up", "session"],
             ["wrap", "up", "the", "session"],
-            ["session", "over"]
+            ["session", "over"],
+            ["that", "ll", "do"],
+            ["let", "s", "call", "it"],
+            ["i", "m", "done"]
         ]
 
         return phrases.contains { phrase in
