@@ -96,3 +96,10 @@ struct ChallengeResult: Codable {
     let detectedLength: DeliveryLength?
     let detectedLine: DeliveryLine?
 }
+
+// MARK: - Speed Estimation Method
+
+enum SpeedEstimationMethod: String, Codable {
+    case frameDifferencing = "frame_differencing"
+    case geminiEstimate = "gemini_estimate"
+}

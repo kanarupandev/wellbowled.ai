@@ -107,6 +107,23 @@ final class EnumsTests: XCTestCase {
         XCTAssertEqual(decoded.isFavorite, delivery.isFavorite)
     }
 
+    // MARK: - Speed Estimation Method
+
+    func testSpeedEstimationMethodCodable() throws {
+        let method = SpeedEstimationMethod.frameDifferencing
+        let data = try JSONEncoder().encode(method)
+        let decoded = try JSONDecoder().decode(SpeedEstimationMethod.self, from: data)
+        XCTAssertEqual(decoded, .frameDifferencing)
+        XCTAssertEqual(decoded.rawValue, "frame_differencing")
+    }
+
+    func testSpeedEstimationMethodGeminiEstimate() throws {
+        let method = SpeedEstimationMethod.geminiEstimate
+        let data = try JSONEncoder().encode(method)
+        let decoded = try JSONDecoder().decode(SpeedEstimationMethod.self, from: data)
+        XCTAssertEqual(decoded, .geminiEstimate)
+    }
+
     // MARK: - DeliveryAnalysis
 
     func testDeliveryAnalysisCodable() throws {

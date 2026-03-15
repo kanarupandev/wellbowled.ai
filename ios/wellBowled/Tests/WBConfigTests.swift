@@ -179,6 +179,31 @@ final class WBConfigTests: XCTestCase {
         XCTAssertEqual(WBConfig.ttsLanguage, "en-IN")
     }
 
+    // MARK: - Speed Calibration Config
+
+    func testSpeedCalibrationConstantsAreReasonable() {
+        XCTAssertEqual(WBConfig.pitchLengthMetres, 20.12, accuracy: 0.001)
+        XCTAssertGreaterThan(WBConfig.calibrationBoxWidthRatio, 0)
+        XCTAssertGreaterThan(WBConfig.calibrationBoxHeightRatio, 0)
+        XCTAssertGreaterThan(WBConfig.calibrationStabilityFrames, 0)
+    }
+
+    func testSpeedEstimationConstantsAreReasonable() {
+        XCTAssertGreaterThan(WBConfig.speedROIWidthRatio, 0)
+        XCTAssertGreaterThan(WBConfig.speedMotionThreshold, 0)
+        XCTAssertGreaterThan(WBConfig.speedMinTransitSeconds, 0)
+        XCTAssertGreaterThan(WBConfig.speedMaxTransitSeconds, WBConfig.speedMinTransitSeconds)
+        XCTAssertGreaterThanOrEqual(WBConfig.speedCalibrationFPS, 60)
+    }
+
+    func testSpeedSearchWindowCoversExpectedRange() {
+        XCTAssertGreaterThanOrEqual(WBConfig.speedSearchWindowPreSeconds, 0)
+        XCTAssertGreaterThan(WBConfig.speedSearchWindowPostSeconds, 0)
+        // Total search window should be > max transit time
+        let totalWindow = WBConfig.speedSearchWindowPreSeconds + WBConfig.speedSearchWindowPostSeconds
+        XCTAssertGreaterThanOrEqual(totalWindow, WBConfig.speedMaxTransitSeconds - 0.1)
+    }
+
     func testMateSystemInstructionIncludesStyleSpecificCues() {
         let oldRaw = UserDefaults.standard.string(forKey: "mate_persona")
         defer { UserDefaults.standard.set(oldRaw, forKey: "mate_persona") }

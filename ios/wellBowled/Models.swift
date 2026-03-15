@@ -74,6 +74,11 @@ struct Delivery: Identifiable, Equatable, Codable {
     var localThumbnailPath: String? // Filename in Documents/thumbnails/
     var localVideoPath: String?     // Filename in Documents/
 
+    // Speed — populated by StumpCalibration frame-differencing (post-session)
+    var speedKph: Double?           // Measured ball speed in km/h
+    var speedConfidence: Double?    // 0.0-1.0 confidence in speed measurement
+    var speedMethod: SpeedEstimationMethod?  // How speed was estimated
+
     // BowlingDNA — populated by MediaPipe + Gemini post-session
     var wristOmega: Double?         // Angular velocity at release (rad/s)
     var releaseWristY: Double?      // Normalized wrist Y at spike frame (0=top, 1=bottom)
@@ -82,6 +87,7 @@ struct Delivery: Identifiable, Equatable, Codable {
 
     enum CodingKeys: String, CodingKey {
         case id, timestamp, report, speed, tips, phases, releaseTimestamp, status, videoURL, sequence, videoID, cloudVideoURL, cloudThumbnailURL, overlayVideoURL, localOverlayPath, landmarksURL, isFavorite, localThumbnailPath, localVideoPath
+        case speedKph, speedConfidence, speedMethod
         case wristOmega, releaseWristY, dna, dnaMatches
     }
     
@@ -105,6 +111,9 @@ struct Delivery: Identifiable, Equatable, Codable {
          isFavorite: Bool = false,
          localThumbnailPath: String? = nil,
          localVideoPath: String? = nil,
+         speedKph: Double? = nil,
+         speedConfidence: Double? = nil,
+         speedMethod: SpeedEstimationMethod? = nil,
          wristOmega: Double? = nil,
          releaseWristY: Double? = nil,
          dna: BowlingDNA? = nil,
@@ -129,6 +138,9 @@ struct Delivery: Identifiable, Equatable, Codable {
         self.isFavorite = isFavorite
         self.localThumbnailPath = localThumbnailPath
         self.localVideoPath = localVideoPath
+        self.speedKph = speedKph
+        self.speedConfidence = speedConfidence
+        self.speedMethod = speedMethod
         self.wristOmega = wristOmega
         self.releaseWristY = releaseWristY
         self.dna = dna
@@ -156,6 +168,9 @@ struct Delivery: Identifiable, Equatable, Codable {
         isFavorite = try container.decode(Bool.self, forKey: .isFavorite)
         localThumbnailPath = try container.decodeIfPresent(String.self, forKey: .localThumbnailPath)
         localVideoPath = try container.decodeIfPresent(String.self, forKey: .localVideoPath)
+        speedKph = try container.decodeIfPresent(Double.self, forKey: .speedKph)
+        speedConfidence = try container.decodeIfPresent(Double.self, forKey: .speedConfidence)
+        speedMethod = try container.decodeIfPresent(SpeedEstimationMethod.self, forKey: .speedMethod)
         wristOmega = try container.decodeIfPresent(Double.self, forKey: .wristOmega)
         releaseWristY = try container.decodeIfPresent(Double.self, forKey: .releaseWristY)
         dna = try container.decodeIfPresent(BowlingDNA.self, forKey: .dna)
@@ -184,6 +199,9 @@ struct Delivery: Identifiable, Equatable, Codable {
         try container.encode(isFavorite, forKey: .isFavorite)
         try container.encode(localThumbnailPath, forKey: .localThumbnailPath)
         try container.encode(localVideoPath, forKey: .localVideoPath)
+        try container.encodeIfPresent(speedKph, forKey: .speedKph)
+        try container.encodeIfPresent(speedConfidence, forKey: .speedConfidence)
+        try container.encodeIfPresent(speedMethod, forKey: .speedMethod)
         try container.encodeIfPresent(wristOmega, forKey: .wristOmega)
         try container.encodeIfPresent(releaseWristY, forKey: .releaseWristY)
         try container.encodeIfPresent(dna, forKey: .dna)
@@ -203,6 +221,9 @@ struct Delivery: Identifiable, Equatable, Codable {
                lhs.isFavorite == rhs.isFavorite &&
                lhs.sequence == rhs.sequence &&
                lhs.localOverlayPath == rhs.localOverlayPath &&
+               lhs.speedKph == rhs.speedKph &&
+               lhs.speedConfidence == rhs.speedConfidence &&
+               lhs.speedMethod == rhs.speedMethod &&
                lhs.wristOmega == rhs.wristOmega &&
                lhs.releaseWristY == rhs.releaseWristY &&
                lhs.dna == rhs.dna

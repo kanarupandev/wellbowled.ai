@@ -270,6 +270,46 @@ enum WBConfig {
     /// Timestamp proximity (seconds) for deduplicating detections across overlapping segments.
     static let liveDedupeWindowSeconds: Double = 3.0
 
+    // MARK: - Stump Calibration
+
+    /// Cricket pitch length (metres) — stumps-to-stumps.
+    static let pitchLengthMetres: Double = 20.12
+
+    /// Width ratio of each calibration guide box (fraction of frame width).
+    static let calibrationBoxWidthRatio: CGFloat = 0.20
+
+    /// Height ratio of each calibration guide box (fraction of frame height).
+    static let calibrationBoxHeightRatio: CGFloat = 0.25
+
+    /// Consecutive stable detections needed to lock stump position.
+    static let calibrationStabilityFrames: Int = 15
+
+    /// Master toggle for stump-calibration speed estimation.
+    static let enableSpeedCalibration: Bool = true
+
+    // MARK: - Speed Estimation
+
+    /// Width of each stump ROI for frame differencing (fraction of frame width).
+    static let speedROIWidthRatio: CGFloat = 0.10
+
+    /// Pixel-difference threshold for motion energy detection.
+    static let speedMotionThreshold: Double = 30.0
+
+    /// Seconds before delivery timestamp to start searching for bowler-gate spike.
+    static let speedSearchWindowPreSeconds: Double = 0.2
+
+    /// Seconds after delivery timestamp to stop searching for striker-gate spike.
+    static let speedSearchWindowPostSeconds: Double = 1.2
+
+    /// Minimum plausible transit time (seconds) — caps speed at ~362 kph.
+    static let speedMinTransitSeconds: Double = 0.2
+
+    /// Maximum plausible transit time (seconds) — floors speed at ~48 kph.
+    static let speedMaxTransitSeconds: Double = 1.5
+
+    /// Target camera FPS when speed calibration is active.
+    static let speedCalibrationFPS: Int = 120
+
     // MARK: - Challenge Mode
 
     /// Rotating target pool for challenge mode.

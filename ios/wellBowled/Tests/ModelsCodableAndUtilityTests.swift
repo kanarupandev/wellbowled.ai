@@ -41,6 +41,9 @@ final class ModelsCodableAndUtilityTests: XCTestCase {
             isFavorite: true,
             localThumbnailPath: "thumbs/t7.jpg",
             localVideoPath: "videos/v7.mov",
+            speedKph: 127.3,
+            speedConfidence: 0.85,
+            speedMethod: .frameDifferencing,
             wristOmega: 1420.5,
             releaseWristY: 0.42,
             dna: FamousBowlerDatabase.anderson.dna,
@@ -67,6 +70,9 @@ final class ModelsCodableAndUtilityTests: XCTestCase {
         XCTAssertEqual(decoded.isFavorite, original.isFavorite)
         XCTAssertEqual(decoded.localThumbnailPath, original.localThumbnailPath)
         XCTAssertEqual(decoded.localVideoPath, original.localVideoPath)
+        XCTAssertEqual(decoded.speedKph ?? -1, original.speedKph ?? -1, accuracy: 0.01)
+        XCTAssertEqual(decoded.speedConfidence ?? -1, original.speedConfidence ?? -1, accuracy: 0.01)
+        XCTAssertEqual(decoded.speedMethod, original.speedMethod)
         XCTAssertEqual(decoded.wristOmega ?? -1, original.wristOmega ?? -1, accuracy: 0.0001)
         XCTAssertEqual(decoded.releaseWristY ?? -1, original.releaseWristY ?? -1, accuracy: 0.0001)
         XCTAssertEqual(decoded.dna, original.dna)
@@ -76,14 +82,22 @@ final class ModelsCodableAndUtilityTests: XCTestCase {
 
     func testDeliveryEquatableConsidersOverlayAndDNAFields() {
         let id = UUID()
-        var lhs = Delivery(id: id, timestamp: 1.0, sequence: 1, localOverlayPath: "a.mp4", wristOmega: 1200, releaseWristY: 0.3, dna: FamousBowlerDatabase.bumrah.dna)
-        var rhs = Delivery(id: id, timestamp: 1.0, sequence: 1, localOverlayPath: "a.mp4", wristOmega: 1200, releaseWristY: 0.3, dna: FamousBowlerDatabase.bumrah.dna)
+        var lhs = Delivery(id: id, timestamp: 1.0, sequence: 1, localOverlayPath: "a.mp4", speedKph: 125.0, speedConfidence: 0.8, speedMethod: .frameDifferencing, wristOmega: 1200, releaseWristY: 0.3, dna: FamousBowlerDatabase.bumrah.dna)
+        var rhs = Delivery(id: id, timestamp: 1.0, sequence: 1, localOverlayPath: "a.mp4", speedKph: 125.0, speedConfidence: 0.8, speedMethod: .frameDifferencing, wristOmega: 1200, releaseWristY: 0.3, dna: FamousBowlerDatabase.bumrah.dna)
         XCTAssertEqual(lhs, rhs)
 
         rhs.localOverlayPath = "b.mp4"
         XCTAssertNotEqual(lhs, rhs)
 
         rhs.localOverlayPath = "a.mp4"
+        rhs.speedKph = 130.0
+        XCTAssertNotEqual(lhs, rhs)
+
+        rhs.speedKph = 125.0
+        rhs.speedMethod = .geminiEstimate
+        XCTAssertNotEqual(lhs, rhs)
+
+        rhs.speedMethod = .frameDifferencing
         rhs.wristOmega = 1100
         XCTAssertNotEqual(lhs, rhs)
 
@@ -97,6 +111,12 @@ final class ModelsCodableAndUtilityTests: XCTestCase {
 
         lhs.dna = nil
         rhs.dna = nil
+        lhs.speedKph = nil
+        rhs.speedKph = nil
+        lhs.speedConfidence = nil
+        rhs.speedConfidence = nil
+        lhs.speedMethod = nil
+        rhs.speedMethod = nil
         XCTAssertEqual(lhs, rhs)
     }
 

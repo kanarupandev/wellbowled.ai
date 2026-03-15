@@ -136,3 +136,14 @@ protocol CameraProviding: AnyObject {
     func startRecording() throws
     func stopRecording()
 }
+
+// MARK: - Speed Estimation
+
+/// Estimates ball speed from a delivery clip using calibrated stump positions.
+protocol SpeedEstimating {
+    func estimateSpeed(
+        clipURL: URL,
+        calibration: StumpCalibration,
+        deliveryTimestamp: Double
+    ) async throws -> SpeedEstimate
+}

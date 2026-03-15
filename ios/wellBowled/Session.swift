@@ -17,6 +17,9 @@ struct Session {
     var challengeHits: Int = 0
     var challengeTotal: Int = 0
 
+    // Stump calibration for speed estimation (set during calibration flow)
+    var calibration: StumpCalibration?
+
     // Summary (populated post-session)
     var summary: SessionSummary?
 
@@ -43,6 +46,7 @@ struct Session {
         self.currentChallenge = nil
         self.challengeHits = 0
         self.challengeTotal = 0
+        self.calibration = nil
         self.summary = nil
     }
 

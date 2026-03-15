@@ -1,3 +1,4 @@
+import CoreGraphics
 import XCTest
 @testable import wellBowled
 
@@ -40,6 +41,13 @@ final class SessionTests: XCTestCase {
         session.addDelivery(Delivery(timestamp: 1.0, sequence: 1))
         session.recordChallengeResult(hit: true)
         session.currentChallenge = "Yorker"
+        session.calibration = StumpCalibration(
+            bowlerStumpCenter: CGPoint(x: 0.5, y: 0.15),
+            strikerStumpCenter: CGPoint(x: 0.5, y: 0.85),
+            frameWidth: 1920, frameHeight: 1080,
+            recordingFPS: 120, calibratedAt: Date(),
+            isManualPlacement: false
+        )
 
         // Start again — everything resets
         session.start()
@@ -47,6 +55,7 @@ final class SessionTests: XCTestCase {
         XCTAssertEqual(session.challengeHits, 0)
         XCTAssertEqual(session.challengeTotal, 0)
         XCTAssertNil(session.currentChallenge)
+        XCTAssertNil(session.calibration)
         XCTAssertNil(session.summary)
     }
 
