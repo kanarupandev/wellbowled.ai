@@ -42,7 +42,7 @@ struct LiveSessionView: View {
                 // Top bar: connection status + delivery count + timer
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(viewModel.session.mode.finePrintLabel)
+                        Text("Live Session")
                             .font(.caption2.weight(.semibold))
                             .foregroundColor(peacockBlue)
 
