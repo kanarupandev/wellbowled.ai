@@ -25,7 +25,7 @@ struct AppConfig {
     
     // Security - Bearer Token Authentication
     // In production, this would come from secure storage (Keychain) after login
-    static let apiSecret = "wellbowled-hackathon-secret"
+    static let apiSecret = ""  // Set via environment or secure storage
     static var authToken: String { apiSecret }  // Alias for clarity
     static var bearerHeader: String { "Bearer \(authToken)" }
     

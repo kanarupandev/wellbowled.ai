@@ -6,18 +6,10 @@ enum WBConfig {
 
     // MARK: - Gemini API
 
-    /// Hardcoded default from .env (hackathon only — not for production)
-    private static let defaultAPIKey = "AIzaSyCpkcQhnB9BuBMljG7beN_fBk4kg2lLahM"
-
-    /// API key: UserDefaults override (persists across updates) → hardcoded default
+    /// API key: set via in-app Settings prompt, stored in UserDefaults
     static var geminiAPIKey: String {
         get {
-            // 1. UserDefaults (user changed via in-app Settings — persists until app deleted)
-            if let key = UserDefaults.standard.string(forKey: "gemini_api_key"), !key.isEmpty {
-                return key
-            }
-            // 2. Hardcoded default from .env
-            return defaultAPIKey
+            return UserDefaults.standard.string(forKey: "gemini_api_key") ?? ""
         }
         set {
             UserDefaults.standard.set(newValue, forKey: "gemini_api_key")
