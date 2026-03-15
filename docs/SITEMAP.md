@@ -65,7 +65,7 @@ Primary documents:
 - `architecture_decision.md` — architecture decisions and status
 - `session_onboarding.md` — product framing
 - `live_results_flow_tdd_plan.md` — live results carousel + deep-analysis UX spec and TDD plan
-- `live_delivery_deep_analysis_requirements.md` — dedicated source-of-truth for on-demand deep analysis, async parallelism, latency targets, race-risk checks, and UI flow
+- `live_delivery_deep_analysis_requirements.md` — dedicated source-of-truth for per-delivery deep analysis flow, async parallelism, latency targets, race-risk checks, and UI behavior
 - `live_session_and_deep_analysis_diagrams.md` — Mermaid diagrams for live demo flow, async deep-analysis pipeline, state machine, and navigation model
 - `delivery_detection_feedback_log.md` — iteration log with change/check/result evidence for delivery detector reliability updates
 - `delivery_detection_hybrid_strategy.md` — canonical hybrid detection policy (MediaPipe live + Gemini Flash batch + timestamp merge rules)

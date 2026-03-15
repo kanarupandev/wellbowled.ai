@@ -30,7 +30,7 @@ You pick up next ball, keep bowling
 
 No screen. No buttons. No stopping. Detection + count is instant and local. Conversation is natural — ask when you want.
 
-### Flow 2: CHALLENGE MODE (the engagement loop)
+### Flow 2: CHALLENGE LOOP (implemented in code path)
 
 ```
 Mate speaks: "Try a yorker on off stump."
@@ -43,7 +43,7 @@ Mate evaluates: "That was full, but drifting leg side.
 Mate speaks: "Now try a good length, 4th stump."
 ```
 
-Simulates match pressure. Adaptive targets based on what you've been bowling. Tracks success rate per delivery type. The mate you wish was always at nets.
+Simulates match pressure with target evaluation and score tracking implemented in the analysis pipeline. Home currently starts sessions in Free mode; direct challenge-mode entry wiring is tracked in roadmap docs.
 
 ### Flow 3: POST-SESSION — Delivery Cards (after session)
 

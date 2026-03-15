@@ -58,7 +58,7 @@ Config E: temp=0.1, default thinking, simple prompt, File API >5MB, no downscali
 - `[VALIDATED]` **Count announcement**: iOS TTS (AVSpeechSynthesizer) — count only, zero latency, local. Pace metrics are post-clip/analysis-stage outputs.
 - `[VALIDATED R18]` **Conversation**: Live API — bowler asks "How was that?", mate answers with audio based on video context. Working on device with auto-reconnect.
 - `[DONE R24]` **Waterfall startup flow**: proactive greet → plan prompt → 5s natural reprompt if no answer → setup verification → pilot run → explicit "Session started".
-- `[DONE R24]` **Mode switch tool call path**: Live API can request `switch_session_mode` and app switches free/challenge dynamically with UI mode badge.
+- `[DONE R24]` **Single-agentic tool path**: Live API tool interface is `end_session` only; no runtime `switch_session_mode` tool call path in current code.
 - `[DONE R24]` **Session duration config**: live timeout increased to 3 minutes via `WBConfig.liveSessionMaxDurationSeconds = 180`.
 - `[DONE R25]` **Native camera tuning**: capture now prefers native formats at target 60fps with 720p+ minimum and safe fallback.
 - `[HYPOTHESIS]` **Post-session analysis**: generateContent (Gemini Pro) on auto-clipped deliveries — code written, untested end-to-end on device

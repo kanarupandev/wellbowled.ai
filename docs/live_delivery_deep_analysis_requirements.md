@@ -83,41 +83,41 @@ This is the right bar to target for hackathon-grade reliability.
 
 ---
 
-## 3. Current Code Static Analysis (Gaps vs Requirements)
+## 3. Current Code Status (Implementation Sync)
 
 ## 3.1 Flow + Navigation
 
 1. Live view auto-start already exists.
-2. Results navigation is currently coupled to `isAnalyzing == false`, which delays entering results when post-session analysis is long.
-3. Current post-session path performs broad analysis eagerly rather than delivery-on-demand deep analysis.
+2. Results sheet auto-opens on session end and is not gated by global `isAnalyzing` state.
+3. Post-session path prepares clips/thumbnails first; deep analysis is per-delivery on demand in results, with optional live auto-analysis queue when enabled.
 
 Impact:
-1. higher perceived latency
-2. violates requested `end -> deliveries page` immediacy.
+1. lower perceived latency from immediate results navigation and clip-first preparation
+2. aligns with requested `end -> deliveries page` immediacy.
 
 ## 3.2 Deep Analysis Trigger Model
 
 1. Current UI shows pending deep-analysis text when phases are absent.
-2. There is no explicit per-delivery "Run Deep Analysis" trigger in this live results path.
+2. An explicit per-delivery "Run Deep Analysis" trigger (and retry path) exists in the live results flow.
 
 Impact:
-1. user has unclear control
-2. on-demand contract not met.
+1. user has explicit on-demand control
+2. on-demand contract is implemented.
 
 ## 3.3 DNA Presentation
 
 1. DNA extraction/matching already implemented.
-2. Current results page shows only a lightweight session-level summary card.
-3. No dedicated per-delivery compelling DNA section in downward flow.
+2. Current results page includes per-delivery DNA presentation (match card + comparison sheet path).
+3. Dedicated per-delivery DNA section is present in downward flow with graceful fallback copy.
 
 ## 3.4 Pose Overlay Availability
 
 1. Overlay renderer exists.
-2. Current live results path depends on `landmarksURL`; this is often absent.
-3. No guaranteed local per-delivery pose extraction fallback in this flow.
+2. Current live results path consumes deep-analysis pose artifacts generated from local clip extraction.
+3. Per-delivery local pose extraction runs during deep analysis; UI includes explicit fallback when frames are unavailable.
 
 Impact:
-1. overlay section can remain unavailable.
+1. overlay section availability now depends on per-delivery extraction success and surfaces failure reasons.
 
 ## 3.5 Async/Race Risk Points
 

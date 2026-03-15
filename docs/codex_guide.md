@@ -62,8 +62,8 @@ git branch: codex/dev
 | Auto-reconnect (1.5s backoff on TCP abort) | On device | `GeminiLiveService.swift` |
 | Session resumption handle sent on reconnect | On device | `GeminiLiveService.swift` |
 | Proactive waterfall onboarding (greet → plan → 5s reprompt → setup check → pilot run → "Session started") | Code wired, unit tested | `SessionViewModel.swift`, `WBConfig.swift`, `Tests/SessionViewModelPromptTests.swift` |
-| Live mode switch tool call (`switch_session_mode`) | Code wired, unit tested | `GeminiLiveService.swift`, `Protocols.swift`, `SessionViewModel.swift`, `Enums.swift` |
-| Live mode fine-print label at top-left (`Mode: Free/Challenge`) | Code wired | `LiveSessionView.swift`, `Enums.swift` |
+| Live tool interface (`end_session` only) | Code wired | `GeminiLiveService.swift`, `SessionViewModel.swift`, `WBConfig.swift` |
+| Live mode fine-print label at top-left (`Mode: Free`) | Code wired (challenge entry from Home not yet wired) | `LiveSessionView.swift`, `SessionViewModel.swift`, `HomeView.swift` |
 | Live session timeout set to 3 minutes (config one-liner) | Code wired, unit tested | `WBConfig.swift`, `Tests/WBConfigTests.swift` |
 | Native iPhone camera tuning (target 60fps + preferred 720p+, per-camera format selection + fallback) | Code wired, unit tested, device build validated | `CameraService.swift`, `WBConfig.swift`, `Tests/WBConfigTests.swift` |
 | 8 mate personas (4 lang × 2 gender) | On device | `WBConfig.swift`, `HomeView.swift` |
@@ -88,7 +88,7 @@ git branch: codex/dev
 - Post-session clip extraction + Gemini analysis end-to-end
 - BowlingDNA extraction from real clips (Gemini vision prompt)
 - Challenge mode evaluation accuracy (hit/miss correctness not benchmarked on real sessions)
-- Model-driven mode switching via live tool call on physical device (free ↔ challenge during planning/live)
+- Challenge-mode entry flow from Home (start in `.challenge`) on physical device
 - Launch-from-terminal reliability when device lock state changes (install succeeded; `devicectl launch` denied when lock state reports locked)
 
 ---
@@ -199,7 +199,7 @@ Tests go to `wellBowledTests/` target in Xcode — NOT in `Tests/` subfolder of 
 4. **sendJSON must go through sendQueue.async** — thread safety for WebSocket sends.
 5. **openContinuation needs NSLock** — URLSession delegates fire on arbitrary threads.
 6. **No video/audio frames before setupComplete** — server aborts pre-handshake data.
-7. **Gemini 3 models only** — Scout: `gemini-3-flash-preview`, Coach: `gemini-3-pro-preview`.
+7. **Gemini model split (current code)** — Live voice: `models/gemini-2.5-flash-native-audio-preview-12-2025`; deep/chip: `gemini-2.5-flash`; post-session: `gemini-3-pro-preview`.
 8. **Detection + count is on-device** — zero API dependency for core loop.
 9. **Live API is conversational, not monitoring** — responds to user speech, does NOT proactively detect.
 10. **BowlingDNA fields are all optional** — partial DNA is valid (graceful degradation).

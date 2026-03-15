@@ -2,21 +2,20 @@
 
 **Date**: 2026-03-03  
 **Repo**: `/Users/kanarupan/workspace/wellbowled.ai`  
-**Scope**: Free mode + Challenge mode live flow, end-session results, on-demand deep analysis, async execution.
+**Scope**: Current app flow (Home -> Live session), end-session results, per-delivery deep analysis, async execution.
 
 ## 1) End-to-End Demo Flow (4 minutes)
 
 ```mermaid
 flowchart TD
-    A["Home"] --> B["Select Mode (Free or Challenge)"]
-    B --> C["Open Live Session"]
-    C --> D["Mate Greets Briefly"]
-    D --> E["Ask Plan for Today"]
-    E --> F["Setup Verification + Pilot Run"]
-    F --> G["Session Started (3-minute timer)"]
-    G --> H["Delivery Detection (on-device)"]
-    H --> I["Live Feedback (brief, mode-aware)"]
-    I --> J{"Session End Trigger"}
+    A["Home"] --> B["Open Live Session"]
+    B --> C["Mate Greets Briefly"]
+    C --> D["Ask Plan for Today"]
+    D --> E["Setup Verification + Pilot Run"]
+    E --> F["Session Started (3-minute timer)"]
+    F --> G["Delivery Detection (on-device)"]
+    G --> H["Live Feedback (brief)"]
+    H --> J{"Session End Trigger"}
     J -->|"Timeout"| K["Auto-Navigate to Deliveries"]
     J -->|"End Button"| K
     J -->|"Voice: end session"| K
