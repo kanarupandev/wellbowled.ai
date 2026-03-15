@@ -157,7 +157,7 @@ struct HomeView: View {
                 .font(.system(size: 42, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
 
-            Text("Live bowling coaching with Gemini voice feedback, smart delivery capture, and deep phase analysis.")
+            Text("Your AI bowling mate with Gemini voice feedback, smart delivery capture, and deep phase analysis.")
                 .font(.subheadline)
                 .foregroundColor(.white.opacity(0.78))
                 .lineSpacing(3)
@@ -176,11 +176,11 @@ struct HomeView: View {
 
     private var modeSelectionCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Live Coaching")
+            Text("Live Expert Mate")
                 .font(.headline)
                 .foregroundColor(.white)
 
-            Text("Your AI bowling mate coaches, challenges, and debriefs — all through voice.")
+            Text("Your AI bowling buddy observes, challenges, and debriefs — all through voice.")
                 .font(.subheadline)
                 .foregroundColor(.white.opacity(0.6))
         }
@@ -256,7 +256,7 @@ struct HomeView: View {
             Text("Connect Gemini API")
                 .font(.headline)
                 .foregroundColor(.white)
-            Text("Add your API key once. It stays on this device and unlocks live voice + video coaching.")
+            Text("Add your API key once. It stays on this device and unlocks your live voice + video buddy.")
                 .font(.caption)
                 .foregroundColor(.white.opacity(0.75))
                 .lineSpacing(2)
@@ -288,7 +288,7 @@ struct HomeView: View {
 
     private var valueProps: some View {
         VStack(alignment: .leading, spacing: 8) {
-            valueRow(icon: "bolt.fill", text: "Low-latency live coaching in under 1 second feedback loops.")
+            valueRow(icon: "bolt.fill", text: "Low-latency live feedback in under 1 second response loops.")
             valueRow(icon: "film.stack.fill", text: "Auto-captured delivery clips with deep on-demand analysis.")
             valueRow(icon: "figure.cricket", text: "Action-signature DNA matching against iconic bowlers.")
         }
