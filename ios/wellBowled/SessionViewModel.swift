@@ -1699,6 +1699,78 @@ extension SessionViewModel: DeliveryDetectionDelegate {
             if session.mode == .challenge {
                 await issueNextChallengeTarget()
             }
+
+            // Live auto-analysis: extract clip and run deep analysis in background
+            if WBConfig.enableLiveAutoAnalysis {
+                scheduleLiveClipAndAnalysis(for: delivery.id, deliveryTimestamp: timestamp, sequence: count)
+            }
         }
+    }
+}
+
+// MARK: - Live Background Analysis
+
+extension SessionViewModel {
+
+    /// Extract clip from the live recording and auto-run deep analysis in background.
+    private func scheduleLiveClipAndAnalysis(for deliveryID: UUID, deliveryTimestamp: Double, sequence: Int) {
+        let task: Task<Void, Never> = Task { [weak self] in
+            guard let self else { return }
+
+            // Wait for postRoll to complete so clip has full content
+            let delayNanos = UInt64(WBConfig.liveAutoAnalysisDelaySeconds * 1_000_000_000)
+            try? await Task.sleep(nanoseconds: delayNanos)
+
+            guard !Task.isCancelled, self.session.isActive else { return }
+
+            // Get recording URL from the live camera
+            guard let recordingURL = self.cameraService.currentRecordingURL else {
+                log.debug("Live auto-analysis skipped D\(sequence): no recording URL")
+                return
+            }
+
+            // Compute recording-relative timestamp
+            let recordingOffset = self.recordingOffsetStore.startSeconds()
+            let clipTimestamp = max(deliveryTimestamp - recordingOffset, 0)
+
+            // Extract clip from the live recording
+            do {
+                let clipURL = try await self.clipExtractor.extractClip(
+                    from: recordingURL,
+                    at: clipTimestamp,
+                    preRoll: WBConfig.clipPreRoll,
+                    postRoll: WBConfig.clipPostRoll
+                )
+
+                guard !Task.isCancelled, self.session.isActive else { return }
+
+                // Store clip on the delivery
+                guard let index = self.session.deliveries.firstIndex(where: { $0.id == deliveryID }) else { return }
+                self.session.deliveries[index].videoURL = clipURL
+                self.session.deliveries[index].thumbnail = ClipThumbnailGenerator.releaseThumbnail(
+                    from: clipURL,
+                    releaseOffset: WBConfig.clipPreRoll
+                )
+                self.session.deliveries[index].status = .queued
+                self.deepAnalysisStatusByDelivery[deliveryID] = DeliveryDeepAnalysisStatus(
+                    stage: .idle,
+                    elapsedSeconds: 0,
+                    statusMessage: "",
+                    failureMessage: nil
+                )
+                log.debug("Live clip extracted for D\(sequence): \(clipURL.lastPathComponent, privacy: .public)")
+
+                if self.liveService.isConnected {
+                    await self.liveService.sendContext("[CLIP READY for delivery \(sequence)] Video clip extracted — starting analysis.")
+                }
+
+                // Auto-trigger deep analysis
+                await self.runDeepAnalysis(for: deliveryID)
+
+            } catch {
+                log.error("Live auto-analysis clip extraction failed for D\(sequence): \(error.localizedDescription, privacy: .public)")
+            }
+        }
+        deepAnalysisTasksByDelivery[deliveryID] = task
     }
 }

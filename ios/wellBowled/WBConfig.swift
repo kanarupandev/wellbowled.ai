@@ -262,6 +262,12 @@ enum WBConfig {
     static let enableLiveAPI = true
     static let enableChallengeMode = true
     static let enablePostSessionAnalysis = true
+    static let enableLiveAutoAnalysis = true
+
+    // MARK: - Live Auto-Analysis
+
+    /// Delay after delivery detection before extracting clip (allows postRoll to complete).
+    static let liveAutoAnalysisDelaySeconds: Double = 2.5
 
     // MARK: - Challenge Mode
 
