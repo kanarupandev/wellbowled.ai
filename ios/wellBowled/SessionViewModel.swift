@@ -1327,7 +1327,7 @@ final class SessionViewModel: ObservableObject {
             if !needsWorkPhases.isEmpty {
                 feedbackParts.append("Needs work: \(needsWorkPhases.joined(separator: ", "))")
             }
-            if let dna = dnaResult, let match = BowlingDNAMatcher.match(userDNA: dna).first {
+            if let match = session.deliveries[index].dnaMatches?.first {
                 feedbackParts.append("DNA match: \(match.bowlerName) (\(match.country)) at \(match.similarityPercent)%. Closest phase: \(match.closestPhase). Biggest difference: \(match.biggestDifference).")
             }
             if let challengeText {

@@ -130,17 +130,20 @@ struct BowlingDNAVectorEncoder {
 
 struct BowlingDNAMatcher {
 
+    /// Pre-encoded vectors for all famous bowlers (computed once, reused for every match).
+    private static let cachedBowlerVectors: [(bowler: FamousBowlerProfile, vector: [Double])] = {
+        FamousBowlerDatabase.allBowlers.map { ($0, BowlingDNAVectorEncoder.encode($0.dna)) }
+    }()
+
     /// Match user DNA against the famous bowler database.
     /// Returns top-N matches sorted by similarity (highest first).
     /// Similarity is honest — best match may be 40-60% for a casual bowler.
     static func match(userDNA: BowlingDNA, topN: Int = 1) -> [BowlingDNAMatch] {
         let userVec = BowlingDNAVectorEncoder.encode(userDNA)
-        let database = FamousBowlerDatabase.allBowlers
 
         var results: [(bowler: FamousBowlerProfile, similarity: Double, closestPhaseIdx: Int, biggestDiffIdx: Int)] = []
 
-        for bowler in database {
-            let bowlerVec = BowlingDNAVectorEncoder.encode(bowler.dna)
+        for (bowler, bowlerVec) in cachedBowlerVectors {
             let (normalisedDistance, closestIdx, biggestIdx) = weightedEuclidean(userVec, bowlerVec)
 
             // normalisedDistance is 0…1 (0 = identical, 1 = maximally different)
