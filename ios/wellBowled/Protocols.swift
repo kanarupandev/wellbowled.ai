@@ -87,18 +87,12 @@ protocol VoiceMateDelegate: AnyObject {
     /// Model requested session end via tool call.
     @MainActor
     func voiceMate(didRequestEndSession reason: String) async
-
-    /// Model requested app-level mode switch via tool call.
-    @MainActor
-    func voiceMate(didRequestModeSwitch mode: SessionMode) async -> Bool
 }
 
 extension VoiceMateDelegate {
     func voiceMate(didTranscribeUser text: String) {}
     @MainActor
     func voiceMate(didRequestEndSession reason: String) async {}
-    @MainActor
-    func voiceMate(didRequestModeSwitch mode: SessionMode) async -> Bool { false }
 }
 
 // MARK: - Clip Extraction

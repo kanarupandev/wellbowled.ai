@@ -12,7 +12,6 @@ struct HomeView: View {
     @State private var showSettings = false
     @State private var showSession = false
     @State private var selectedPersona = WBConfig.matePersona
-    @State private var selectedMode: SessionMode = .freePlay
     @State private var selectedRecordingItem: PhotosPickerItem?
     @State private var isImportingRecording = false
     @State private var recordingImportError: String?
@@ -69,7 +68,7 @@ struct HomeView: View {
             Text("Paste your Google AI Studio Gemini key to enable live session audio + video feedback.")
         }
         .fullScreenCover(isPresented: $showSession) {
-            LiveSessionView(initialMode: selectedMode)
+            LiveSessionView()
         }
         .fullScreenCover(isPresented: $showImportedReplay, onDismiss: {
             importedRecordingURL = nil
@@ -77,7 +76,7 @@ struct HomeView: View {
             if let importedRecordingURL {
                 ImportedSessionReplayContainer(
                     recordingURL: importedRecordingURL,
-                    mode: selectedMode
+                    mode: .freePlay
                 )
             } else {
                 Color.black.ignoresSafeArea()
@@ -96,7 +95,7 @@ struct HomeView: View {
     }
 
     private var startButtonTitle: String {
-        selectedMode == .challenge ? "Start Live Challenge" : "Start Live Coaching"
+        "Start Live Session"
     }
 
     private var homeBackground: some View {
@@ -177,30 +176,13 @@ struct HomeView: View {
 
     private var modeSelectionCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Session Mode")
+            Text("Live Coaching")
                 .font(.headline)
                 .foregroundColor(.white)
 
-            HStack(spacing: 12) {
-                ModeOptionCard(
-                    title: "Free Play",
-                    subtitle: "Open coaching session",
-                    icon: "figure.cricket",
-                    isSelected: selectedMode == .freePlay
-                ) {
-                    selectedMode = .freePlay
-                }
-
-                ModeOptionCard(
-                    title: "Challenge",
-                    subtitle: "Target-driven session",
-                    icon: "scope",
-                    isSelected: selectedMode == .challenge
-                ) {
-                    selectedMode = .challenge
-                }
-            }
-            .animation(.easeInOut(duration: 0.2), value: selectedMode)
+            Text("Your AI bowling mate coaches, challenges, and debriefs — all through voice.")
+                .font(.subheadline)
+                .foregroundColor(.white.opacity(0.6))
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -219,7 +201,7 @@ struct HomeView: View {
             showSession = true
         } label: {
             HStack(spacing: 10) {
-                Image(systemName: selectedMode == .challenge ? "scope" : "mic.fill")
+                Image(systemName: "mic.fill")
                     .font(.headline)
                 Text(startButtonTitle)
                     .font(.headline.weight(.semibold))
@@ -386,44 +368,6 @@ private struct ImportedSessionReplayContainer: View {
         .onDisappear {
             viewModel.cancelReplayPreparation()
         }
-    }
-}
-
-private struct ModeOptionCard: View {
-    let title: String
-    let subtitle: String
-    let icon: String
-    let isSelected: Bool
-    let onTap: () -> Void
-
-    var body: some View {
-        Button(action: onTap) {
-            VStack(alignment: .leading, spacing: 6) {
-                Image(systemName: icon)
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(isSelected ? .black : .white.opacity(0.9))
-
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(isSelected ? .black : .white)
-
-                Text(subtitle)
-                    .font(.caption2)
-                    .foregroundColor(isSelected ? .black.opacity(0.72) : .white.opacity(0.72))
-                    .lineLimit(2)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(isSelected ? Color(hex: "20C997") : Color.white.opacity(0.08))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(isSelected ? Color.clear : Color.white.opacity(0.16), lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
     }
 }
 

@@ -100,7 +100,7 @@ final class SessionViewModel: ObservableObject {
 
     // MARK: - Session Lifecycle
 
-    func startSession(mode: SessionMode = .freePlay) async {
+    func startSession() async {
         guard !session.isActive else {
             log.debug("startSession ignored: session already active")
             return
@@ -120,18 +120,12 @@ final class SessionViewModel: ObservableObject {
 
         log.debug("Starting session...")
         errorMessage = nil
-        session.start(mode: mode)
+        session.start(mode: .freePlay)
         cameraFlipDisabled = false
         challengeTargetBySequence = [:]
         challengeEngine.reset(shuffle: true)
-        if mode == .challenge {
-            let target = challengeEngine.nextTarget()
-            session.currentChallenge = target
-            currentChallengeTarget = target
-        } else {
-            session.currentChallenge = nil
-            currentChallengeTarget = nil
-        }
+        session.currentChallenge = nil
+        currentChallengeTarget = nil
         shouldSendProactiveGreeting = true
         didSendProactiveGreeting = false
         flowPhase = .starting
@@ -1449,28 +1443,6 @@ final class SessionViewModel: ObservableObject {
         await maybeSendProactiveGreetingIfNeeded()
     }
 
-    private func switchSessionMode(to mode: SessionMode) async -> Bool {
-        guard session.isActive else { return false }
-        guard session.mode != mode else { return true }
-
-        session.mode = mode
-
-        if mode == .freePlay {
-            session.currentChallenge = nil
-            currentChallengeTarget = nil
-            challengeTargetBySequence = [:]
-            await liveService.sendContext("[MODE SWITCHED] Free mode active. Continue concise action-focused feedback.")
-            return true
-        }
-
-        challengeEngine.reset(shuffle: true)
-        challengeTargetBySequence = [:]
-        challengeEvaluatedDeliveries = []
-        await issueNextChallengeTarget(isInitial: true)
-        await liveService.sendContext("[MODE SWITCHED] Challenge mode active.")
-        return true
-    }
-
     private func maybeSendProactiveGreetingIfNeeded() async {
         guard session.isActive else { return }
         guard shouldSendProactiveGreeting, !didSendProactiveGreeting else { return }
@@ -1479,20 +1451,9 @@ final class SessionViewModel: ObservableObject {
         didSendProactiveGreeting = true
         flowPhase = .starting
 
-        // Single natural greeting — no waterfall, no scripted sequence.
-        // The system prompt handles all conversational flow autonomously.
-        let modeContext = session.mode == .challenge
-            ? "Current mode is challenge."
-            : "Current mode is free play."
-        let challengeContext: String
-        if session.mode == .challenge, let target = currentChallengeTarget, !target.isEmpty {
-            challengeContext = "Active challenge target: \(target)."
-        } else {
-            challengeContext = "No active challenge target."
-        }
+        // Single natural greeting — the system prompt handles all conversational flow autonomously.
         await liveService.sendContext("""
         [SESSION STARTED] The bowler just opened the app and is at the nets. \
-        \(modeContext) \(challengeContext) \
         Greet them naturally and start the conversation. \
         Ask what they want to work on and how long they have. \
         Check you can see their full action in the video feed.
@@ -1675,9 +1636,6 @@ extension SessionViewModel: VoiceMateDelegate {
         await endSession()
     }
 
-    func voiceMate(didRequestModeSwitch mode: SessionMode) async -> Bool {
-        await switchSessionMode(to: mode)
-    }
 }
 
 // MARK: - DeliveryDetectionDelegate

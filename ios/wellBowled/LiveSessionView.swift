@@ -14,11 +14,6 @@ struct LiveSessionView: View {
     @State private var didAttemptAutoStart = false
     @State private var isAutoStarting = false
     @State private var isExitingToHome = false
-    let initialMode: SessionMode
-
-    init(initialMode: SessionMode = .freePlay) {
-        self.initialMode = initialMode
-    }
 
     var body: some View {
         ZStack {
@@ -207,7 +202,7 @@ struct LiveSessionView: View {
                                 liveViewLog.debug("Opening results sheet after manual end")
                             } else if !isAutoStarting {
                                 liveViewLog.debug("Main action tapped in inactive session: restarting session")
-                                await viewModel.startSession(mode: initialMode)
+                                await viewModel.startSession()
                             }
                         }
                     } label: {
@@ -297,9 +292,9 @@ struct LiveSessionView: View {
             guard !didAttemptAutoStart else { return }
             didAttemptAutoStart = true
             isAutoStarting = true
-            liveViewLog.debug("LiveSessionView appeared: auto-starting session with mode=\(initialMode.rawValue, privacy: .public)")
+            liveViewLog.debug("LiveSessionView appeared: auto-starting session")
             Task {
-                await viewModel.startSession(mode: initialMode)
+                await viewModel.startSession()
                 isAutoStarting = false
             }
         }
@@ -316,7 +311,7 @@ struct LiveSessionView: View {
     }
 
     private var isChallengeSession: Bool {
-        viewModel.session.mode == .challenge || (!viewModel.session.isActive && initialMode == .challenge)
+        viewModel.session.mode == .challenge
     }
 
     private var challengeBannerText: String {
