@@ -393,14 +393,19 @@ struct ExpertAnalysis: Codable {
 // MARK: - Expert Analysis Mapper
 
 class ExpertAnalysisMapper {
+    /// 9 key biomechanical dots: head, shoulders, hips, knees, ankles
     static let keyJoints: Set<String> = [
+        "NOSE",
         "LEFT_SHOULDER", "RIGHT_SHOULDER",
-        "LEFT_ELBOW", "RIGHT_ELBOW",
-        "LEFT_WRIST", "RIGHT_WRIST",
         "LEFT_HIP", "RIGHT_HIP",
         "LEFT_KNEE", "RIGHT_KNEE",
         "LEFT_ANKLE", "RIGHT_ANKLE"
     ]
+
+    // Brand colors for biomechanical feedback
+    static let goodColor = Color(red: 0.125, green: 0.788, blue: 0.592)       // #20C997
+    static let attentionColor = Color(red: 0.957, green: 0.635, blue: 0.380)   // #F4A261
+    static let injuryRiskColor = Color(red: 0.902, green: 0.224, blue: 0.275)  // #E63946
 
     static func getJointColor(jointName: String, expertAnalysis: ExpertAnalysis?, timestamp: Double) -> String {
         guard let analysis = expertAnalysis else {
@@ -414,13 +419,24 @@ class ExpertAnalysisMapper {
             return "white"
         }
 
-        // Check joint feedback
-        if currentPhase.feedback.injuryRisk.contains(jointName) {
-            return "red"
-        } else if currentPhase.feedback.slow.contains(jointName) {
-            return "yellow"
-        } else if currentPhase.feedback.good.contains(jointName) {
-            return "green"
+        // Check joint feedback — NOSE maps to head-related feedback
+        let lookupName = jointName == "NOSE" ? "HEAD" : jointName
+        let allNames = [lookupName, jointName] // Check both variants
+
+        for name in allNames {
+            if currentPhase.feedback.injuryRisk.contains(name) {
+                return "red"
+            }
+        }
+        for name in allNames {
+            if currentPhase.feedback.slow.contains(name) {
+                return "yellow"
+            }
+        }
+        for name in allNames {
+            if currentPhase.feedback.good.contains(name) {
+                return "green"
+            }
         }
 
         return "white"
@@ -430,11 +446,11 @@ class ExpertAnalysisMapper {
         let colorString = getJointColor(jointName: landmarkName, expertAnalysis: expertAnalysis, timestamp: timestamp)
         switch colorString {
         case "red":
-            return .red
+            return injuryRiskColor
         case "yellow":
-            return .yellow
+            return attentionColor
         case "green":
-            return .green
+            return goodColor
         default:
             return .white
         }
@@ -486,7 +502,8 @@ struct SkeletonRenderer {
 
     /// Key joint indices for dot rendering (6 joints only):
     /// LEFT_SHOULDER(11), RIGHT_SHOULDER(12), LEFT_WRIST(15), RIGHT_WRIST(16), LEFT_KNEE(25), RIGHT_KNEE(26)
-    static let keyJointIndices: Set<Int> = [11, 12, 15, 16, 25, 26]
+    /// 9 key biomechanical dots: nose(0), shoulders(11,12), hips(23,24), knees(25,26), ankles(27,28)
+    static let keyJointIndices: Set<Int> = [0, 11, 12, 23, 24, 25, 26, 27, 28]
 
     static func filterVisible(_ landmarks: [PoseLandmark], threshold: Float) -> [PoseLandmark] {
         return landmarks.filter { $0.visibility >= threshold }

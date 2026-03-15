@@ -94,7 +94,7 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
             "feedback": {
               "good": ["LEFT_HIP", "RIGHT_HIP"],
               "slow": ["RIGHT_SHOULDER"],
-              "injury_risk": ["RIGHT_ELBOW"]
+              "injury_risk": ["RIGHT_KNEE"]
             }
           }
         ]
@@ -107,6 +107,11 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
     - clip_ts, start, end must be within 0.0 to 5.0.
     - Keep summary/observation/tip concise and non-robotic.
     - If uncertain, still provide best-effort phase breakdown with lower-confidence wording.
+    - expert_analysis feedback: ONLY use these 9 body parts: HEAD, LEFT_SHOULDER, RIGHT_SHOULDER, LEFT_HIP, RIGHT_HIP, LEFT_KNEE, RIGHT_KNEE, LEFT_ANKLE, RIGHT_ANKLE.
+    - Only include body parts you are highly confident about (>90%). Max 3-5 total annotations across all phases. Quality over quantity.
+    - injury_risk: biomechanical concern that could cause strain/injury (e.g. knee collapsing, hyperextended elbow).
+    - slow: attention area, needs improvement but not dangerous.
+    - good: strong technique worth maintaining.
     """
 
     // MARK: - Chip Guidance Prompt
