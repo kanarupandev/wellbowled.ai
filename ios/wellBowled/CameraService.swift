@@ -47,8 +47,8 @@ final class CameraService: NSObject, CameraProviding, @unchecked Sendable {
         }
         set {
             stateLock.lock()
+            defer { stateLock.unlock() }
             _onVideoFrame = newValue
-            stateLock.unlock()
         }
     }
 
@@ -61,8 +61,8 @@ final class CameraService: NSObject, CameraProviding, @unchecked Sendable {
         }
         set {
             stateLock.lock()
+            defer { stateLock.unlock() }
             _onAudioSample = newValue
-            stateLock.unlock()
         }
     }
 
@@ -106,8 +106,8 @@ final class CameraService: NSObject, CameraProviding, @unchecked Sendable {
     /// Enable or disable high-FPS mode for speed calibration.
     func setSpeedMode(_ enabled: Bool) {
         stateLock.lock()
+        defer { stateLock.unlock() }
         speedMode = enabled
-        stateLock.unlock()
     }
 
     private var effectiveTargetFPS: Int {
@@ -186,10 +186,10 @@ final class CameraService: NSObject, CameraProviding, @unchecked Sendable {
 
     func resetRecordingSegments() {
         stateLock.lock()
+        defer { stateLock.unlock() }
         _recordedSegmentURLs = []
         _currentRecordingURL = nil
         _isRecording = false
-        stateLock.unlock()
     }
 
     func stopRecording() {
@@ -640,29 +640,29 @@ extension CameraService: AVCaptureFileOutputRecordingDelegate {
 private extension CameraService {
     func appendRecordedSegment(url: URL) {
         stateLock.lock()
+        defer { stateLock.unlock() }
         if !_recordedSegmentURLs.contains(url) {
             _recordedSegmentURLs.append(url)
         }
-        stateLock.unlock()
     }
 
     func setRecordingStarted(url: URL) {
         stateLock.lock()
+        defer { stateLock.unlock() }
         _currentRecordingURL = url
         _isRecording = true
-        stateLock.unlock()
     }
 
     func setRecordingStopped() {
         stateLock.lock()
+        defer { stateLock.unlock() }
         _isRecording = false
-        stateLock.unlock()
     }
 
     func setCameraPosition(_ position: AVCaptureDevice.Position) {
         stateLock.lock()
+        defer { stateLock.unlock() }
         _cameraPosition = position
-        stateLock.unlock()
     }
 }
 

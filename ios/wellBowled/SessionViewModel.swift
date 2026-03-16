@@ -1701,10 +1701,8 @@ final class SessionViewModel: ObservableObject {
         // Speed summary
         let speeds = deliveries.compactMap(\.speedKph)
         var speedSummary = ""
-        if !speeds.isEmpty {
+        if let minS = speeds.min(), let maxS = speeds.max() {
             let avg = speeds.reduce(0, +) / Double(speeds.count)
-            let minS = speeds.min()!
-            let maxS = speeds.max()!
             speedSummary = "Speed: avg \(String(format: "%.1f", avg)) kph, range \(String(format: "%.1f", minS))–\(String(format: "%.1f", maxS)) kph"
         }
 
@@ -2531,12 +2529,11 @@ extension SessionViewModel {
     /// Queue A processor: detect deliveries in segments serially.
     private func processDetectionQueue() async {
         while !Task.isCancelled {
-            guard !liveDetectionQueue.isEmpty else {
+            guard let entry = liveDetectionQueue.first else {
                 try? await Task.sleep(nanoseconds: 250_000_000) // 250ms poll
                 continue
             }
-
-            let entry = liveDetectionQueue.removeFirst()
+            liveDetectionQueue.removeFirst()
             let segmentURL = entry.url
             let segmentStartTime = entry.startTime
             defer { try? FileManager.default.removeItem(at: segmentURL) }

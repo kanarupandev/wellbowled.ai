@@ -200,7 +200,20 @@ final class GeminiLiveService: NSObject, VoiceMateService {
     // MARK: - VoiceMateService
 
     weak var delegate: VoiceMateDelegate?
-    private(set) var isConnected: Bool = false
+    private var _isConnected: Bool = false
+    private let stateLock = NSLock()
+    private(set) var isConnected: Bool {
+        get {
+            stateLock.lock()
+            defer { stateLock.unlock() }
+            return _isConnected
+        }
+        set {
+            stateLock.lock()
+            defer { stateLock.unlock() }
+            _isConnected = newValue
+        }
+    }
     private(set) var isSpeaking: Bool = false
 
     /// Observable connection state for UI

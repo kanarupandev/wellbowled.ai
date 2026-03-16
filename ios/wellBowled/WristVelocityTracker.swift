@@ -119,14 +119,15 @@ struct WristVelocityTracker {
         var unwrapped = [first ?? 0]
 
         for i in 1..<thetas.count {
+            guard let last = unwrapped.last else { break }
             guard let current = thetas[i], let previous = thetas[i - 1] else {
-                unwrapped.append(unwrapped.last ?? 0)
+                unwrapped.append(last)
                 continue
             }
             var delta = current - previous
             if delta > .pi { delta -= 2 * .pi }
             if delta < -.pi { delta += 2 * .pi }
-            unwrapped.append(unwrapped.last! + delta)
+            unwrapped.append(last + delta)
         }
         return unwrapped
     }

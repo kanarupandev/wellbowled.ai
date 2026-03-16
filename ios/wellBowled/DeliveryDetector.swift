@@ -160,7 +160,7 @@ final class DeliveryDetector: DeliveryDetecting {
 
             // Check if a new spike was detected
             if velocityTracker.detectedSpikes.count > lastSpikeCount {
-                let spike = velocityTracker.detectedSpikes.last!
+                guard let spike = velocityTracker.detectedSpikes.last else { return }
                 lastSpikeCount = velocityTracker.detectedSpikes.count
                 guard Self.passesOverarmGate(for: spike.arm, candidate: candidate) else {
                     log.debug("Spike dropped by overarm gate: omega=\(spike.omega, privacy: .public), arm=\(spike.arm.rawValue, privacy: .public)")

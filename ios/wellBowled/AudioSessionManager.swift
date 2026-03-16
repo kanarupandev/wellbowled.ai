@@ -98,9 +98,9 @@ final class AudioSessionManager {
         }
 
         micTapLock.lock()
+        defer { micTapLock.unlock() }
         micChunkHandler = onChunk
         micChunkCount = 0
-        micTapLock.unlock()
 
         inputNode.removeTap(onBus: 0)
         inputNode.installTap(onBus: 0, bufferSize: 2048, format: inputFormat) { [weak self] buffer, _ in
@@ -117,8 +117,8 @@ final class AudioSessionManager {
         }
 
         micTapLock.lock()
+        defer { micTapLock.unlock() }
         isMicTapInstalled = true
-        micTapLock.unlock()
         log.info("Live input tap installed: sr=\(inputFormat.sampleRate) ch=\(inputFormat.channelCount)")
         log.debug("Live input tap route: \(self.currentRouteSummary(), privacy: .public)")
         return true
@@ -126,11 +126,11 @@ final class AudioSessionManager {
 
     func stopLiveInputCapture() {
         micTapLock.lock()
+        defer { micTapLock.unlock() }
         let wasInstalled = isMicTapInstalled
         isMicTapInstalled = false
         micChunkHandler = nil
         micChunkCount = 0
-        micTapLock.unlock()
 
         guard wasInstalled else { return }
         audioEngine.inputNode.removeTap(onBus: 0)

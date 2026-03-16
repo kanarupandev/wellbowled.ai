@@ -230,7 +230,7 @@ final class RealNetworkService: NetworkServiceProtocol, @unchecked Sendable {
         ]
 
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        print("💬 [Chat] Request body: \(String(data: request.httpBody!, encoding: .utf8)?.prefix(200) ?? "nil")...")
+        print("💬 [Chat] Request body: \(request.httpBody.flatMap { String(data: $0, encoding: .utf8)?.prefix(200) } ?? "nil")...")
 
         let data: Data
         let response: URLResponse
@@ -320,7 +320,11 @@ final class RealNetworkService: NetworkServiceProtocol, @unchecked Sendable {
         print("📡 [SSE] Connecting to: \(components.url?.absoluteString ?? "nil")")
         print("📡 [SSE] VideoID: \(videoID)")
 
-        var request = URLRequest(url: components.url!)
+        guard let url = components.url else {
+            onEvent(.failure(URLError(.badURL)))
+            return
+        }
+        var request = URLRequest(url: url)
         request.setValue(AppConfig.bearerHeader, forHTTPHeaderField: "Authorization")
         request.timeoutInterval = self.timeout
 
