@@ -57,10 +57,14 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
     // MARK: - Deep Analysis Prompt (On-Demand)
 
     private static let deepAnalysisPromptBase = """
-    You are an elite cricket bowling biomechanics expert analyzing a single 5-second delivery clip.
+    You are analyzing a 5-second video clip for cricket bowling biomechanics.
 
-    Watch the ENTIRE clip first — run-up entry through follow-through completion — before writing any analysis. \
-    Pay close attention to the transition between phases, not just static positions.
+    FIRST: Does this clip show an actual cricket bowling delivery? If you cannot see a bowler \
+    delivering a ball with an overarm action, return: \
+    { "pace_estimate": "none", "summary": "No bowling delivery visible in this clip.", "phases": [] }
+
+    If a genuine delivery IS visible: watch the ENTIRE clip first — run-up through follow-through — \
+    before writing any analysis. Only describe what you actually see. Do NOT fabricate observations.
 
     Return STRICT JSON only:
     {
@@ -445,18 +449,25 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
         log.debug("Starting challenge evaluation: clip=\(clipURL.lastPathComponent, privacy: .public), target=\(target, privacy: .public)")
 
         let prompt = """
-        You are evaluating a cricket bowling delivery against a target.
+        You are evaluating a video clip of a cricket bowling delivery against a target.
+
+        FIRST: Does this clip show an actual cricket bowling delivery? \
+        If NOT — return: { "matches_target": false, "confidence": 0.0, \
+        "explanation": "No bowling delivery visible", "detected_length": "unknown", "detected_line": "unknown" }
 
         TARGET: "\(target)"
 
-        Did the bowler achieve the target? Respond with JSON:
+        If a genuine delivery IS visible, evaluate honestly:
         {
           "matches_target": true,
           "confidence": 0.7,
-          "explanation": "Good yorker on off stump, right on target",
+          "explanation": "What you actually observed about where the ball pitched and its line",
           "detected_length": "yorker",
           "detected_line": "off"
         }
+
+        Only claim a match if you genuinely see the ball achieving the target. \
+        If uncertain, set confidence low and matches_target false.
         """
 
         let payload: [String: Any] = [
