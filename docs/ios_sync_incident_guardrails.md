@@ -93,3 +93,42 @@ After build:
 
 - This incident was a process/sync-scope failure, not a model/business-logic regression.
 - Keep `wellbowled.ai` as source-of-truth for app code, and treat `xcodeProj/wellBowled` as a fragile deployment mirror with strict sync boundaries.
+
+---
+
+## Addendum: Recurring Linker Incident (2026-03-16, later session)
+
+### Symptom
+
+- Xcode showed: `Framework 'MediaPipeTasksCommon' not found`
+- Followed by generic: `Linker command failed with exit code 1`
+
+### Actual Cause (Confirmed)
+
+1. Build succeeded from workspace and failed only when project/pod wiring context was wrong.
+2. `wellbowled.ai/ios/wellBowled` is source-only and contains no CocoaPods scaffolding (`NO_PODS`).
+3. The deterministic build path is the mirror project root with Pods + workspace:
+   - `/Users/kanarupan/workspace/xcodeProj/wellBowled`
+   - `wellBowled.xcworkspace`
+
+### Permanent Rule
+
+- Always build and run from `wellBowled.xcworkspace`, never from `wellBowled.xcodeproj`.
+
+### Proven Good Build + Deploy Sequence
+
+```bash
+cd /Users/kanarupan/workspace/xcodeProj/wellBowled
+pod install
+xcodebuild -workspace wellBowled.xcworkspace -scheme wellBowled \
+  -destination 'platform=iOS,name=Kanarupan' -configuration Debug clean build
+xcrun devicectl device install app --device Kanarupan \
+  /Users/kanarupan/Library/Developer/Xcode/DerivedData/wellBowled-dovdfiwshrploseqggisupqoeikf/Build/Products/Debug-iphoneos/wellBowled.app
+xcrun devicectl device process launch --device Kanarupan kanarupan.wellBowled
+```
+
+### Validation Result in This Session
+
+- Device-targeted workspace build succeeded end-to-end with code signing.
+- App installed to `Kanarupan` successfully.
+- App launched successfully with bundle id `kanarupan.wellBowled`.
