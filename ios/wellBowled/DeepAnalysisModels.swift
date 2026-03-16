@@ -6,6 +6,7 @@ struct DeliveryDeepAnalysisResult: Codable {
     let phases: [AnalysisPhase]
     let expertAnalysis: ExpertAnalysis?
     let dna: BowlingDNA?
+    let speedConfidence: Double? // 0.0-1.0 Gemini's visual assessment of speed measurement quality
 }
 
 struct ChipGuidanceResponse: Codable, Equatable {

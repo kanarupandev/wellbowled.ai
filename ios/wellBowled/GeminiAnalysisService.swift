@@ -201,11 +201,21 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
         if let ctx = speedContext {
             prompt += """
 
-            SPEED MEASUREMENT:
-            Ball speed measured at \(String(format: "%.1f", ctx.kph)) kph (\(ctx.method), \(ctx.fps)fps recording).
-            Error margin: \(String(format: "%.1f", ctx.errorMarginKph)) kph.
-            Use this speed in your analysis. Reference it when discussing pace.
-            Do NOT override this with your own estimate — use the measured value.
+            SPEED MEASUREMENT (video frame-differencing):
+            Ball speed measured at \(String(format: "%.1f", ctx.kph)) kph (\(ctx.method), \(ctx.fps)fps).
+            Frame-timing error margin: ±\(String(format: "%.1f", ctx.errorMarginKph)) kph.
+            Use this speed in your analysis. Reference it as "estimated at" or "roughly".
+            Do NOT override with your own estimate — use the measured value.
+
+            Add a "speed_confidence" field to your JSON response (0.0-1.0):
+            Assess how trustworthy this speed measurement is based on what you SEE:
+            - Can you clearly see the ball travel the full pitch? (if not, lower confidence)
+            - Is the camera angle front-on with both sets of stumps visible? (if not, lower)
+            - Is there camera shake or motion blur? (if yes, lower)
+            - Is the ball clearly distinguishable from background? (if not, lower)
+            0.8+ = clear ball path, good angle, both stumps visible, minimal blur
+            0.5-0.8 = some occlusion or suboptimal angle but ball path mostly visible
+            <0.5 = significant issues (ball lost, heavy blur, bad angle, one stump set missing)
             """
         }
         return prompt
@@ -632,12 +642,16 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
             log.warning("No 'dna' key in deep analysis response — keys present: \(result.keys.sorted().joined(separator: ", "))")
         }
 
+        // Parse Gemini's visual speed confidence (0.0-1.0)
+        let speedConfidence = (result["speed_confidence"] as? Double).flatMap { min(max($0, 0), 1.0) }
+
         return DeliveryDeepAnalysisResult(
             paceEstimate: paceEstimate,
             summary: summary,
             phases: phases,
             expertAnalysis: expertAnalysis,
-            dna: dna
+            dna: dna,
+            speedConfidence: speedConfidence
         )
     }
 

@@ -1424,6 +1424,13 @@ final class SessionViewModel: ObservableObject {
         session.deliveries[index].phases = detailedResult.phases
         session.deliveries[index].status = .success
 
+        // Gemini visual assessment: if speed confidence is very low, suppress the speed display
+        if let geminiConf = detailedResult.speedConfidence, geminiConf < 0.4, session.deliveries[index].speedKph != nil {
+            log.info("Speed suppressed for D\(index + 1): Gemini visual confidence \(String(format: "%.2f", geminiConf)) too low")
+            session.deliveries[index].speedKph = nil
+            session.deliveries[index].speedErrorMarginKph = nil
+        }
+
         if let dna = dnaResult {
             session.deliveries[index].dna = dna
             session.deliveries[index].dnaMatches = BowlingDNAMatcher.match(userDNA: dna)
