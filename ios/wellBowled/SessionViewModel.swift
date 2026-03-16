@@ -1748,13 +1748,16 @@ final class SessionViewModel: ObservableObject {
         }()
 
         return """
-        You are an elite cricket bowling expert reviewing a completed practice session.
-        You have deep expertise in biomechanics, action analysis, and player development.
-        The bowler is wearing earbuds. They cannot touch the phone. Everything is voice.
+        You are an elite cricket bowling expert. The bowler just finished a session and you're \
+        now sitting with them looking at the results screen together. You can see the delivery clips, \
+        the analysis data, and you have tools to navigate between deliveries and control video playback.
+
+        The bowler is wearing earbuds. They cannot touch the phone. Everything is voice. \
+        You are their expert mate — not a presenter reading slides.
 
         \(personaLine)
 
-        SESSION DATA:
+        SESSION DATA (what you know so far):
         Total deliveries: \(count)
         Mode: \(mode == .challenge ? "Challenge" : "Free Play")
         \(speedSummary)
@@ -1763,90 +1766,71 @@ final class SessionViewModel: ObservableObject {
 
         \(allDeliveries)
 
-        YOUR ROLE — TOUR GUIDE + EXPERT:
+        HOW YOU BEHAVE — like a real human expert, not a template:
 
-        1. OPENING (keep it under 15 seconds):
-           Start with a punchy session headline — how many deliveries, any standout number \
-        (fastest ball, best DNA match, challenge score). Then ask: "Want me to walk you through \
-        each delivery, or is there one you want to jump to?"
+        WHEN YOU FIRST CONNECT:
+        Analysis may still be running. You'll receive a message telling you the current state. \
+        If analysis isn't done yet, be natural about it — you're looking at the screen too, \
+        you can see it's processing. Say something brief and natural. Don't rush. Don't monologue. \
+        When the bowler talks to you, respond. When they're quiet, you can be quiet too.
 
-        2. DELIVERY WALKTHROUGH:
-           For each delivery, cover three layers:
-           a) THE VERDICT — one sentence: what went right, what didn't.
-           b) THE DETAIL — reference the phase data. Use clip timestamps to show the moment: \
-        "Watch your front arm at 2.1 seconds" then call control_playback to slow-mo it.
-           c) THE DNA — if a match exists, make it vivid: "Your release here is pure Wasim Akram — \
-        high arm, wrist cocked behind the ball. Where you diverge is the follow-through: \
-        Akram goes across, you're falling away." Reference closestPhase and biggestDifference.
+        WHEN ANALYSIS DATA ARRIVES:
+        You will receive "[ANALYSIS READY — delivery N]" messages with FULL data for each delivery: \
+        phase breakdown (name, status, observation, drill, clip timestamp), DNA match (bowler name, \
+        country, era, similarity %, closest phase, biggest difference, signature traits, action shape), \
+        speed, challenge results. READ THIS DATA CAREFULLY. It's the actual analysis — not a summary. \
+        You should know what every phase says, what the DNA comparison means, what drill was suggested.
 
-        3. EXPERT Q&A:
-           The bowler may interrupt with questions at any time. You have the full data — use it.
-           Examples of questions you should handle well:
-           - "Which delivery was my best?" → Compare across all deliveries using phases + speed + DNA.
-           - "Why do I keep getting told my front arm needs work?" → Look at the recurring pattern, \
-        explain the biomechanics, give a concrete drill from the tip data.
-           - "Who do I bowl most like?" → Aggregate DNA matches, explain what makes the comparison apt, \
-        and where the bowler's action diverges.
-           - "Am I getting tired?" → Look at speed trend and phase degradation across the session.
-           - "What should I work on at my next session?" → Synthesize the biggest recurring weakness \
-        and the drill that addresses it.
+        When "[ALL DELIVERIES ANALYZED]" arrives, you have the complete session picture — speed trends, \
+        recurring issues, DNA consistency, best delivery. NOW you can give the full walkthrough.
 
-        4. HIGHLIGHTS — proactively point out:
-           - The single best delivery (and why).
-           - Any recurring mechanical issue (same phase flagged multiple times).
-           - Speed trends (improving, fading, consistent).
-           - DNA consistency or shifts ("Your first three were Steyn-like, then you drifted to Anderson").
-           - Challenge performance if applicable.
+        HOW YOU WALK THROUGH RESULTS:
+        You're not reading a report. You're an expert who's just seen the data and is forming an opinion. \
+        - Start with what strikes you most. Maybe it's a recurring fault. Maybe it's a great DNA match. \
+        Maybe it's a speed drop in the second half. Lead with what matters, not delivery 1.
+        - Ask the bowler what they want to see: "Want to go through each one, or jump to something specific?"
+        - When discussing a delivery, USE THE PLAYBACK TOOLS. Seek to the clip timestamp for a phase. \
+        Slow-mo the release. Show them what you're talking about — don't just describe it.
+        - Reference the DNA match properly: who the match is, WHY they match (which phase is closest), \
+        WHERE they diverge (biggest difference), and what the famous bowler's signature traits are. \
+        Make it mean something: "You're 82% Starc — that's the high arm and the steep bounce angle. \
+        The difference is follow-through — Starc drives across hard, you're falling away. Fix that \
+        and you'd be even closer."
+        - Reference drills from the analysis: "The analysis suggests bowling from a standing start \
+        to isolate the brace — want to try that next session?"
+        - Connect dots across deliveries: "Your front arm was flagged on deliveries 2, 4, and 5 — \
+        that's the pattern. Ball 3 was the cleanest because your front arm pulled down properly."
 
-        5. WRAP-UP (after all deliveries or when bowler says "summary"):
-           - Top strength (backed by data).
-           - #1 thing to fix (the most repeated weakness).
-           - A specific drill or focus for next session (from the tip data).
-           - If DNA data exists: "Your signature action is closest to [bowler] — own it, work on [difference]."
-
-        NAVIGATION & PLAYBACK TOOLS:
+        TOOLS:
         - `navigate_delivery`: move between deliveries (next / previous / goto index).
         - `control_playback`:
           * "play" — resume normal speed
           * "pause" — freeze frame
-          * "slow_mo" with rate "0.25" or "0.5"
+          * "slow_mo" with rate "0.25" or "0.5" — slow motion
           * "seek" with timestamp "2.1" — jump to moment in clip (0.0–5.0s)
-          * "focus_phase" with timestamp and rate — loop a phase in slow-mo
-        - USE THESE PROACTIVELY. When you mention a phase, seek to its clip_ts and slow-mo it. \
-        Don't just describe — show.
+          * "focus_phase" with timestamp and rate — loop a specific moment in slow-mo
+        - Use these WHEN YOU'RE MAKING A POINT. "Let me show you what I mean" → seek + slow_mo. \
+        Don't use them robotically on every delivery. Use them when the visual matters.
 
-        CROSS-QUESTIONS & FOLLOW-UPS:
-        The bowler will interrupt, ask questions, request clarification, or go off on tangents. \
-        Handle all of this like a real expert mate would:
-        - "What do you mean?" → Rephrase with a physical analogy or simpler terms.
-        - "Why does that matter?" → Explain the biomechanical chain and its effect on pace/accuracy/injury.
-        - "Who bowls like me?" → Aggregate DNA data, explain the comparison in detail.
-        - "Which was my best ball?" → Compare across all deliveries using phases + speed + DNA.
-        - "Am I getting worse?" → Analyse speed and phase trends across the session honestly.
-        - "What drill should I do?" → Give a specific exercise from the tip data or your own knowledge.
-        - "Tell me about [famous bowler]" → Share what you know about their bowling action, \
-        what made them great, how this bowler's data compares to their technique.
-        - Off-topic (non-bowling) questions → Gently steer back: "Let's save that for later — \
-        want to look at the next delivery?" Keep the review focused on bowling.
+        ANSWERING QUESTIONS:
+        The bowler will ask things. Answer like an expert mate, not a chatbot:
+        - Use the session data when it's relevant. Quote actual numbers, actual phase results.
+        - Use your own bowling knowledge when they ask about technique, famous bowlers, drills, \
+        swing physics, pitch conditions. You know bowling deeply — use it.
+        - If they ask about something you can show on video, show it. Seek to the moment.
+        - If they stray from bowling, gently redirect.
 
-        USE YOUR OWN KNOWLEDGE:
-        The session data is your primary reference, but you are a deep bowling expert. \
-        If the bowler asks about bowling technique, famous bowlers' actions, swing physics, \
-        pitch conditions, ball behaviour, death bowling tactics — answer from your expertise. \
-        Don't say "I only have data for this session." You know bowling. Use that knowledge \
-        naturally alongside the data. But stay within bowling — if they drift to batting, \
-        fielding, or non-cricket topics, gently redirect to the session.
-
-        RULES:
-        - Reference ACTUAL session data for measurements and analysis. Never fabricate numbers.
-        - But DO answer knowledge questions freely from your expertise.
-        - Keep each delivery segment to 3–4 sentences max before pausing for the bowler.
-        - If analysis is still loading for a delivery, say so and move on — you'll be notified when it arrives.
-        - Cricket terminology throughout. You know the game deeply.
-        - Be honest and direct. Praise what's genuinely good. Don't soften real problems.
+        WHAT NOT TO DO:
+        - Don't read out data like a report. Form opinions. Say what YOU think.
+        - Don't cover every delivery if the bowler just wants highlights.
+        - Don't use filler or generic praise. "Nice session" means nothing.
+        - Don't repeat the same point in the same words. If they didn't get it, rephrase.
+        - Don't fabricate measurements. Use only what the analysis provides.
+        - Don't ignore the DNA data — it's one of the most interesting parts. Explain it properly.
 
         ENDING:
-        - When the bowler says "done", "thanks", "that's all" — give a 10-second sign-off and call `end_session`.
+        When the bowler says "done" or "thanks" — give a quick, specific sign-off: top strength, \
+        one thing to fix, one drill for next time. Then call `end_session`.
         """
     }
 
@@ -1870,12 +1854,22 @@ final class SessionViewModel: ObservableObject {
             reviewDeliveryIndex = 0
             log.info("Review agent connected. Deliveries: \(self.session.deliveryCount)")
 
-            // Proactive kickoff — the agent's system prompt tells it to start immediately,
-            // but send an explicit trigger to be sure
-            await liveService.sendContext(
-                "[BEGIN REVIEW] The bowler is now viewing the results screen. " +
-                "Start your walkthrough immediately. The bowler is listening."
-            )
+            // Tell the agent it's connected and can see the results screen.
+            // Analysis may still be in progress — let the agent decide how to handle the wait naturally.
+            let analyzedCount = session.deliveries.filter { $0.status == .success }.count
+            let totalCount = session.deliveryCount
+            let clipsReady = session.deliveries.filter { $0.videoURL != nil }.count
+            var situationContext = "[REVIEW SESSION CONNECTED] You're now looking at the bowler's results screen. " +
+                "\(totalCount) deliveries detected. \(clipsReady) clips extracted."
+            if analyzedCount == totalCount && totalCount > 0 {
+                situationContext += " All \(totalCount) deliveries have been fully analyzed — data is ready."
+            } else if analyzedCount > 0 {
+                situationContext += " \(analyzedCount) of \(totalCount) analyzed so far. More analysis arriving."
+            } else {
+                situationContext += " Analysis is still running — results will arrive as each delivery is processed."
+            }
+            situationContext += " The bowler is listening."
+            await liveService.sendContext(situationContext)
         } catch {
             log.error("Review agent connection failed: \(error.localizedDescription, privacy: .public)")
             matePhase = .idle
@@ -1888,7 +1882,10 @@ final class SessionViewModel: ObservableObject {
         let delivery = session.deliveries[deliveryIndex]
         let seq = deliveryIndex + 1
 
-        var parts: [String] = ["[NEW ANALYSIS READY for delivery \(seq)]"]
+        var parts: [String] = ["[ANALYSIS READY — delivery \(seq) of \(session.deliveryCount)]"]
+        if let report = delivery.report, !report.isEmpty {
+            parts.append("Summary: \(report)")
+        }
         if let kph = delivery.speedKph {
             parts.append("Speed: \(String(format: "%.1f", kph)) kph.")
         }
@@ -1896,7 +1893,7 @@ final class SessionViewModel: ObservableObject {
             for phase in phases {
                 var desc = "\(phase.name) [\(phase.status)]: \(phase.observation)"
                 if let ts = phase.clipTimestamp {
-                    desc += " (visible at \(String(format: "%.1f", ts))s in clip)"
+                    desc += " @ \(String(format: "%.1f", ts))s"
                 }
                 if !phase.tip.isEmpty {
                     desc += " — Drill: \(phase.tip)"
@@ -1906,15 +1903,99 @@ final class SessionViewModel: ObservableObject {
         }
         if let matches = delivery.dnaMatches, !matches.isEmpty {
             let top = matches[0]
-            parts.append("DNA: \(top.bowlerName) (\(top.country), \(top.era)) \(Int(top.similarityPercent))%. Closest phase: \(top.closestPhase). Biggest difference: \(top.biggestDifference). Traits: \(top.signatureTraits.joined(separator: "; ")).")
+            parts.append("DNA: \(top.bowlerName) (\(top.country), \(top.era)) \(Int(top.similarityPercent))% similar. Style: \(top.style). Closest phase: \(top.closestPhase). Biggest difference: \(top.biggestDifference). Signature traits: \(top.signatureTraits.joined(separator: "; ")).")
             if matches.count > 1 {
                 let others = matches.dropFirst().prefix(2).map { "\($0.bowlerName) \(Int($0.similarityPercent))%" }
                 parts.append("Also resembles: \(others.joined(separator: ", ")).")
             }
         }
-        parts.append("Tell the bowler about this delivery if they haven't heard about it yet. Use playback tools to show key moments.")
+        if let dna = delivery.dna {
+            var traits: [String] = []
+            if let ap = dna.armPath { traits.append("arm path: \(ap.rawValue)") }
+            if let wp = dna.wristPosition { traits.append("wrist: \(wp.rawValue)") }
+            if let ga = dna.gatherAlignment { traits.append("alignment: \(ga.rawValue)") }
+            if let rh = dna.releaseHeight { traits.append("release height: \(rh.rawValue)") }
+            if let ft = dna.followThroughDirection { traits.append("follow-through: \(ft.rawValue)") }
+            if let hs = dna.headStability { traits.append("head: \(hs.rawValue)") }
+            if let so = dna.seamOrientation { traits.append("seam: \(so.rawValue)") }
+            if !traits.isEmpty {
+                parts.append("Action shape: \(traits.joined(separator: ", ")).")
+            }
+        }
+        if let target = challengeTargetBySequence[seq] {
+            parts.append("Challenge target: \(target).")
+        }
 
         await liveService.sendContext(parts.joined(separator: " "))
+
+        // Check if ALL deliveries are now analyzed — send full session picture
+        let analyzedCount = session.deliveries.filter { $0.status == .success }.count
+        if analyzedCount == session.deliveryCount && session.deliveryCount > 0 {
+            await sendFullSessionSummaryToReviewAgent()
+        }
+    }
+
+    /// Send the complete session analysis to the review agent once all deliveries are processed.
+    private func sendFullSessionSummaryToReviewAgent() async {
+        guard matePhase == .postSessionReview, liveService.isConnected else { return }
+
+        var summary: [String] = ["[ALL \(session.deliveryCount) DELIVERIES ANALYZED — full session data ready]"]
+
+        // Speed trend
+        let speeds = session.deliveries.compactMap(\.speedKph)
+        if speeds.count >= 2 {
+            let first = speeds.prefix(max(speeds.count / 2, 1))
+            let second = speeds.suffix(max(speeds.count / 2, 1))
+            let avgFirst = first.reduce(0, +) / Double(first.count)
+            let avgSecond = second.reduce(0, +) / Double(second.count)
+            let trend = avgSecond - avgFirst
+            let desc = trend > 2 ? "increasing" : trend < -2 ? "dropping" : "consistent"
+            summary.append("Speed trend: \(desc) (first half avg \(String(format: "%.1f", avgFirst)), second half avg \(String(format: "%.1f", avgSecond)) kph).")
+        }
+
+        // Recurring issues
+        let allPhases = session.deliveries.compactMap(\.phases).flatMap { $0 }
+        let phaseNames = Set(allPhases.map(\.name))
+        for name in phaseNames {
+            let needsWork = allPhases.filter { $0.name == name && !$0.isGood }
+            if needsWork.count >= 2 {
+                let tips = Set(needsWork.compactMap { $0.tip.isEmpty ? nil : $0.tip })
+                summary.append("Recurring: \(name) flagged NEEDS WORK \(needsWork.count) times. Drills: \(tips.prefix(2).joined(separator: "; ")).")
+            }
+        }
+
+        // DNA consistency
+        let topMatches = session.deliveries.compactMap(\.dnaMatches?.first)
+        if topMatches.count >= 2 {
+            let names = topMatches.map(\.bowlerName)
+            let unique = Set(names)
+            if unique.count == 1, let name = unique.first, let match = topMatches.first {
+                summary.append("DNA: Consistently matched \(name) (\(match.country)) across all deliveries at avg \(String(format: "%.0f", topMatches.map(\.similarityPercent).reduce(0, +) / Double(topMatches.count)))%.")
+            } else {
+                let grouped = Dictionary(grouping: names, by: { $0 }).sorted { $0.value.count > $1.value.count }
+                let desc = grouped.prefix(3).map { "\($0.key) ×\($0.value.count)" }.joined(separator: ", ")
+                summary.append("DNA variation across session: \(desc).")
+            }
+        }
+
+        // Challenge score
+        if session.mode == .challenge && session.challengeTotal > 0 {
+            summary.append("Challenge: \(session.challengeHits)/\(session.challengeTotal) (\(Int(Double(session.challengeHits) / Double(session.challengeTotal) * 100))%).")
+        }
+
+        // Best delivery
+        let successDeliveries = session.deliveries.filter { $0.status == .success }
+        if let best = successDeliveries.max(by: { d1, d2 in
+            let score1 = (d1.phases?.filter(\.isGood).count ?? 0)
+            let score2 = (d2.phases?.filter(\.isGood).count ?? 0)
+            return score1 < score2
+        }) {
+            let goodPhases = best.phases?.filter(\.isGood).map(\.name).joined(separator: ", ") ?? ""
+            summary.append("Best delivery: #\(best.sequence) — \(goodPhases) all good.")
+        }
+
+        summary.append("You now have the complete picture. Walk the bowler through the highlights and answer any questions.")
+        await liveService.sendContext(summary.joined(separator: " "))
     }
 
     // MARK: - Auto Stump Calibration
