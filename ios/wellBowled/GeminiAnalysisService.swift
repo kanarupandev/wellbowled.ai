@@ -15,11 +15,13 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
     // MARK: - Analysis Prompt
 
     private static let analysisPrompt = """
-    You are an elite cricket biomechanics analyst reviewing a 5-second bowling delivery clip.
+    You are analyzing a 5-second video clip.
 
-    Watch the FULL action sequence — run-up through follow-through — before classifying.
+    FIRST: Does this clip show an actual cricket bowling delivery (overarm action, ball released)?
+    If NOT — return: { "pace_estimate": "none", "length": "unknown", "line": "unknown", "type": "unknown", \
+    "observation": "No bowling delivery visible in this clip.", "confidence": 0.0 }
 
-    Respond with STRICT JSON only:
+    If YES — watch the FULL action before classifying. Respond with STRICT JSON only:
     {
       "pace_estimate": "medium pace",
       "length": "good_length",
