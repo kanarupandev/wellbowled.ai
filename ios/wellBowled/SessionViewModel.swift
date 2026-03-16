@@ -116,6 +116,7 @@ final class SessionViewModel: ObservableObject {
     private var liveAudioChunkCounter = 0
     private var liveMicChunkCounter = 0
     private var useCameraAudioFallback = false
+    private var reconnectAttempts = 0
 
     // Live segment detection queues
     private var liveSegmentTimerTask: Task<Void, Never>?
@@ -2274,11 +2275,16 @@ extension SessionViewModel: VoiceMateDelegate {
                 return
             }
 
-            log.debug("Auto-reconnecting after disconnect: \(reason, privacy: .public), matePhase=\(String(describing: self.matePhase))")
-            errorMessage = "Reconnecting..."
-            debugLog += "Reconnecting...\n"
+            reconnectAttempts += 1
+            let attempt = reconnectAttempts
 
-            try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5s backoff
+            // Exponential backoff: 1.5s, 3s, 6s, capped at 15s
+            let backoffNs = UInt64(min(1.5 * pow(2.0, Double(attempt - 1)), 15.0) * 1_000_000_000)
+            log.debug("Auto-reconnecting (attempt \(attempt)) after disconnect: \(reason, privacy: .public), matePhase=\(String(describing: self.matePhase)), backoff=\(backoffNs / 1_000_000)ms")
+            errorMessage = "Reconnecting..."
+            debugLog += "Reconnecting (attempt \(attempt))...\n"
+
+            try? await Task.sleep(nanoseconds: backoffNs)
 
             guard session.isActive || matePhase == .postSessionReview else { return }
 
@@ -2290,6 +2296,7 @@ extension SessionViewModel: VoiceMateDelegate {
                 }
 
                 try await liveService.connect()
+                reconnectAttempts = 0 // Reset on success
                 errorMessage = nil
                 debugLog += "Reconnected!\n"
 
@@ -2308,7 +2315,7 @@ extension SessionViewModel: VoiceMateDelegate {
                     await maybeSendProactiveGreetingIfNeeded()
                 }
             } catch {
-                debugLog += "RECONNECT FAIL: \(error.localizedDescription)\n"
+                debugLog += "RECONNECT FAIL (attempt \(attempt)): \(error.localizedDescription)\n"
                 errorMessage = "Reconnect failed: \(error.localizedDescription)"
             }
         }

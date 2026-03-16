@@ -212,6 +212,7 @@ final class GeminiLiveService: NSObject, VoiceMateService {
     private var urlSession: URLSession?
     private let sendQueue = DispatchQueue(label: "com.wellbowled.live.send")
     private var receiveTask: Task<Void, Never>?
+    private var keepAliveTask: Task<Void, Never>?
     private var lastFrameSentTime: CFAbsoluteTime = 0
     private var sessionResumptionHandle: String?
     private var openContinuation: CheckedContinuation<Void, Error>?
@@ -356,12 +357,20 @@ final class GeminiLiveService: NSObject, VoiceMateService {
         receiveTask = Task { [weak self] in
             await self?.receiveLoop()
         }
+
+        // Start keepalive ping loop — prevents server-side inactivity timeout (~30s)
+        keepAliveTask?.cancel()
+        keepAliveTask = Task { [weak self] in
+            await self?.keepAliveLoop()
+        }
     }
 
     // MARK: - Disconnect
 
     func disconnect() async {
         log.debug("Disconnecting...")
+        keepAliveTask?.cancel()
+        keepAliveTask = nil
         receiveTask?.cancel()
         receiveTask = nil
         webSocketTask?.cancel(with: .normalClosure, reason: nil)
@@ -487,6 +496,44 @@ final class GeminiLiveService: NSObject, VoiceMateService {
         try await webSocketTask?.send(.string(jsonString))
     }
 
+    // MARK: - Keep-Alive
+
+    /// Sends periodic WebSocket pings to prevent server-side inactivity timeout (~30s).
+    /// Also sends a tiny silent audio chunk as a fallback — some WebSocket servers
+    /// don't treat pings as activity.
+    private func keepAliveLoop() async {
+        // 160 bytes of silence = 10ms at 16kHz 16-bit mono PCM
+        let silentPCM = Data(count: 320)
+        let silentBase64 = silentPCM.base64EncodedString()
+
+        while !Task.isCancelled {
+            do {
+                try await Task.sleep(nanoseconds: 15_000_000_000) // every 15s
+            } catch {
+                break
+            }
+
+            guard let ws = webSocketTask, isConnected else { break }
+
+            // WebSocket-level ping
+            ws.sendPing { [weak self] error in
+                if let error {
+                    log.warning("Keep-alive ping failed: \(error.localizedDescription)")
+                    self?.isConnected = false
+                }
+            }
+
+            // Application-level silent audio — ensures Gemini counts this as activity
+            let input = LiveRealtimeInput(
+                realtimeInput: LiveMediaInput(
+                    mediaChunks: [LiveMediaChunk(mimeType: "audio/pcm;rate=16000", data: silentBase64)]
+                )
+            )
+            sendJSON(input)
+        }
+        log.debug("Keep-alive loop ended")
+    }
+
     // MARK: - Receive Loop
 
     private func receiveLoop() async {
@@ -531,11 +578,11 @@ final class GeminiLiveService: NSObject, VoiceMateService {
     private func handleMessage(_ jsonString: String) {
         guard let data = jsonString.data(using: .utf8),
               let msg = try? decoder.decode(LiveServerMessage.self, from: data) else {
-            // Surface undecodable server messages — often contains the actual error
-            let preview = String(jsonString.prefix(200))
-            log.warning("Failed to decode message: \(preview)")
-            print("[GeminiLive] UNDECODABLE MSG: \(preview)")
-            delegate?.voiceMate(didDisconnect: "Server: \(preview)")
+            // Log undecodable messages but do NOT trigger disconnect — the WebSocket is still open.
+            // Triggering didDisconnect here caused false reconnect cycles.
+            let preview = String(jsonString.prefix(300))
+            log.warning("Undecodable server message (ignored): \(preview)")
+            print("[GeminiLive] UNDECODABLE MSG (ignored): \(preview)")
             return
         }
 
