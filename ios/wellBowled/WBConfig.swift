@@ -254,7 +254,6 @@ enum WBConfig {
     static let enableLiveAPI = true
     static let enableChallengeMode = true
     static let enablePostSessionAnalysis = true
-    static let enableLiveAutoAnalysis = true
 
     // MARK: - Live Segment Detection Queues
 

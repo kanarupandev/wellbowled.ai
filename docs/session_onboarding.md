@@ -2,7 +2,7 @@
 
 ## What is this?
 
-An **expert mate** for cricket bowlers. Not a coach — a knowledgeable buddy who watches you bowl, calls out your count and pace, challenges you with targets, and gives you a session report when you're done.
+An **expert mate** for cricket bowlers. Not a coach — a knowledgeable buddy who watches you bowl, gives you real-time voice feedback, and walks you through a deep biomechanical analysis when you're done.
 
 Built for the **Gemini Live Hackathon 2026**.
 
@@ -10,27 +10,30 @@ Built for the **Gemini Live Hackathon 2026**.
 
 You're at nets or in the backyard. You set your phone on a tripod. You press Start. You bowl.
 
-### Flow 1: LIVE — Audio Mate (during session)
+### Flow 1: LIVE — Expert Mate (during session)
 
 ```
 You bowl
     ↓
-MediaPipe detects delivery (wrist velocity spike, on-device, instant)
+Gemini Flash detects delivery (30s video segments, queued analysis)
     ↓
-iOS TTS speaks: "Three."  ← count only, zero latency, no network
+iOS TTS speaks: "Three."  ← count, zero latency, on-device
     ↓
-You ask: "How was that?"
+Deep analysis runs in background (phases, DNA, speed)
     ↓
-Live API hears you + sees video context
+Mate speaks feedback: "Front arm's pulling across — that's why you're falling away."
     ↓
-Mate speaks: "Good length, nice seam position, bit wide of off."
+You ask: "What do you mean?"
+    ↓
+Mate rephrases: "When you land, your front arm flings out instead of
+pulling down to your hip. Your head follows it off-line."
     ↓
 You pick up next ball, keep bowling
 ```
 
-No screen. No buttons. No stopping. Detection + count is instant and local. Conversation is natural — ask when you want.
+No screen. No buttons. No stopping. The mate watches, forms opinions across deliveries, picks ONE thing per ball, and handles follow-up questions like a real expert.
 
-### Flow 2: CHALLENGE LOOP (implemented in code path)
+### Flow 2: CHALLENGE LOOP
 
 ```
 Mate speaks: "Try a yorker on off stump."
@@ -43,83 +46,127 @@ Mate evaluates: "That was full, but drifting leg side.
 Mate speaks: "Now try a good length, 4th stump."
 ```
 
-Simulates match pressure with target evaluation and score tracking implemented in the analysis pipeline. Home currently starts sessions in Free mode; direct challenge-mode entry wiring is tracked in roadmap docs.
+Challenges target specific biomechanical fixes, not just "hit a spot". Mate can also set action-focused drills: "Next 3 balls, pull your front arm down to your hip."
 
-### Flow 3: POST-SESSION — Delivery Cards (after session)
+### Flow 3: POST-SESSION — Review Agent (after session)
 
 ```
 Session ends
     ↓
-App auto-clips each delivery (5s window)
+Review agent connects (same voice, fresh context with all analysis data)
     ↓
-Gemini Pro analyzes each clip
+Agent looks at the results screen with the bowler
     ↓
-Delivery card: Pace Score, Rough Speed Bucket, length, line, key observation
-Session summary: count, Pace Score trend, challenge mode score
+All analysis complete → agent walks through highlights:
+  - Phase breakdown per delivery (GOOD / NEEDS WORK + drills)
+  - BowlingDNA match (e.g. "82% Starc — high arm, steep bounce")
+  - Speed trends, recurring issues, best delivery
+    ↓
+Agent uses playback tools: slow-mo the release, seek to a phase timestamp
+    ↓
+Bowler asks questions: "Who do I bowl most like?" / "What drill should I do?"
+    ↓
+Agent answers from data + own expertise
 ```
 
-45 min of raw video → 36 bite-sized clips you'll actually watch.
+### Flow 4: IMPORTED RECORDING — Analyze any bowling video
 
-## What It Detects
+```
+Home screen → "Analyze Recording" → pick video from Photos
+    ↓
+Same Gemini Flash segment detection → find deliveries → extract clips
+    ↓
+Review agent connects with full analysis
+    ↓
+Identical walkthrough experience as live session
+```
 
-| Attribute | Method | Accuracy | Status |
-|-----------|--------|----------|--------|
-| Delivery count | MediaPipe wrist spike + Gemini | High | Proven (4/4 nets) |
-| Pace Score + Rough Speed Bucket | Delivery mechanics signal + Gemini clip context | Relative metric (not radar speed) | Canonical policy |
-| Estimated Speed (optional) | Personal calibration model + confidence gate | Shown only when calibration quality is sufficient | Conditional |
-| Length (yorker/full/good/short) | Gemini on clip (visual) | ~75-85% estimated | To validate |
-| Line (off/middle/leg) | Gemini on clip (visual) | ~60-70% estimated | To validate |
-| Type (seam/spin) | Gemini on clip (action) | ~80%+ estimated | To validate |
-| Pitch map (zone-based) | Accumulated Gemini classifications | Approximate zones | To build |
+## Detection Pipeline
+
+**Gemini Flash is the sole delivery detector** (MediaPipe removed from detection path).
+
+| Stage | Method | When |
+|-------|--------|------|
+| Live detection | Gemini Flash segment scan (30s segments, 5s overlap, confidence ≥ 0.9) | During live session (Queue A) |
+| Live deep analysis | Gemini 3 Pro (phases, DNA, speed) | During live session (Queue B, concurrent) |
+| Post-session batch | Gemini Flash segment scan (60s segments, 5s overlap; fallback: 20s, 8s overlap) | After session or for imported recordings |
+| Clip extraction | AVAssetExportSession (5s window: 3s pre-roll + 2s post-roll) | Parallel, per delivery |
+
+## What It Analyzes
+
+| Attribute | Method | Status |
+|-----------|--------|--------|
+| Delivery detection | Gemini Flash segment detection | Validated |
+| 5-phase biomechanical breakdown | Gemini 3 Pro deep analysis (run-up, gather, delivery stride, release, follow-through) | Done |
+| BowlingDNA action signature | Gemini vision (16 categorical fields) + 20-dimension model | Done — 103 famous bowler database |
+| Pace Score + Rough Speed Bucket | Delivery mechanics + Gemini context | Canonical policy |
+| Estimated Speed (optional) | Frame-differencing with stump calibration (120fps) | Code complete, unvalidated on device |
+| Length / Line / Type | Gemini on clip | Done |
+| Challenge evaluation | Gemini on clip vs target | Done in code |
 
 ## What It Doesn't Do
 
-- Exact/radar-grade speed claims — not supported in this product.
-- Legality assessment — 2D video can't measure 15° elbow extension
-- Broadcast video analysis — scene cuts break detection
-- Real-time video overlay — latency kills it
+- Exact/radar-grade speed claims
+- Legality assessment (2D video can't measure 15° elbow extension)
+- Broadcast video analysis (scene cuts break detection)
+- Real-time video overlay (latency prohibitive)
+- Batting, fielding, or non-bowling analysis
 
 ## Stack
 
-- **Delivery detection**: MediaPipe Pose on-device (wrist velocity spike) — instant, proven 4/4
-- **Count announcement**: iOS TTS (AVSpeechSynthesizer) — count only, zero latency, local
-- **Voice conversation**: Gemini Live API (`gemini-2.5-flash-native-audio`) — AUDIO mode, bowler asks → mate answers (R17+R18+R19 validated on device, 8 personas)
-- **Challenge mode evaluation**: Gemini on clip (generateContent) — delivery type + success assessment
-- **Post-session analysis**: Gemini 3 Pro (`gemini-3-pro-preview`) via generateContent
-- **Pace/speed output model**: Pace Score (primary), Rough Speed Bucket (secondary), Estimated Speed only when calibrated with confidence
-- **iOS client**: Swift, camera capture + pose overlay
-- **Config**: Config E — temp=0.1, default thinking, simple prompt, File API >5MB
+- **Delivery detection**: Gemini Flash (`gemini-2.5-flash`) segment scanning — sole detector for both live and imported recordings
+- **Count announcement**: iOS TTS (AVSpeechSynthesizer) — on-device, zero latency
+- **Voice conversation**: Gemini Live API (`gemini-2.5-flash-native-audio`) — bidirectional audio, 8 personas (4 languages × 2 genders)
+- **Deep analysis**: Gemini 3 Pro (`gemini-3-pro-preview`) — 5-phase breakdown, expert biomechanical annotations
+- **BowlingDNA**: Gemini vision extraction + weighted Euclidean matcher against 103 bowler profiles
+- **Review agent**: Fresh Gemini Live API session with full analysis data, navigation + playback tools
+- **iOS client**: Swift 5.9+ / iOS 17+ / SwiftUI + Combine
+- **Config**: temp=0.1, JSON response format, 5s clip window
+
+## Expert Mate Personality
+
+The mate is an expert, not a template. Key behaviors:
+- **Watches before speaking** — first ball is quiet, forms opinions by ball 2-3, commits to the biggest issue by ball 4+
+- **ONE thing per ball** — never lists multiple points
+- **Varies responses** — never says the same thing twice in the same words
+- **Uses silence** — doesn't comment on every delivery; a bowler in rhythm doesn't need commentary
+- **Handles cross-questions** — rephrases with analogies, explains biomechanical chains, compares to famous bowlers
+- **Research-grade biomechanics** — references joint angles, kinetic chain sequencing, injury risk flags (mixed action → L4/L5 stress, trunk lateral flexion >50°)
+- **Uses own knowledge** — swing physics, famous bowler actions, death bowling tactics, drill prescription
+- **Stays on bowling** — gently steers back if user drifts to non-bowling topics
+
+## Review Agent
+
+Connects after session ends (or after imported recording analysis). Behaves like an expert looking at the results screen with the bowler:
+- Waits for analysis to complete naturally
+- Leads with what strikes them most (not delivery 1)
+- Uses playback tools to SHOW moments (slow-mo, seek to phase timestamps)
+- Explains DNA matches properly (who, why, where they diverge, signature traits)
+- References drills from analysis data
+- Connects dots across deliveries (recurring issues, speed trends, DNA shifts)
+- Handles questions from own expertise + session data
 
 ## Competitive Landscape
 
 | Tool | Approach | Our Differentiation |
 |------|----------|-------------------|
-| **FullTrack AI** | Single iPhone behind stumps, ball tracking, pitch maps. 3M+ users. Peer-reviewed (ICC >0.96). | They track the ball pixel-by-pixel. We understand the bowling semantically. They give you data. We give you a mate who talks to you. |
-| **PitchVision** | 2 cameras + laptop + activation sensor. Professional coaching. | Hardware kit. We're phone-only. |
-| **CricVision** | Cloud-based ball tracking + analysis. | Similar approach but no live audio feedback. |
-| **Catapult** | Wearable GPS/inertial sensors. IPL teams. | Hardware. Different market (professional workload management). |
+| **FullTrack AI** | Ball tracking, pitch maps. 3M+ users. | They track pixels. We understand bowling semantically. They give data. We give an expert mate who talks to you. |
+| **PitchVision** | 2 cameras + laptop + activation sensor. | Hardware kit. We're phone-only. |
+| **CricVision** | Cloud-based ball tracking. | No live audio feedback. No biomechanical analysis. |
+| **Catapult** | Wearable GPS/inertial sensors. IPL teams. | Different market (professional workload). |
 
 ## Repo Structure
 
 ```
 wellbowled.ai/
-├── docs/              # Architecture, prompts, process
-├── experiments/       # Detection, speed, live API experiments
-├── research/          # Research index, cricket resources
-└── codex/             # Codex agent research (parallel)
+├── ios/wellBowled/       # Source of truth (92 Swift files)
+│   └── Tests/            # 21 test files
+├── docs/                 # Architecture, prompts, process (52 files)
+├── experiments/          # Archived research
+├── research/             # Research index
+└── codex/                # Codex agent research
 ```
 
 ## Previous Demo
 
 Gemini 3 hackathon (Feb 2026): https://www.youtube.com/watch?v=Gpif-vPtYTc
-
-## Key Research (R1-R16)
-
-See `research/README.md` for full index. Highlights:
-- **R9**: Config E is best (6/7 PASS at mixed thresholds)
-- **R11+R17**: Live API is conversational, not monitoring — revised to MediaPipe detection + iOS TTS + Live API conversation
-- **R12+**: Pace Score metric model adopted — relative improvement tracking first, rough bucket context, calibrated estimated speed only
-- **R13**: MediaPipe wrist velocity spike: proven delivery trigger
-- **R14**: Delivery type detection feasible (length ~75-85%, line ~60-70%)
-- **R15**: Competitive landscape — nobody does live audio feedback
-- **R16**: Ball tracking SOTA — YOLOv8 viable on mobile via CoreML

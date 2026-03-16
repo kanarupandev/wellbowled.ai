@@ -279,8 +279,6 @@ final class SessionViewModel: ObservableObject {
         cameraService.onVideoFrame = nil
         cameraService.onAudioSample = nil
 
-        // Stop detection
-        detector.stop()
         tts.stop()
         stopLiveSegmentDetection()
 
@@ -337,7 +335,6 @@ final class SessionViewModel: ObservableObject {
 
         cameraService.onVideoFrame = nil
         cameraService.onAudioSample = nil
-        detector.stop()
         tts.stop()
         await disconnectMate()
         cameraService.stopRecording()
@@ -451,18 +448,15 @@ final class SessionViewModel: ObservableObject {
                 try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s per attempt
                 let urls = cameraService.recordedSegmentURLs
                 let segs = RecordingSegmentPlanner.existingSegments(urls) { FileManager.default.fileExists(atPath: $0.path) }
-                print("[ClipDebug] Flip wait attempt \(attempt): \(segs.count) segments")
-                if segs.count > 1 {
-                    let lastSeg = segs.last!
-                    print("[ClipDebug] Using LAST segment: \(lastSeg.lastPathComponent)")
+                log.debug("Camera flip wait attempt \(attempt): \(segs.count) segments found")
+                if segs.count > 1, let lastSeg = segs.last {
                     log.info("Camera was flipped; using last segment: \(lastSeg.lastPathComponent, privacy: .public)")
                     return lastSeg
                 }
             }
             // Fallback: use the currentRecordingURL (front camera file path, may still be finalizing)
             if let fb = fallback, FileManager.default.fileExists(atPath: fb.path) {
-                print("[ClipDebug] Flip fallback to currentRecordingURL: \(fb.lastPathComponent)")
-                log.warning("Camera flip: second segment not found in recordedSegmentURLs; using fallback")
+                log.warning("Camera flip: second segment not found; falling back to \(fb.lastPathComponent, privacy: .public)")
                 return fb
             }
         }
@@ -565,7 +559,6 @@ final class SessionViewModel: ObservableObject {
 
         cameraService.onVideoFrame = nil
         cameraService.onAudioSample = nil
-        detector.stop()
         tts.stop()
         audioManager.stopPlaybackEngine()
         audioManager.stopLiveInputCapture()
@@ -791,8 +784,8 @@ final class SessionViewModel: ObservableObject {
         }
 
         let recordingOffset = recordingOffsetStore.startSeconds()
-        print("[ClipDebug] recordingOffset=\(recordingOffset), recordingURL=\(recordingURL.lastPathComponent)")
-        print("[ClipDebug] deliveries=\(session.deliveries.map { "ts=\($0.timestamp)" })")
+        log.debug("Clip prep: recordingOffset=\(recordingOffset), file=\(recordingURL.lastPathComponent, privacy: .public)")
+        log.debug("Clip prep: \(self.session.deliveries.count) deliveries, timestamps=\(self.session.deliveries.map { String(format: "%.2f", $0.timestamp) })")
         let recordingAsset = AVURLAsset(url: recordingURL)
         let recordingDurationTime = (try? await recordingAsset.load(.duration)) ?? .zero
         let recordingDuration = max(CMTimeGetSeconds(recordingDurationTime), 0)
@@ -1193,7 +1186,7 @@ final class SessionViewModel: ObservableObject {
     func deepAnalysisArtifacts(for deliveryID: UUID) -> DeliveryDeepAnalysisArtifacts? {
         let result = deepAnalysisArtifactsByDelivery[deliveryID]
         if result == nil {
-            print("🦴 [Artifacts] MISS for \(deliveryID.uuidString.prefix(8)). Available: \(deepAnalysisArtifactsByDelivery.keys.map { String($0.uuidString.prefix(8)) })")
+            log.warning("Deep analysis artifacts not found for \(deliveryID.uuidString.prefix(8), privacy: .public). Available keys: \(self.deepAnalysisArtifactsByDelivery.keys.map { String($0.uuidString.prefix(8)) })")
         }
         return result
     }
@@ -1433,14 +1426,14 @@ final class SessionViewModel: ObservableObject {
         artifacts.poseFrames = poseFrames
         if poseFrames.isEmpty {
             artifacts.poseFailureReason = poseFailureReason ?? "No confident pose landmarks detected in the delivery clip. Try closer framing and stronger lighting."
-            print("🦴 [DeepAnalysis] Pose FAILED for D\(index + 1): \(artifacts.poseFailureReason!)")
+            log.error("Pose extraction failed for D\(index + 1): \(artifacts.poseFailureReason!, privacy: .public)")
         } else {
             artifacts.poseFailureReason = nil
-            print("🦴 [DeepAnalysis] Pose SUCCESS for D\(index + 1): \(poseFrames.count) frames")
+            log.debug("Pose extraction succeeded for D\(index + 1): \(poseFrames.count) frames")
         }
         artifacts.expertAnalysis = detailedResult.expertAnalysis ?? ExpertAnalysisBuilder.build(from: detailedResult.phases)
         deepAnalysisArtifactsByDelivery[deliveryID] = artifacts
-        print("🦴 [DeepAnalysis] Stored artifacts for deliveryID=\(deliveryID.uuidString.prefix(8)), poseFrames=\(poseFrames.count), poseFailure=\(poseFailureReason ?? "none")")
+        log.debug("Stored deep analysis artifacts for D\(index + 1): poseFrames=\(poseFrames.count), poseFailure=\(poseFailureReason ?? "none", privacy: .public)")
 
         deepAnalysisStatusByDelivery[deliveryID] = DeliveryDeepAnalysisStatus(
             stage: .ready,
