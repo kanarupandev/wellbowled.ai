@@ -1497,6 +1497,11 @@ final class SessionViewModel: ObservableObject {
             """)
             await liveService.sendContext(feedbackParts.joined(separator: " "))
 
+            // Rotate to next challenge target after evaluation
+            if challengeText != nil {
+                await issueNextChallengeTarget()
+            }
+
             // Also feed to review agent if in review mode
             if matePhase == .postSessionReview {
                 await feedAnalysisToReviewAgent(deliveryIndex: index)
@@ -1624,15 +1629,19 @@ final class SessionViewModel: ObservableObject {
         flowPhase = .starting
 
         // Single natural greeting — the system prompt handles all conversational flow autonomously.
+        let stumpNote = WBConfig.enableSpeedCalibration
+            ? "There are guide boxes on screen for stump alignment (top = bowler end, bottom = striker end). " +
+              "If you can see stumps in the video, guide the bowler to line them up in the boxes — this enables speed tracking. " +
+              "If no stumps visible, move on — speed isn't essential."
+            : "Speed calibration is off for this session — focus on technique."
         await liveService.sendContext("""
         [SESSION STARTED] The bowler just opened the app and is at the nets. \
-        There are guide boxes on screen for stump alignment (top = bowler end, bottom = striker end). \
-        If you can see stumps in the video, guide the bowler to line them up in the boxes — this enables speed tracking. \
-        If no stumps visible, move on — speed isn't essential. \
+        \(stumpNote) \
         Greet them naturally, ask what they want to work on and how much time they've got. \
         Once they tell you, use set_session_duration to start the countdown. \
         If they don't mention time, set it to 5 minutes by default and tell them: \
-        "I'll set us up for 5 minutes — just say if you want more time."
+        "I'll set us up for 5 minutes — just say if you want more time." \
+        After you've seen 2-3 deliveries, use set_challenge_target to start the challenge loop.
         """)
     }
 
@@ -2424,6 +2433,24 @@ extension SessionViewModel: VoiceMateDelegate {
         }
     }
 
+    func voiceMate(didSetChallengeTarget target: String) async {
+        guard session.isActive else { return }
+
+        // Switch to challenge mode if not already
+        if session.mode != .challenge {
+            session.mode = .challenge
+            log.info("Challenge mode activated by mate")
+        }
+
+        session.currentChallenge = target
+        currentChallengeTarget = target
+        log.info("Challenge target set by mate: \(target, privacy: .public)")
+
+        if liveService.isConnected {
+            await liveService.sendContext("[CHALLENGE ACTIVE] Target: \"\(target)\". The bowler can see this on screen. The next delivery will be evaluated against it.")
+        }
+    }
+
 }
 
 // MARK: - DeliveryDetectionDelegate
@@ -2601,6 +2628,11 @@ extension SessionViewModel {
                         deepAnalysisStatusByDelivery[delivery.id] = DeliveryDeepAnalysisStatus(
                             stage: .idle, elapsedSeconds: 0, statusMessage: "", failureMessage: nil
                         )
+
+                        // Record current challenge target for this delivery
+                        if session.mode == .challenge, let target = session.currentChallenge {
+                            challengeTargetBySequence[count] = target
+                        }
 
                         log.debug("Live delivery detected: D\(count) at \(String(format: "%.1f", globalTimestamp))s, confidence \(String(format: "%.2f", detection.confidence))")
 

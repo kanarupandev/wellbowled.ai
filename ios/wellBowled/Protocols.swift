@@ -99,6 +99,10 @@ protocol VoiceMateDelegate: AnyObject {
     /// Model set the session duration via tool call (after asking the bowler how long they have).
     @MainActor
     func voiceMate(didSetSessionDuration minutes: Int) async
+
+    /// Model activated a challenge target via tool call.
+    @MainActor
+    func voiceMate(didSetChallengeTarget target: String) async
 }
 
 extension VoiceMateDelegate {
@@ -109,6 +113,8 @@ extension VoiceMateDelegate {
     func voiceMate(didRequestNavigateDelivery action: String, deliveryNumber: Int?) async {}
     @MainActor
     func voiceMate(didRequestPlaybackControl action: String, timestamp: Double?, rate: Float?) async {}
+    @MainActor
+    func voiceMate(didSetChallengeTarget target: String) async {}
 }
 
 

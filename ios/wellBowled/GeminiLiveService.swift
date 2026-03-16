@@ -314,6 +314,21 @@ final class GeminiLiveService: NSObject, VoiceMateService {
                         ],
                         required: ["action"]
                     )
+                ),
+                LiveFunctionDeclaration(
+                    name: "set_challenge_target",
+                    description: "Set a bowling challenge target for the bowler. Call this when you want to challenge them — e.g. after seeing 2-3 deliveries. The target appears on screen and the next delivery is evaluated against it. Targets rotate automatically after each evaluation.",
+                    parameters: LiveFunctionParameters(
+                        type: "OBJECT",
+                        properties: [
+                            "target": LiveFunctionProperty(
+                                type: "STRING",
+                                description: "The challenge target description, e.g. 'Yorker on off stump', 'Good length outside off', 'Full and straight'",
+                                enum: nil
+                            )
+                        ],
+                        required: ["target"]
+                    )
                 )
             ]
         )
@@ -712,6 +727,16 @@ final class GeminiLiveService: NSObject, VoiceMateService {
                     self.sendToolResponse(
                         for: functionCall,
                         message: "Playback: \(action)"
+                    )
+                }
+            case "set_challenge_target":
+                let target = functionCall.args["target"] ?? "Good length on off stump"
+                Task { [weak self] in
+                    guard let self else { return }
+                    await self.delegate?.voiceMate(didSetChallengeTarget: target)
+                    self.sendToolResponse(
+                        for: functionCall,
+                        message: "Challenge target set: \(target)"
                     )
                 }
             default:

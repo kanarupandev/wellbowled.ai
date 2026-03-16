@@ -111,15 +111,24 @@ struct LiveSessionView: View {
                     HStack(spacing: 8) {
                         Image(systemName: "scope")
                             .font(.caption)
+                            .symbolEffect(.pulse, isActive: viewModel.currentChallengeTarget != nil)
                         Text(challengeBannerText)
                             .font(.caption.bold())
                             .lineLimit(1)
+                        Spacer()
+                        if !viewModel.session.challengeScoreText.isEmpty {
+                            Text(viewModel.session.challengeScoreText)
+                                .font(.caption.monospacedDigit())
+                                .foregroundColor(.green)
+                        }
                     }
                     .foregroundColor(peacockBlue)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Color.black.opacity(0.45))
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .animation(.spring(response: 0.4), value: viewModel.currentChallengeTarget)
                 }
 
                 Spacer()
