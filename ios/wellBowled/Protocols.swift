@@ -91,6 +91,10 @@ protocol VoiceMateDelegate: AnyObject {
     /// Model requested delivery navigation via tool call (review mode).
     @MainActor
     func voiceMate(didRequestNavigateDelivery action: String, deliveryNumber: Int?) async
+
+    /// Model requested video playback control via tool call (review mode).
+    @MainActor
+    func voiceMate(didRequestPlaybackControl action: String, timestamp: Double?, rate: Float?) async
 }
 
 extension VoiceMateDelegate {
@@ -99,13 +103,10 @@ extension VoiceMateDelegate {
     func voiceMate(didRequestEndSession reason: String) async {}
     @MainActor
     func voiceMate(didRequestNavigateDelivery action: String, deliveryNumber: Int?) async {}
+    @MainActor
+    func voiceMate(didRequestPlaybackControl action: String, timestamp: Double?, rate: Float?) async {}
 }
 
-protocol VoiceMateNavigationDelegate: AnyObject {
-    /// Mate requested delivery navigation via tool call.
-    @MainActor
-    func voiceMate(didRequestNavigateDelivery action: String, deliveryNumber: Int?) async
-}
 
 // MARK: - Clip Extraction
 

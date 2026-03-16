@@ -63,6 +63,28 @@ final class SessionViewModel: ObservableObject {
     // Stump calibration state (published for CalibrationOverlayView)
     @Published private(set) var calibrationState: StumpDetectionService.CalibrationState = .idle
 
+    // Agent playback commands (review agent controls video replay)
+    struct PlaybackCommand: Equatable {
+        let id = UUID()
+        let action: PlaybackAction
+        let timestamp: Double?
+        let rate: Float?
+
+        static func == (lhs: PlaybackCommand, rhs: PlaybackCommand) -> Bool {
+            lhs.id == rhs.id
+        }
+    }
+
+    enum PlaybackAction: String {
+        case play
+        case pause
+        case slowMo
+        case seek
+        case focusPhase
+    }
+
+    @Published var playbackCommand: PlaybackCommand?
+
     // MARK: - Services
 
     let cameraService = CameraService()
@@ -1661,10 +1683,18 @@ final class SessionViewModel: ObservableObject {
         - After all deliveries: give a 15-second session wrap-up. Top strength. Top area to work on. What to focus on next session.
         - Be honest. Don't sugar-coat. But be constructive.
 
-        NAVIGATION:
-        - The bowler can say "next", "previous", "go to delivery 3", or "skip to the summary".
-        - You have the `navigate_delivery` tool to sync the UI carousel.
-        - When navigating, call the tool AND speak about the delivery.
+        NAVIGATION & PLAYBACK TOOLS:
+        - You have `navigate_delivery` to move between deliveries (next/previous/goto).
+        - You have `control_playback` to control the video replay:
+          * action "play" — resume at normal speed
+          * action "pause" — freeze the frame
+          * action "slow_mo" with rate "0.25" or "0.5" — slow motion replay
+          * action "seek" with timestamp "2.1" — jump to a specific moment (0.0-5.0)
+          * action "focus_phase" with timestamp "2.1" and rate "0.5" — loop a phase in slow-mo
+        - USE THESE PROACTIVELY. When discussing the release, seek to the release timestamp and slow-mo it.
+        - Example: "Let me show you the release in slow motion" → call control_playback(action: "focus_phase", timestamp: "2.1", rate: "0.25")
+        - After showing a moment, resume normal playback or move to the next delivery.
+        - The bowler can also say "next", "previous", "go to delivery 3", or "skip to the summary".
 
         PROACTIVE:
         - If you notice a pattern across deliveries (e.g. same issue recurring), call it out.
@@ -2032,6 +2062,26 @@ extension SessionViewModel: VoiceMateDelegate {
         default:
             break
         }
+    }
+
+    func voiceMate(didRequestPlaybackControl action: String, timestamp: Double?, rate: Float?) async {
+        log.debug("Mate playback control: action=\(action, privacy: .public) ts=\(timestamp ?? -1) rate=\(rate ?? -1)")
+
+        let playbackAction: PlaybackAction
+        switch action {
+        case "play": playbackAction = .play
+        case "pause": playbackAction = .pause
+        case "slow_mo": playbackAction = .slowMo
+        case "seek": playbackAction = .seek
+        case "focus_phase": playbackAction = .focusPhase
+        default: return
+        }
+
+        playbackCommand = PlaybackCommand(
+            action: playbackAction,
+            timestamp: timestamp,
+            rate: rate
+        )
     }
 
 }

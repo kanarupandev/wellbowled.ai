@@ -665,6 +665,13 @@ private struct SessionDeliveryResultPage: View {
                 .onChange(of: delivery.videoURL) { _, _ in
                     setupPlayerIfNeeded()
                 }
+                .onChange(of: viewModel.playbackCommand) { _, cmd in
+                    guard let cmd else { return }
+                    // Only respond if this delivery is currently being reviewed
+                    guard viewModel.reviewDeliveryIndex < viewModel.session.deliveries.count,
+                          viewModel.session.deliveries[viewModel.reviewDeliveryIndex].id == deliveryID else { return }
+                    executePlaybackCommand(cmd)
+                }
                 .onDisappear {
                     teardownPlayback()
                 }
@@ -1076,6 +1083,49 @@ private struct SessionDeliveryResultPage: View {
             toleranceBefore: .zero,
             toleranceAfter: .zero
         ) { _ in
+        }
+    }
+
+    /// Execute a playback command from the review agent.
+    private func executePlaybackCommand(_ cmd: SessionViewModel.PlaybackCommand) {
+        guard let player else { return }
+        liveViewLog.debug("Agent playback command: \(cmd.action.rawValue), ts=\(cmd.timestamp ?? -1), rate=\(cmd.rate ?? -1)")
+
+        switch cmd.action {
+        case .play:
+            isPlaybackPaused = false
+            playbackRate = cmd.rate ?? 1.0
+            applyPlaybackMode()
+
+        case .pause:
+            isPlaybackPaused = true
+            applyPlaybackMode()
+
+        case .slowMo:
+            isPlaybackPaused = false
+            playbackRate = cmd.rate ?? 0.25
+            applyPlaybackMode()
+
+        case .seek:
+            if let ts = cmd.timestamp {
+                isPlaybackPaused = false
+                seek(to: ts)
+                applyPlaybackMode()
+            }
+
+        case .focusPhase:
+            if let ts = cmd.timestamp {
+                isPlaybackPaused = false
+                playbackRate = cmd.rate ?? 0.5
+                let window = SessionResultsPlanner.focusWindow(
+                    for: ts,
+                    clipDuration: clipDurationSeconds
+                )
+                focusWindow = window
+                seek(to: window.lowerBound)
+                applyPlaybackMode()
+                startFocusLoop()
+            }
         }
     }
 

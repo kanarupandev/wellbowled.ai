@@ -260,6 +260,31 @@ final class GeminiLiveService: NSObject, VoiceMateService {
                         ],
                         required: ["action"]
                     )
+                ),
+                LiveFunctionDeclaration(
+                    name: "control_playback",
+                    description: "Control the video replay during post-session review. Use to play, pause, slow-motion, or seek to a specific timestamp in the current delivery clip. Use this proactively to show the bowler key moments.",
+                    parameters: LiveFunctionParameters(
+                        type: "OBJECT",
+                        properties: [
+                            "action": LiveFunctionProperty(
+                                type: "STRING",
+                                description: "Playback action",
+                                enum: ["play", "pause", "slow_mo", "seek", "focus_phase"]
+                            ),
+                            "timestamp": LiveFunctionProperty(
+                                type: "STRING",
+                                description: "Seek target in seconds (0.0-5.0). Used with seek and focus_phase actions.",
+                                enum: nil
+                            ),
+                            "rate": LiveFunctionProperty(
+                                type: "STRING",
+                                description: "Playback rate for slow_mo (e.g. 0.25, 0.5). Ignored for other actions.",
+                                enum: nil
+                            )
+                        ],
+                        required: ["action"]
+                    )
                 )
             ]
         )
@@ -602,6 +627,18 @@ final class GeminiLiveService: NSObject, VoiceMateService {
                     self.sendToolResponse(
                         for: functionCall,
                         message: "Navigating: \(action)"
+                    )
+                }
+            case "control_playback":
+                let action = functionCall.args["action"] ?? "play"
+                let timestamp = functionCall.args["timestamp"].flatMap { Double($0) }
+                let rate = functionCall.args["rate"].flatMap { Float($0) }
+                Task { [weak self] in
+                    guard let self else { return }
+                    await self.delegate?.voiceMate(didRequestPlaybackControl: action, timestamp: timestamp, rate: rate)
+                    self.sendToolResponse(
+                        for: functionCall,
+                        message: "Playback: \(action)"
                     )
                 }
             default:
