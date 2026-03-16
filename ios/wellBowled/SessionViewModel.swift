@@ -406,21 +406,32 @@ final class SessionViewModel: ObservableObject {
         let delivery = session.deliveries[index]
         let seq = index + 1
 
-        var context = "[REVIEWING DELIVERY \(seq)] The bowler is now looking at delivery \(seq)."
+        var parts: [String] = ["[REVIEWING DELIVERY \(seq)] The bowler jumped to delivery \(seq). Talk them through it."]
+        if let kph = delivery.speedKph {
+            parts.append("Speed: \(String(format: "%.1f", kph)) kph.")
+        }
+        if let report = delivery.report, !report.isEmpty {
+            parts.append("Report: \(report)")
+        }
         if let phases = delivery.phases, !phases.isEmpty {
-            let good = phases.filter(\.isGood).map(\.name).joined(separator: ", ")
-            let work = phases.filter { !$0.isGood }.map(\.name).joined(separator: ", ")
-            context += " Phases — Good: \(good.isEmpty ? "none" : good). Needs work: \(work.isEmpty ? "none" : work)."
+            for phase in phases {
+                var desc = "\(phase.name) [\(phase.status)]: \(phase.observation)"
+                if let ts = phase.clipTimestamp {
+                    desc += " @ \(String(format: "%.1f", ts))s"
+                }
+                if !phase.tip.isEmpty { desc += " — Drill: \(phase.tip)" }
+                parts.append(desc)
+            }
         }
-        if let speedKph = delivery.speedKph {
-            context += " Speed: \(String(format: "%.1f", speedKph)) kph."
+        if let matches = delivery.dnaMatches, let top = matches.first {
+            parts.append("DNA: \(top.bowlerName) (\(top.country)) \(Int(top.similarityPercent))%. Closest: \(top.closestPhase). Diverges: \(top.biggestDifference).")
         }
-        if let report = delivery.report {
-            context += " Report: \(report)"
+        if let target = challengeTargetBySequence[seq] {
+            parts.append("Challenge target was: \(target).")
         }
 
         if liveService.isConnected {
-            await liveService.sendContext(context)
+            await liveService.sendContext(parts.joined(separator: " "))
         }
     }
 
@@ -1618,32 +1629,63 @@ final class SessionViewModel: ObservableObject {
     private func buildReviewAgentPrompt() -> String {
         let deliveries = session.deliveries
         let count = deliveries.count
+        let mode = session.mode
 
         var deliveryDetails: [String] = []
         for (i, d) in deliveries.enumerated() {
-            var lines: [String] = ["Delivery \(i + 1):"]
-            if let kph = d.speedKph {
+            let seq = i + 1
+            var lines: [String] = ["Delivery \(seq):"]
+            if let kph = d.speedKph, let conf = d.speedConfidence {
+                lines.append("  Speed: \(String(format: "%.1f", kph)) kph (confidence \(String(format: "%.0f", conf * 100))%)")
+            } else if let kph = d.speedKph {
                 lines.append("  Speed: \(String(format: "%.1f", kph)) kph")
             }
             if let report = d.report, !report.isEmpty {
                 lines.append("  Report: \(report)")
             }
             if let phases = d.phases, !phases.isEmpty {
-                let good = phases.filter(\.isGood).map(\.name).joined(separator: ", ")
-                let work = phases.filter({ !$0.isGood }).map(\.name).joined(separator: ", ")
-                if !good.isEmpty { lines.append("  Good: \(good)") }
-                if !work.isEmpty { lines.append("  Needs work: \(work)") }
                 for phase in phases {
+                    var phaseLabel = "  \(phase.name) [\(phase.status)]"
+                    if let ts = phase.clipTimestamp {
+                        phaseLabel += " @ \(String(format: "%.1f", ts))s in clip"
+                    }
+                    lines.append(phaseLabel)
                     if !phase.observation.isEmpty {
-                        lines.append("  \(phase.name): \(phase.observation)")
+                        lines.append("    \(phase.observation)")
                     }
                     if !phase.tip.isEmpty {
-                        lines.append("    Tip: \(phase.tip)")
+                        lines.append("    Drill: \(phase.tip)")
                     }
                 }
             }
-            if let dna = d.dna, let matches = d.dnaMatches, let top = matches.first {
-                lines.append("  DNA match: \(top.bowlerName) (\(top.country)) \(Int(top.similarityPercent))%")
+            if let matches = d.dnaMatches, !matches.isEmpty {
+                let top = matches[0]
+                lines.append("  DNA match: \(top.bowlerName) (\(top.country), \(top.era)) — \(Int(top.similarityPercent))% similar")
+                lines.append("    Style: \(top.style)")
+                lines.append("    Closest phase: \(top.closestPhase)")
+                lines.append("    Biggest difference: \(top.biggestDifference)")
+                if !top.signatureTraits.isEmpty {
+                    lines.append("    Signature traits: \(top.signatureTraits.joined(separator: "; "))")
+                }
+                if matches.count > 1 {
+                    let others = matches.dropFirst().prefix(2).map { "\($0.bowlerName) \(Int($0.similarityPercent))%" }
+                    lines.append("    Also resembles: \(others.joined(separator: ", "))")
+                }
+            }
+            if let dna = d.dna {
+                var traits: [String] = []
+                if let ap = dna.armPath { traits.append("arm: \(ap.rawValue)") }
+                if let wp = dna.wristPosition { traits.append("wrist: \(wp.rawValue)") }
+                if let ga = dna.gatherAlignment { traits.append("alignment: \(ga.rawValue)") }
+                if let rh = dna.releaseHeight { traits.append("release: \(rh.rawValue)") }
+                if let ft = dna.followThroughDirection { traits.append("follow-through: \(ft.rawValue)") }
+                if let hs = dna.headStability { traits.append("head: \(hs.rawValue)") }
+                if !traits.isEmpty {
+                    lines.append("  Action shape: \(traits.joined(separator: ", "))")
+                }
+            }
+            if let target = challengeTargetBySequence[seq] {
+                lines.append("  Challenge target: \(target)")
             }
             deliveryDetails.append(lines.joined(separator: "\n"))
         }
@@ -1655,64 +1697,133 @@ final class SessionViewModel: ObservableObject {
         var speedSummary = ""
         if !speeds.isEmpty {
             let avg = speeds.reduce(0, +) / Double(speeds.count)
-            let min = speeds.min()!
-            let max = speeds.max()!
-            speedSummary = "Speed summary: avg \(String(format: "%.1f", avg)) kph, min \(String(format: "%.1f", min)), max \(String(format: "%.1f", max))"
+            let minS = speeds.min()!
+            let maxS = speeds.max()!
+            speedSummary = "Speed: avg \(String(format: "%.1f", avg)) kph, range \(String(format: "%.1f", minS))–\(String(format: "%.1f", maxS)) kph"
         }
 
+        // Challenge summary
+        var challengeSummary = ""
+        if mode == .challenge && session.challengeTotal > 0 {
+            let pct = session.challengeTotal > 0 ? Int(Double(session.challengeHits) / Double(session.challengeTotal) * 100) : 0
+            challengeSummary = "Challenge score: \(session.challengeHits)/\(session.challengeTotal) (\(pct)%)"
+        }
+
+        // Cross-delivery patterns for the agent to reference
+        var patternNotes: [String] = []
+        let phaseNames = Set(deliveries.compactMap(\.phases).flatMap { $0 }.map(\.name))
+        for phaseName in phaseNames {
+            let needsWork = deliveries.filter { d in
+                d.phases?.first(where: { $0.name == phaseName && !$0.isGood }) != nil
+            }
+            if needsWork.count >= 2 {
+                let seqs = needsWork.compactMap { d in deliveries.firstIndex(where: { $0.id == d.id }).map { $0 + 1 } }
+                patternNotes.append("Recurring issue — \(phaseName) needs work in deliveries \(seqs.map(String.init).joined(separator: ", "))")
+            }
+        }
+
+        // DNA consistency
+        let topMatches = deliveries.compactMap(\.dnaMatches?.first)
+        if topMatches.count >= 2 {
+            let names = topMatches.map(\.bowlerName)
+            let unique = Set(names)
+            if unique.count == 1 {
+                patternNotes.append("Consistent DNA — matched \(names[0]) across all analyzed deliveries")
+            } else {
+                let grouped = Dictionary(grouping: names, by: { $0 }).sorted { $0.value.count > $1.value.count }
+                let desc = grouped.prefix(3).map { "\($0.key) ×\($0.value.count)" }.joined(separator: ", ")
+                patternNotes.append("DNA variation: \(desc)")
+            }
+        }
+
+        let patternsBlock = patternNotes.isEmpty ? "" : "\nPATTERNS DETECTED:\n\(patternNotes.map { "- \($0)" }.joined(separator: "\n"))"
+
+        let personaLine: String = {
+            switch WBConfig.matePersona.personaStyle {
+            case .aussie: return "Speak with a casual Australian accent. Cricket slang welcome."
+            case .tamil: return "SPEAK ENTIRELY IN TAMIL. Cricket terms in English."
+            case .tanglish: return "Speak in Tanglish — natural Tamil-English mix."
+            default: return "Speak in clear, warm English."
+            }
+        }()
+
         return """
-        You are a cricket bowling analysis expert reviewing a completed practice session.
-        Your sole purpose is to walk the bowler through their session results — delivery by delivery.
+        You are an elite cricket bowling coach reviewing a completed practice session.
+        You have deep expertise in biomechanics, action analysis, and player development.
         The bowler is wearing earbuds. They cannot touch the phone. Everything is voice.
 
-        \(WBConfig.matePersona.personaStyle == .aussie ? "Speak with a casual Australian accent. Cricket slang welcome." :
-          WBConfig.matePersona.personaStyle == .tamil ? "SPEAK ENTIRELY IN TAMIL. Cricket terms in English." :
-          WBConfig.matePersona.personaStyle == .tanglish ? "Speak in Tanglish — natural Tamil-English mix." :
-          "Speak in clear, warm English.")
+        \(personaLine)
 
         SESSION DATA:
         Total deliveries: \(count)
+        Mode: \(mode == .challenge ? "Challenge" : "Free Play")
         \(speedSummary)
+        \(challengeSummary)
+        \(patternsBlock)
 
         \(allDeliveries)
 
-        BEHAVIOR:
-        - START IMMEDIATELY. Do not wait to be asked. Begin with a brief session overview (10 seconds max).
-        - Then walk through each delivery. Lead with what was good, then what needs work, then the actionable tip.
-        - If speed data is available, reference it naturally: "That was 127 kph — good pace."
-        - If a DNA match is interesting, mention it: "That delivery had a bit of Starc about it."
-        - Between deliveries, pause briefly and say "Next one" or "Moving on to delivery 3."
-        - If the bowler interrupts with a question, answer it, then continue the walkthrough.
-        - After all deliveries: give a 15-second session wrap-up. Top strength. Top area to work on. What to focus on next session.
-        - Be honest. Don't sugar-coat. But be constructive.
+        YOUR ROLE — TOUR GUIDE + EXPERT:
+
+        1. OPENING (keep it under 15 seconds):
+           Start with a punchy session headline — how many deliveries, any standout number \
+        (fastest ball, best DNA match, challenge score). Then ask: "Want me to walk you through \
+        each delivery, or is there one you want to jump to?"
+
+        2. DELIVERY WALKTHROUGH:
+           For each delivery, cover three layers:
+           a) THE VERDICT — one sentence: what went right, what didn't.
+           b) THE DETAIL — reference the phase data. Use clip timestamps to show the moment: \
+        "Watch your front arm at 2.1 seconds" then call control_playback to slow-mo it.
+           c) THE DNA — if a match exists, make it vivid: "Your release here is pure Wasim Akram — \
+        high arm, wrist cocked behind the ball. Where you diverge is the follow-through: \
+        Akram goes across, you're falling away." Reference closestPhase and biggestDifference.
+
+        3. EXPERT Q&A:
+           The bowler may interrupt with questions at any time. You have the full data — use it.
+           Examples of questions you should handle well:
+           - "Which delivery was my best?" → Compare across all deliveries using phases + speed + DNA.
+           - "Why do I keep getting told my front arm needs work?" → Look at the recurring pattern, \
+        explain the biomechanics, give a concrete drill from the tip data.
+           - "Who do I bowl most like?" → Aggregate DNA matches, explain what makes the comparison apt, \
+        and where the bowler's action diverges.
+           - "Am I getting tired?" → Look at speed trend and phase degradation across the session.
+           - "What should I work on at my next session?" → Synthesize the biggest recurring weakness \
+        and the drill that addresses it.
+
+        4. HIGHLIGHTS — proactively point out:
+           - The single best delivery (and why).
+           - Any recurring mechanical issue (same phase flagged multiple times).
+           - Speed trends (improving, fading, consistent).
+           - DNA consistency or shifts ("Your first three were Steyn-like, then you drifted to Anderson").
+           - Challenge performance if applicable.
+
+        5. WRAP-UP (after all deliveries or when bowler says "summary"):
+           - Top strength (backed by data).
+           - #1 thing to fix (the most repeated weakness).
+           - A specific drill or focus for next session (from the tip data).
+           - If DNA data exists: "Your signature action is closest to [bowler] — own it, work on [difference]."
 
         NAVIGATION & PLAYBACK TOOLS:
-        - You have `navigate_delivery` to move between deliveries (next/previous/goto).
-        - You have `control_playback` to control the video replay:
-          * action "play" — resume at normal speed
-          * action "pause" — freeze the frame
-          * action "slow_mo" with rate "0.25" or "0.5" — slow motion replay
-          * action "seek" with timestamp "2.1" — jump to a specific moment (0.0-5.0)
-          * action "focus_phase" with timestamp "2.1" and rate "0.5" — loop a phase in slow-mo
-        - USE THESE PROACTIVELY. When discussing the release, seek to the release timestamp and slow-mo it.
-        - Example: "Let me show you the release in slow motion" → call control_playback(action: "focus_phase", timestamp: "2.1", rate: "0.25")
-        - After showing a moment, resume normal playback or move to the next delivery.
-        - The bowler can also say "next", "previous", "go to delivery 3", or "skip to the summary".
-
-        PROACTIVE:
-        - If you notice a pattern across deliveries (e.g. same issue recurring), call it out.
-        - If speed drops across the session, mention fatigue.
-        - If one delivery stands out (best or worst), highlight it.
-        - Compare first vs last delivery for progress/regression.
-
-        ENDING:
-        - When the bowler says "done", "thanks", "that's all" — give a short sign-off.
-        - Call `end_session` tool to disconnect.
+        - `navigate_delivery`: move between deliveries (next / previous / goto index).
+        - `control_playback`:
+          * "play" — resume normal speed
+          * "pause" — freeze frame
+          * "slow_mo" with rate "0.25" or "0.5"
+          * "seek" with timestamp "2.1" — jump to moment in clip (0.0–5.0s)
+          * "focus_phase" with timestamp and rate — loop a phase in slow-mo
+        - USE THESE PROACTIVELY. When you mention a phase, seek to its clip_ts and slow-mo it. \
+        Don't just describe — show.
 
         RULES:
-        - Max 3 sentences per delivery. Don't monologue.
-        - Reference the ACTUAL data. Never fabricate measurements.
-        - Cricket terminology. You know the game.
+        - Reference ACTUAL data from the session. Never fabricate measurements or matches.
+        - Keep each delivery segment to 3–4 sentences max before pausing for the bowler.
+        - If analysis is still loading for a delivery, say so and move on — you'll be notified when it arrives.
+        - Cricket terminology throughout. You know the game deeply.
+        - Be honest and direct. Praise what's genuinely good. Don't soften real problems.
+
+        ENDING:
+        - When the bowler says "done", "thanks", "that's all" — give a 10-second sign-off and call `end_session`.
         """
     }
 
@@ -1756,18 +1867,29 @@ final class SessionViewModel: ObservableObject {
 
         var parts: [String] = ["[NEW ANALYSIS READY for delivery \(seq)]"]
         if let kph = delivery.speedKph {
-            parts.append("Speed: \(String(format: "%.1f", kph)) kph")
+            parts.append("Speed: \(String(format: "%.1f", kph)) kph.")
         }
         if let phases = delivery.phases, !phases.isEmpty {
-            let good = phases.filter(\.isGood).map { "\($0.name): \($0.observation)" }.joined(separator: "; ")
-            let work = phases.filter({ !$0.isGood }).map { "\($0.name): \($0.observation) — Tip: \($0.tip)" }.joined(separator: "; ")
-            if !good.isEmpty { parts.append("Good: \(good)") }
-            if !work.isEmpty { parts.append("Needs work: \(work)") }
+            for phase in phases {
+                var desc = "\(phase.name) [\(phase.status)]: \(phase.observation)"
+                if let ts = phase.clipTimestamp {
+                    desc += " (visible at \(String(format: "%.1f", ts))s in clip)"
+                }
+                if !phase.tip.isEmpty {
+                    desc += " — Drill: \(phase.tip)"
+                }
+                parts.append(desc)
+            }
         }
-        if let matches = delivery.dnaMatches, let top = matches.first {
-            parts.append("DNA: \(top.bowlerName) \(Int(top.similarityPercent))%")
+        if let matches = delivery.dnaMatches, !matches.isEmpty {
+            let top = matches[0]
+            parts.append("DNA: \(top.bowlerName) (\(top.country), \(top.era)) \(Int(top.similarityPercent))%. Closest phase: \(top.closestPhase). Biggest difference: \(top.biggestDifference). Traits: \(top.signatureTraits.joined(separator: "; ")).")
+            if matches.count > 1 {
+                let others = matches.dropFirst().prefix(2).map { "\($0.bowlerName) \(Int($0.similarityPercent))%" }
+                parts.append("Also resembles: \(others.joined(separator: ", ")).")
+            }
         }
-        parts.append("Walk through this delivery now if the bowler hasn't heard about it yet.")
+        parts.append("Tell the bowler about this delivery if they haven't heard about it yet. Use playback tools to show key moments.")
 
         await liveService.sendContext(parts.joined(separator: " "))
     }
