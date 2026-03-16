@@ -42,6 +42,7 @@ final class ModelsCodableAndUtilityTests: XCTestCase {
             localThumbnailPath: "thumbs/t7.jpg",
             localVideoPath: "videos/v7.mov",
             speedKph: 127.3,
+            speedErrorMarginKph: 3.2,
             speedConfidence: 0.85,
             speedMethod: .frameDifferencing,
             wristOmega: 1420.5,
@@ -71,6 +72,7 @@ final class ModelsCodableAndUtilityTests: XCTestCase {
         XCTAssertEqual(decoded.localThumbnailPath, original.localThumbnailPath)
         XCTAssertEqual(decoded.localVideoPath, original.localVideoPath)
         XCTAssertEqual(decoded.speedKph ?? -1, original.speedKph ?? -1, accuracy: 0.01)
+        XCTAssertEqual(decoded.speedErrorMarginKph ?? -1, original.speedErrorMarginKph ?? -1, accuracy: 0.01)
         XCTAssertEqual(decoded.speedConfidence ?? -1, original.speedConfidence ?? -1, accuracy: 0.01)
         XCTAssertEqual(decoded.speedMethod, original.speedMethod)
         XCTAssertEqual(decoded.wristOmega ?? -1, original.wristOmega ?? -1, accuracy: 0.0001)

@@ -579,7 +579,7 @@ private struct SessionDeliveryResultPage: View {
                                 if let speedKph = delivery.speedKph {
                                     VStack {
                                         HStack {
-                                            SessionSpeedBadge(kph: speedKph, confidence: delivery.speedConfidence)
+                                            SessionSpeedBadge(kph: speedKph, errorMarginKph: delivery.speedErrorMarginKph)
                                             Spacer()
                                         }
                                         .padding(.leading, 16)
@@ -1551,17 +1551,20 @@ private struct SessionFeedbackLine: View {
 
 private struct SessionSpeedBadge: View {
     let kph: Double
-    let confidence: Double?
+    let errorMarginKph: Double?
 
-    private var formattedSpeed: String {
-        String(format: "%.0f", kph)
+    private var speedText: String {
+        if let margin = errorMarginKph {
+            return "\(String(format: "%.0f", kph)) ±\(String(format: "%.0f", margin)) kph"
+        }
+        return "~\(String(format: "%.0f", kph)) kph"
     }
 
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: "gauge.with.needle.fill")
                 .font(.caption2)
-            Text("\(formattedSpeed) kph")
+            Text(speedText)
                 .font(.system(size: 14, weight: .bold, design: .rounded).monospacedDigit())
         }
         .foregroundColor(.white)

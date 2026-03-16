@@ -76,6 +76,7 @@ struct Delivery: Identifiable, Equatable, Codable {
 
     // Speed — populated by StumpCalibration frame-differencing (post-session)
     var speedKph: Double?           // Measured ball speed in km/h
+    var speedErrorMarginKph: Double? // ± error margin in km/h (nil = unknown)
     var speedConfidence: Double?    // 0.0-1.0 confidence in speed measurement
     var speedMethod: SpeedEstimationMethod?  // How speed was estimated
 
@@ -87,7 +88,7 @@ struct Delivery: Identifiable, Equatable, Codable {
 
     enum CodingKeys: String, CodingKey {
         case id, timestamp, report, speed, tips, phases, releaseTimestamp, status, videoURL, sequence, videoID, cloudVideoURL, cloudThumbnailURL, overlayVideoURL, localOverlayPath, landmarksURL, isFavorite, localThumbnailPath, localVideoPath
-        case speedKph, speedConfidence, speedMethod
+        case speedKph, speedErrorMarginKph, speedConfidence, speedMethod
         case wristOmega, releaseWristY, dna, dnaMatches
     }
     
@@ -112,6 +113,7 @@ struct Delivery: Identifiable, Equatable, Codable {
          localThumbnailPath: String? = nil,
          localVideoPath: String? = nil,
          speedKph: Double? = nil,
+         speedErrorMarginKph: Double? = nil,
          speedConfidence: Double? = nil,
          speedMethod: SpeedEstimationMethod? = nil,
          wristOmega: Double? = nil,
@@ -139,6 +141,7 @@ struct Delivery: Identifiable, Equatable, Codable {
         self.localThumbnailPath = localThumbnailPath
         self.localVideoPath = localVideoPath
         self.speedKph = speedKph
+        self.speedErrorMarginKph = speedErrorMarginKph
         self.speedConfidence = speedConfidence
         self.speedMethod = speedMethod
         self.wristOmega = wristOmega
@@ -169,6 +172,7 @@ struct Delivery: Identifiable, Equatable, Codable {
         localThumbnailPath = try container.decodeIfPresent(String.self, forKey: .localThumbnailPath)
         localVideoPath = try container.decodeIfPresent(String.self, forKey: .localVideoPath)
         speedKph = try container.decodeIfPresent(Double.self, forKey: .speedKph)
+        speedErrorMarginKph = try container.decodeIfPresent(Double.self, forKey: .speedErrorMarginKph)
         speedConfidence = try container.decodeIfPresent(Double.self, forKey: .speedConfidence)
         speedMethod = try container.decodeIfPresent(SpeedEstimationMethod.self, forKey: .speedMethod)
         wristOmega = try container.decodeIfPresent(Double.self, forKey: .wristOmega)
@@ -200,6 +204,7 @@ struct Delivery: Identifiable, Equatable, Codable {
         try container.encode(localThumbnailPath, forKey: .localThumbnailPath)
         try container.encode(localVideoPath, forKey: .localVideoPath)
         try container.encodeIfPresent(speedKph, forKey: .speedKph)
+        try container.encodeIfPresent(speedErrorMarginKph, forKey: .speedErrorMarginKph)
         try container.encodeIfPresent(speedConfidence, forKey: .speedConfidence)
         try container.encodeIfPresent(speedMethod, forKey: .speedMethod)
         try container.encodeIfPresent(wristOmega, forKey: .wristOmega)
@@ -222,6 +227,7 @@ struct Delivery: Identifiable, Equatable, Codable {
                lhs.sequence == rhs.sequence &&
                lhs.localOverlayPath == rhs.localOverlayPath &&
                lhs.speedKph == rhs.speedKph &&
+               lhs.speedErrorMarginKph == rhs.speedErrorMarginKph &&
                lhs.speedConfidence == rhs.speedConfidence &&
                lhs.speedMethod == rhs.speedMethod &&
                lhs.wristOmega == rhs.wristOmega &&

@@ -410,8 +410,10 @@ final class SessionViewModel: ObservableObject {
         let seq = index + 1
 
         var parts: [String] = ["[REVIEWING DELIVERY \(seq)] The bowler jumped to delivery \(seq). Talk them through it."]
-        if let kph = delivery.speedKph {
-            parts.append("Speed: \(String(format: "%.1f", kph)) kph.")
+        if let kph = delivery.speedKph, let margin = delivery.speedErrorMarginKph {
+            parts.append("Estimated speed: \(String(format: "%.0f", kph)) ±\(String(format: "%.0f", margin)) kph (video-based, not radar).")
+        } else if let kph = delivery.speedKph {
+            parts.append("Estimated speed: ~\(String(format: "%.0f", kph)) kph (video-based, not radar).")
         }
         if let report = delivery.report, !report.isEmpty {
             parts.append("Report: \(report)")
@@ -1299,16 +1301,22 @@ final class SessionViewModel: ObservableObject {
                     calibration: calibration,
                     deliveryTimestamp: deliveryTs
                 )
-                session.deliveries[index].speedKph = estimate.kph
-                session.deliveries[index].speedConfidence = estimate.confidence
-                session.deliveries[index].speedMethod = estimate.method
+                let margin = estimate.errorMarginKph ?? 5.0
+                if margin < 5.0 {
+                    session.deliveries[index].speedKph = estimate.kph
+                    session.deliveries[index].speedErrorMarginKph = margin
+                    session.deliveries[index].speedConfidence = estimate.confidence
+                    session.deliveries[index].speedMethod = estimate.method
+                    log.info("Speed estimated for D\(index + 1): \(String(format: "%.1f", estimate.kph)) ±\(String(format: "%.1f", margin)) kph")
+                } else {
+                    log.info("Speed suppressed for D\(index + 1): ±\(String(format: "%.1f", margin)) kph too imprecise")
+                }
                 speedContext = GeminiAnalysisService.SpeedContext(
                     kph: estimate.kph,
-                    errorMarginKph: estimate.errorMarginKph ?? 5.0,
+                    errorMarginKph: margin,
                     method: estimate.method.rawValue,
                     fps: calibration.recordingFPS
                 )
-                log.info("Speed estimated for D\(index + 1): \(String(format: "%.1f", estimate.kph)) kph (confidence: \(String(format: "%.2f", estimate.confidence)))")
             } catch {
                 log.debug("Speed estimation failed for D\(index + 1): \(error.localizedDescription, privacy: .public)")
             }
@@ -1448,8 +1456,10 @@ final class SessionViewModel: ObservableObject {
         if liveService.isConnected {
             var feedbackParts: [String] = ["[ANALYSIS COMPLETE for delivery \(index + 1)]"]
             feedbackParts.append("Summary: \(detailedResult.summary)")
-            if let speedKph = session.deliveries[index].speedKph {
-                feedbackParts.append("Measured speed: \(String(format: "%.1f", speedKph)) kph (frame-differencing, calibrated)")
+            if let speedKph = session.deliveries[index].speedKph, let margin = session.deliveries[index].speedErrorMarginKph {
+                feedbackParts.append("Estimated speed: \(String(format: "%.0f", speedKph)) ±\(String(format: "%.0f", margin)) kph (video-based estimate, not radar)")
+            } else if let speedKph = session.deliveries[index].speedKph {
+                feedbackParts.append("Estimated speed: ~\(String(format: "%.0f", speedKph)) kph (video-based estimate)")
             } else if !detailedResult.paceEstimate.isEmpty {
                 feedbackParts.append("Pace estimate: \(detailedResult.paceEstimate)")
             }
@@ -1631,10 +1641,10 @@ final class SessionViewModel: ObservableObject {
         for (i, d) in deliveries.enumerated() {
             let seq = i + 1
             var lines: [String] = ["Delivery \(seq):"]
-            if let kph = d.speedKph, let conf = d.speedConfidence {
-                lines.append("  Speed: \(String(format: "%.1f", kph)) kph (confidence \(String(format: "%.0f", conf * 100))%)")
+            if let kph = d.speedKph, let margin = d.speedErrorMarginKph {
+                lines.append("  Estimated speed: \(String(format: "%.0f", kph)) ±\(String(format: "%.0f", margin)) kph (video-based)")
             } else if let kph = d.speedKph {
-                lines.append("  Speed: \(String(format: "%.1f", kph)) kph")
+                lines.append("  Estimated speed: ~\(String(format: "%.0f", kph)) kph (video-based)")
             }
             if let report = d.report, !report.isEmpty {
                 lines.append("  Report: \(report)")
@@ -1913,8 +1923,10 @@ final class SessionViewModel: ObservableObject {
         if let report = delivery.report, !report.isEmpty {
             parts.append("Summary: \(report)")
         }
-        if let kph = delivery.speedKph {
-            parts.append("Speed: \(String(format: "%.1f", kph)) kph.")
+        if let kph = delivery.speedKph, let margin = delivery.speedErrorMarginKph {
+            parts.append("Estimated speed: \(String(format: "%.0f", kph)) ±\(String(format: "%.0f", margin)) kph (video-based).")
+        } else if let kph = delivery.speedKph {
+            parts.append("Estimated speed: ~\(String(format: "%.0f", kph)) kph (video-based).")
         }
         if let phases = delivery.phases, !phases.isEmpty {
             for phase in phases {
@@ -1977,7 +1989,7 @@ final class SessionViewModel: ObservableObject {
             let avgSecond = second.reduce(0, +) / Double(second.count)
             let trend = avgSecond - avgFirst
             let desc = trend > 2 ? "increasing" : trend < -2 ? "dropping" : "consistent"
-            summary.append("Speed trend: \(desc) (first half avg \(String(format: "%.1f", avgFirst)), second half avg \(String(format: "%.1f", avgSecond)) kph).")
+            summary.append("Speed trend: \(desc) (first half avg ~\(String(format: "%.0f", avgFirst)), second half avg ~\(String(format: "%.0f", avgSecond)) kph, video-based estimates).")
         }
 
         // Recurring issues
