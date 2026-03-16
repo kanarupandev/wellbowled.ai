@@ -35,8 +35,8 @@ struct LiveSessionView: View {
                 let overlayMode: CalibrationOverlayView.OverlayMode = {
                     switch viewModel.calibrationState {
                     case .detecting: return .calibrating
-                    case .locked: return .active
-                    case .idle, .failed: return .hidden
+                    case .locked(_): return .active
+                    case .idle, .failed(_): return .hidden
                     }
                 }()
                 if overlayMode != .hidden {
