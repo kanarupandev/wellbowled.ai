@@ -2076,10 +2076,10 @@ final class SessionViewModel: ObservableObject {
         // .detecting already set by the delegate before this task started
         log.info("Stump alignment scanning started")
 
-        // Scan every 3 seconds for up to 20 seconds (7 attempts)
-        let maxAttempts = 7
+        // Scan every 1.5s for up to 15 seconds (10 attempts) — fast for demo responsiveness
+        let maxAttempts = 10
         for attempt in 1...maxAttempts {
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
             guard session.isActive, calibrationState == .detecting else { return }
 
             guard let snapshot = captureCurrentFrame() else {
