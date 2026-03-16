@@ -717,7 +717,19 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
                 followThroughDirection: (dnaDict["follow_through_direction"] as? String).flatMap(FollowThroughDir.init),
                 balanceAtFinish: (dnaDict["balance_at_finish"] as? String).flatMap(BalanceAtFinish.init)
             )
-            log.debug("DNA extracted from deep analysis response")
+            // Log which fields parsed vs failed for debugging DNA quality
+            let dnaFields: [(String, Any?)] = [
+                ("run_up_stride", dna?.runUpStride), ("arm_path", dna?.armPath),
+                ("gather_alignment", dna?.gatherAlignment), ("release_height", dna?.releaseHeight),
+                ("wrist_position", dna?.wristPosition), ("follow_through_direction", dna?.followThroughDirection)
+            ]
+            let parsed = dnaFields.filter { $0.1 != nil }.count
+            let total = dnaDict.count
+            log.debug("DNA extracted: \(parsed)/\(total) key fields parsed from \(dnaDict.keys.sorted().joined(separator: ", "))")
+            if parsed == 0 {
+                log.warning("DNA extraction returned all-nil fields — raw values: \(dnaDict)")
+                dna = nil // Don't create empty DNA — better to show "no match" than broken match
+            }
         }
 
         return DeliveryDeepAnalysisResult(
@@ -849,9 +861,15 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
         return nil
     }
 
+    /// Retryable HTTP status codes — try the next candidate model instead of failing.
+    private static let retryableStatusCodes: Set<Int> = [400, 404, 429, 500, 502, 503]
+
     private func requestJSON(payload: [String: Any], candidateModels: [String]) async throws -> Data {
         var lastError: Error = AnalysisError.parseError
         var triedAtLeastOne = false
+
+        // Serialize payload ONCE — avoids re-encoding the (potentially large) base64 video per retry.
+        let body = try JSONSerialization.data(withJSONObject: payload)
 
         for model in candidateModels where !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             triedAtLeastOne = true
@@ -862,18 +880,20 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
                 request.httpMethod = "POST"
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
                 request.timeoutInterval = 120
-                request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+                request.httpBody = body
 
                 let (data, response) = try await URLSession.shared.data(for: request)
                 guard let httpResponse = response as? HTTPURLResponse else {
                     throw AnalysisError.parseError
                 }
                 guard httpResponse.statusCode == 200 else {
-                    log.debug("JSON request non-200: model=\(model, privacy: .public), status=\(httpResponse.statusCode)")
-                    if httpResponse.statusCode == 404 || httpResponse.statusCode == 400 {
+                    let status = httpResponse.statusCode
+                    log.debug("JSON request non-200: model=\(model, privacy: .public), status=\(status)")
+                    if Self.retryableStatusCodes.contains(status) {
+                        lastError = AnalysisError.apiError(status)
                         continue
                     }
-                    throw AnalysisError.apiError(httpResponse.statusCode)
+                    throw AnalysisError.apiError(status)
                 }
                 log.debug("JSON request success: model=\(model, privacy: .public)")
                 return data

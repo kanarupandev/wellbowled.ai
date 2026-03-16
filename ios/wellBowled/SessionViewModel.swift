@@ -1252,7 +1252,6 @@ final class SessionViewModel: ObservableObject {
 
     private enum DeepComponentResult {
         case detailed(Result<DeliveryDeepAnalysisResult, Error>)
-        case dna(Result<BowlingDNA, Error>)
         case pose(Result<[FramePoseLandmarks], Error>)
         case challenge(Result<ChallengeResult, Error>, target: String)
     }
@@ -1359,7 +1358,6 @@ final class SessionViewModel: ObservableObject {
                     log.debug("Deep analysis component ready: detailed delivery=\(index + 1), dna=\(result.dna != nil)")
                 case .detailed(.failure(let error)):
                     log.error("Deep analysis failed for D\(index + 1): \(error.localizedDescription)")
-                case .dna: break // No longer a separate call — DNA comes from .detailed
                 case .pose(.success(let frames)):
                     poseFrames = frames
                     poseFailureReason = nil
@@ -2224,24 +2222,26 @@ extension SessionViewModel: VoiceMateDelegate {
                     await disconnectMate()
                 }
 
-                // Direct playback voice commands — instant client-side response
-                if lower.contains("pause") || lower.contains("freeze") {
+                // Direct playback voice commands — instant client-side response.
+                // Word boundary matching avoids false positives (e.g. "replay" ≠ "play").
+                let words = Set(lower.split(separator: " ").map(String.init))
+                if words.contains("pause") || words.contains("freeze") {
                     playbackCommand = PlaybackCommand(action: .pause, timestamp: nil, rate: nil)
-                } else if lower.contains("normal speed") || lower.contains("normal rate") || lower.contains("1x") {
+                } else if lower.contains("normal speed") || lower.contains("normal rate") || words.contains("1x") {
                     playbackCommand = PlaybackCommand(action: .play, timestamp: nil, rate: 1.0)
-                } else if lower.contains("play") || lower.contains("resume") {
+                } else if words.contains("play") || words.contains("resume") {
                     playbackCommand = PlaybackCommand(action: .play, timestamp: nil, rate: nil)
-                } else if lower.contains("slow") || lower.contains("slo-mo") || lower.contains("slow mo") {
+                } else if words.contains("slow") || lower.contains("slo-mo") || lower.contains("slow mo") || lower.contains("slow motion") {
                     let rate: Float
-                    if lower.contains("0.25") || lower.contains("quarter") || lower.contains("ultra") {
+                    if lower.contains("0.25") || words.contains("quarter") || words.contains("ultra") {
                         rate = 0.25
-                    } else if lower.contains("0.5") || lower.contains("half") {
+                    } else if lower.contains("0.5") || words.contains("half") {
                         rate = 0.5
                     } else {
                         rate = 0.25
                     }
                     playbackCommand = PlaybackCommand(action: .slowMo, timestamp: nil, rate: rate)
-                } else if lower.contains("fast") || lower.contains("2x") || lower.contains("double") {
+                } else if words.contains("fast") || words.contains("2x") || words.contains("double") {
                     playbackCommand = PlaybackCommand(action: .play, timestamp: nil, rate: 2.0)
                 }
             }
@@ -2458,8 +2458,7 @@ extension SessionViewModel {
     private func processDetectionQueue() async {
         while !Task.isCancelled {
             guard !liveDetectionQueue.isEmpty else {
-                // Poll for new segments
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                try? await Task.sleep(nanoseconds: 250_000_000) // 250ms poll
                 continue
             }
 
@@ -2552,7 +2551,7 @@ extension SessionViewModel {
     private func processDeepAnalysisQueue() async {
         while !Task.isCancelled {
             guard !liveDeepAnalysisQueue.isEmpty else {
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                try? await Task.sleep(nanoseconds: 250_000_000) // 250ms poll
                 continue
             }
 
