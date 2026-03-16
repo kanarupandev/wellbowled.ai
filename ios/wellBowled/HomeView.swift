@@ -233,7 +233,7 @@ struct HomeView: View {
                         .font(.headline)
                 }
 
-                Text(isImportingRecording ? "Importing recording..." : "Use iPhone Recording")
+                Text(isImportingRecording ? "Importing recording..." : "Analyze Recording")
                     .font(.headline.weight(.semibold))
             }
             .foregroundColor(.white)

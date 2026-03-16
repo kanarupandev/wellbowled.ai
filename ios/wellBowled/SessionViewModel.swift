@@ -70,6 +70,7 @@ final class SessionViewModel: ObservableObject {
     private let clipExtractor = ClipExtractor()
     private let analysisService = GeminiAnalysisService()
     private let clipPoseExtractor = ClipPoseExtractor()
+    private let speedEstimationService = SpeedEstimationService()
 
     private var cancellables = Set<AnyCancellable>()
     private let ciContext = CIContext()  // Reuse — creating per frame is expensive
@@ -1255,10 +1256,9 @@ final class SessionViewModel: ObservableObject {
         // Speed estimation (if calibration available)
         var speedContext: GeminiAnalysisService.SpeedContext?
         if let calibration = session.calibration {
-            let speedService = SpeedEstimationService()
             do {
                 let deliveryTs = session.deliveries[index].releaseTimestamp ?? WBConfig.clipPreRoll
-                let estimate = try await speedService.estimateSpeed(
+                let estimate = try await speedEstimationService.estimateSpeed(
                     clipURL: clipURL,
                     calibration: calibration,
                     deliveryTimestamp: deliveryTs

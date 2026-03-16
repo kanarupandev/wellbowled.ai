@@ -28,6 +28,18 @@ struct LiveSessionView: View {
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
 
+            // Calibration corridor overlay (TV broadcast style)
+            if isSessionActive, WBConfig.enableSpeedCalibration {
+                CalibrationOverlayView(
+                    mode: viewModel.session.calibration != nil ? .active : .hidden,
+                    calibrationState: viewModel.session.calibration.map { .locked($0) } ?? .idle,
+                    bowlerGuideRect: StumpDetectionService.defaultBowlerGuideRect(),
+                    strikerGuideRect: StumpDetectionService.defaultStrikerGuideRect(),
+                    onManualTap: nil
+                )
+                .allowsHitTesting(false)
+            }
+
             // Delivery flash overlay (large centered count that fades)
             if let count = deliveryFlashCount {
                 Text("\(count)")
