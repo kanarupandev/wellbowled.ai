@@ -2283,10 +2283,28 @@ extension SessionViewModel: VoiceMateDelegate {
             guard session.isActive || matePhase == .postSessionReview else { return }
 
             do {
+                // In review mode, re-set the review agent system prompt before reconnecting.
+                // The systemInstructionOverride is one-shot and gets cleared after connect().
+                if matePhase == .postSessionReview {
+                    liveService.systemInstructionOverride = buildReviewAgentPrompt()
+                }
+
                 try await liveService.connect()
                 errorMessage = nil
                 debugLog += "Reconnected!\n"
-                if session.isActive {
+
+                if matePhase == .postSessionReview {
+                    // Re-send session context so the review agent knows where we are
+                    let analyzedCount = session.deliveries.filter { $0.status == .success }.count
+                    let totalCount = session.deliveryCount
+                    let currentDelivery = reviewDeliveryIndex + 1
+                    await liveService.sendContext(
+                        "[RECONNECTED — REVIEW SESSION] You're back. \(totalCount) deliveries, " +
+                        "\(analyzedCount) analyzed. Currently looking at delivery \(currentDelivery). " +
+                        "The bowler was talking to you — pick up naturally. Don't re-introduce yourself."
+                    )
+                    log.info("Review agent reconnected with context: delivery \(currentDelivery)/\(totalCount)")
+                } else if session.isActive {
                     await maybeSendProactiveGreetingIfNeeded()
                 }
             } catch {
