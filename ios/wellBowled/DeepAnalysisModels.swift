@@ -5,6 +5,7 @@ struct DeliveryDeepAnalysisResult: Codable {
     let summary: String
     let phases: [AnalysisPhase]
     let expertAnalysis: ExpertAnalysis?
+    let dna: BowlingDNA?
 }
 
 struct ChipGuidanceResponse: Codable, Equatable {

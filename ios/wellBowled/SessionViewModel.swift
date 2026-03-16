@@ -1321,25 +1321,13 @@ final class SessionViewModel: ObservableObject {
         }()
 
         await withTaskGroup(of: DeepComponentResult.self) { group in
+            // Deep analysis + DNA extraction in ONE Gemini call (same video, same response)
             group.addTask { [analysisService] in
                 do {
                     let deep = try await analysisService.analyzeDeliveryDeep(clipURL: clipURL, speedContext: speedContext)
                     return .detailed(.success(deep))
                 } catch {
                     return .detailed(.failure(error))
-                }
-            }
-
-            group.addTask { [analysisService, delivery = self.session.deliveries[index]] in
-                do {
-                    let dna = try await analysisService.extractBowlingDNA(
-                        clipURL: clipURL,
-                        wristOmega: delivery.wristOmega,
-                        releaseWristY: delivery.releaseWristY
-                    )
-                    return .dna(.success(dna))
-                } catch {
-                    return .dna(.failure(error))
                 }
             }
 
@@ -1367,14 +1355,11 @@ final class SessionViewModel: ObservableObject {
                 switch component {
                 case .detailed(.success(let result)):
                     detailedResult = result
-                    log.debug("Deep analysis component ready: detailed delivery=\(index + 1)")
+                    dnaResult = result.dna // DNA extracted from same Gemini call
+                    log.debug("Deep analysis component ready: detailed delivery=\(index + 1), dna=\(result.dna != nil)")
                 case .detailed(.failure(let error)):
                     log.error("Deep analysis failed for D\(index + 1): \(error.localizedDescription)")
-                case .dna(.success(let dna)):
-                    dnaResult = dna
-                    log.debug("Deep analysis component ready: dna delivery=\(index + 1)")
-                case .dna(.failure(let error)):
-                    log.debug("DNA extraction failed for D\(index + 1): \(error.localizedDescription, privacy: .public)")
+                case .dna: break // No longer a separate call — DNA comes from .detailed
                 case .pose(.success(let frames)):
                     poseFrames = frames
                     poseFailureReason = nil

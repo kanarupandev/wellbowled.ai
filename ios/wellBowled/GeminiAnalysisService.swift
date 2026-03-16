@@ -206,6 +206,29 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
     sling action, wrist-spin finger mechanics, reverse swing grip cues, or a technical nuance specific \
     to this bowler's style), call it out. The guide ensures consistency; your expertise fills the gaps. \
     Prioritise what is most important for THIS specific delivery over mechanically covering every phase.
+
+    ACTION DNA SIGNATURE — include in the same response:
+    Also classify the bowler's action signature into the "dna" object below. This is used for vector \
+    matching against famous bowlers. Use null for ANY field you cannot confidently determine.
+
+    "dna": {
+      "run_up_stride": "short" | "medium" | "long",
+      "run_up_speed": "slow" | "moderate" | "fast" | "explosive",
+      "approach_angle": "straight" | "angled" | "wide",
+      "gather_alignment": "front_on" | "semi" | "side_on",
+      "back_foot_contact": "braced" | "sliding" | "jumping",
+      "trunk_lean": "upright" | "slight" | "pronounced",
+      "delivery_stride_length": "short" | "normal" | "over_striding",
+      "front_arm_action": "pull" | "sweep" | "delayed",
+      "head_stability": "stable" | "tilted" | "falling",
+      "arm_path": "high" | "round_arm" | "sling",
+      "release_height": "high" | "medium" | "low",
+      "wrist_position": "behind" | "cocked" | "side_arm",
+      "seam_orientation": "upright" | "scrambled" | "angled",
+      "revolutions": "low" | "medium" | "high",
+      "follow_through_direction": "across" | "straight" | "wide",
+      "balance_at_finish": "balanced" | "falling" | "stumbling"
+    }
     """
 
     /// Build the deep analysis prompt, optionally injecting measured speed context.
@@ -673,11 +696,36 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
             expertAnalysis = ExpertAnalysisBuilder.build(from: phases).map { normalized(expertAnalysis: $0) }
         }
 
+        // Parse DNA from the same response
+        var dna: BowlingDNA?
+        if let dnaDict = result["dna"] as? [String: Any] {
+            dna = BowlingDNA(
+                runUpStride: (dnaDict["run_up_stride"] as? String).flatMap(RunUpStrideCategory.init),
+                runUpSpeed: (dnaDict["run_up_speed"] as? String).flatMap(RunUpSpeed.init),
+                approachAngle: (dnaDict["approach_angle"] as? String).flatMap(ApproachAngle.init),
+                gatherAlignment: (dnaDict["gather_alignment"] as? String).flatMap(BodyAlignment.init),
+                backFootContact: (dnaDict["back_foot_contact"] as? String).flatMap(BackFootContact.init),
+                trunkLean: (dnaDict["trunk_lean"] as? String).flatMap(TrunkLean.init),
+                deliveryStrideLength: (dnaDict["delivery_stride_length"] as? String).flatMap(StrideLength.init),
+                frontArmAction: (dnaDict["front_arm_action"] as? String).flatMap(FrontArmAction.init),
+                headStability: (dnaDict["head_stability"] as? String).flatMap(HeadStability.init),
+                armPath: (dnaDict["arm_path"] as? String).flatMap(ArmPath.init),
+                releaseHeight: (dnaDict["release_height"] as? String).flatMap(ReleaseHeight.init),
+                wristPosition: (dnaDict["wrist_position"] as? String).flatMap(WristPosition.init),
+                seamOrientation: (dnaDict["seam_orientation"] as? String).flatMap(SeamOrientation.init),
+                revolutions: (dnaDict["revolutions"] as? String).flatMap(Revolutions.init),
+                followThroughDirection: (dnaDict["follow_through_direction"] as? String).flatMap(FollowThroughDir.init),
+                balanceAtFinish: (dnaDict["balance_at_finish"] as? String).flatMap(BalanceAtFinish.init)
+            )
+            log.debug("DNA extracted from deep analysis response")
+        }
+
         return DeliveryDeepAnalysisResult(
             paceEstimate: paceEstimate,
             summary: summary,
             phases: phases,
-            expertAnalysis: expertAnalysis
+            expertAnalysis: expertAnalysis,
+            dna: dna
         )
     }
 
