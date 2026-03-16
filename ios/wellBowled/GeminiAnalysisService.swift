@@ -15,9 +15,11 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
     // MARK: - Analysis Prompt
 
     private static let analysisPrompt = """
-    You are analyzing a 5-second cricket bowling clip. The clip shows one bowling delivery.
+    You are an elite cricket biomechanics analyst reviewing a 5-second bowling delivery clip.
 
-    Analyze the delivery and respond with JSON only:
+    Watch the FULL action sequence — run-up through follow-through — before classifying.
+
+    Respond with STRICT JSON only:
     {
       "pace_estimate": "medium pace",
       "length": "good_length",
@@ -27,23 +29,32 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
       "confidence": 0.7
     }
 
-    Field values:
-    - pace_estimate: one of "quick", "medium pace", "slow", "spin"
-    - length: one of "yorker", "full", "good_length", "short", "bouncer", "unknown"
-    - line: one of "off", "middle", "leg", "wide", "unknown"
-    - type: one of "seam", "spin", "unknown"
-    - observation: one short sentence about the most notable aspect
-    - confidence: 0.0-1.0 how confident you are in this assessment
+    CLASSIFICATION GUIDE:
+    - pace_estimate: "quick" (>125 kph indicators: explosive run-up, braced front knee, high arm speed, \
+    steep bounce, keeper standing well back), "medium pace" (110-125 kph: controlled run-up, moderate arm speed), \
+    "slow" (<110 kph: short run-up, gentle action), "spin" (visible wrist/finger rotation at release, \
+    loop in flight, slow through the air)
+    - length: "yorker" (pitches at batsman's toes/crease), "full" (first third from batsman), \
+    "good_length" (6-8m from batsman, maximum indecision zone), "short" (bouncer's half, rises above waist), \
+    "bouncer" (dug in short, rises to chest/head), "unknown"
+    - line: "off" (at or outside off stump), "middle" (middle stump corridor), \
+    "leg" (leg stump or down leg side), "wide" (well outside off or leg), "unknown"
+    - type: "seam" (upright or angled seam, pace-based), "spin" (visible revolutions), "unknown"
+    - observation: ONE sentence — the most biomechanically significant aspect you can see (seam position, \
+    front knee angle, release point, head position, follow-through direction)
+    - confidence: 0.0-1.0. Lower if camera angle is oblique, video is blurry, or action is partially obscured.
 
-    Be honest. If the camera angle or video quality makes assessment difficult, say so and lower confidence.
+    Be honest. If you cannot see a clear release or the camera cuts away, say so and use confidence < 0.4.
     """
 
     // MARK: - DNA Extraction Prompt
 
     private static let dnaExtractionPrompt = """
-    You are analyzing a 5-second cricket bowling clip. Extract the bowler's action signature.
+    You are a cricket biomechanics specialist extracting a bowler's action signature from a 5-second delivery clip.
 
-    Respond with JSON only matching this schema:
+    Watch the COMPLETE action from run-up entry to follow-through completion before classifying any field.
+
+    Respond with STRICT JSON matching this schema:
     {
       "run_up_stride": "short" | "medium" | "long",
       "run_up_speed": "slow" | "moderate" | "fast" | "explosive",
@@ -63,25 +74,47 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
       "balance_at_finish": "balanced" | "falling" | "stumbling"
     }
 
-    Use null for any field you cannot confidently determine from the video.
-    Focus on what you can actually see. Be honest about limitations.
+    BIOMECHANICAL REFERENCE for each field:
+    - gather_alignment: Check hip-shoulder orientation at back-foot contact (BFC). \
+    "side_on" = back foot parallel to crease, chest facing gully. "front_on" = chest facing batsman. \
+    "semi" = between the two (~30-45 degrees open).
+    - back_foot_contact: "braced" = planted firmly, absorbing force. "jumping" = airborne bound. \
+    "sliding" = foot drags or skids on landing.
+    - trunk_lean: Lateral flexion of the torso at release. "upright" = <20 degrees. \
+    "slight" = 20-40 degrees. "pronounced" = >40 degrees (injury risk flag).
+    - front_arm_action: "pull" = drives down and through (textbook). "sweep" = flings out laterally. \
+    "delayed" = stays up late, delays circumduction (associated with higher pace).
+    - arm_path: "high" = release near 12 o'clock (McGrath, Anderson). "round_arm" = ~10 o'clock (Malinga-style). \
+    "sling" = chest-height release, catapult motion.
+    - wrist_position: "behind" = fingers directly behind the ball at release (seam bowler default). \
+    "cocked" = wrist angled, seam tilted (swing variant). "side_arm" = wrist rotated laterally.
+    - seam_orientation: "upright" = bolt upright like Anderson (maximises conventional swing). \
+    "angled" = seam tilted toward slip or fine leg. "scrambled" = wobbling, no clean axis.
+    - head_stability: "stable" = head over front foot at release, eyes level. \
+    "tilted" = head leaning to off side. "falling" = head dropping away from the action.
+
+    Use null for ANY field you cannot confidently determine from the video angle or quality. \
+    Partial DNA is valid — do not guess. Only classify what you can clearly see.
     """
 
     // MARK: - Deep Analysis Prompt (On-Demand)
 
     private static let deepAnalysisPromptBase = """
-    You are analyzing a single 5-second cricket bowling clip.
+    You are an elite cricket bowling biomechanics expert analyzing a single 5-second delivery clip.
+
+    Watch the ENTIRE clip first — run-up entry through follow-through completion — before writing any analysis. \
+    Pay close attention to the transition between phases, not just static positions.
 
     Return STRICT JSON only:
     {
       "pace_estimate": "medium pace",
-      "summary": "One short summary sentence.",
+      "summary": "One sentence: the single most important technical takeaway from this delivery.",
       "phases": [
         {
           "name": "Run-up",
           "status": "GOOD",
-          "observation": "One short observation.",
-          "tip": "One short actionable correction or reinforcement.",
+          "observation": "What you actually see — reference specific body positions.",
+          "tip": "One concrete drill or cue the bowler can try next ball.",
           "clip_ts": 0.8
         }
       ],
@@ -92,7 +125,7 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
             "start": 0.0,
             "end": 1.0,
             "feedback": {
-              "good": ["LEFT_HIP", "RIGHT_HIP"],
+              "good": ["LEFT_HIP"],
               "slow": ["RIGHT_SHOULDER"],
               "injury_risk": ["RIGHT_KNEE"]
             }
@@ -101,17 +134,62 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
       }
     }
 
-    Rules:
-    - Use 4 to 6 chronological phases max.
-    - status must be GOOD or NEEDS WORK.
-    - clip_ts, start, end must be within 0.0 to 5.0.
-    - Keep summary/observation/tip concise and non-robotic.
-    - If uncertain, still provide best-effort phase breakdown with lower-confidence wording.
-    - expert_analysis feedback: ONLY use these 9 body parts: HEAD, LEFT_SHOULDER, RIGHT_SHOULDER, LEFT_HIP, RIGHT_HIP, LEFT_KNEE, RIGHT_KNEE, LEFT_ANKLE, RIGHT_ANKLE.
-    - Only include body parts you are highly confident about (>90%). Max 3-5 total annotations across all phases. Quality over quantity.
-    - injury_risk: biomechanical concern that could cause strain/injury (e.g. knee collapsing, hyperextended elbow).
-    - slow: attention area, needs improvement but not dangerous.
-    - good: strong technique worth maintaining.
+    PHASE ANALYSIS GUIDE — evaluate these 5 phases in order:
+
+    1. RUN-UP & APPROACH (clip_ts: early in clip)
+       Look for: rhythm and acceleration (should be progressive, not flat). Approach angle — \
+    straight line toward target or drifting wide? Run-up speed relative to bowler type.
+       Common faults: kink/deviation at the end of run-up (causes falling away downstream), \
+    decelerating before the crease, stuttering final strides.
+
+    2. GATHER & LOAD (back-foot contact)
+       Look for: hip-shoulder alignment at BFC — are hips and shoulders aligned (side-on, semi, front-on) \
+    or misaligned (mixed action = injury risk)? Height and quality of the bound. Coil/separation \
+    between hips and shoulders. Back-foot landing angle relative to crease.
+       Common faults: mixed action (hips front-on, shoulders side-on — lumbar stress fracture risk), \
+    collapsing on back foot, no hip-shoulder separation.
+       INJURY FLAG: If shoulders counter-rotate excessively relative to hips, flag as injury_risk.
+
+    3. DELIVERY STRIDE (front-foot contact through release)
+       Look for: front knee angle at FFC and at release — is it bracing (extending/straightening) \
+    or collapsing? Stride length and alignment (BFC, FFC, and follow-through should be in a straight line). \
+    Front arm action: pulling down and through (good) vs flinging out laterally (energy leak). \
+    Head position: should be directly over front foot at release, eyes level.
+       Common faults: front knee collapse (absorbs energy instead of transferring to ball), \
+    front arm pulling away (causes head and body to fall off), over-striding (BFC to FFC too far apart).
+       KEY: The front leg works through eccentric control — controlled deceleration, not rigid bracing.
+
+    4. RELEASE
+       Look for: arm path (high = ~12 o'clock ideal for seamers), release point height and consistency. \
+    Wrist position behind the ball. Seam orientation at release — upright (maximises swing), \
+    angled (cross-seam/cutters), or scrambled (inconsistent). Ball coming out cleanly or wobbling.
+       Common faults: early release (ball comes out too soon — usually arm speed inconsistency), \
+    wrist falling away at release, low release point reducing bounce and control.
+
+    5. FOLLOW-THROUGH
+       Look for: does the first stride continue the straight line from BFC → FFC? Is the bowling arm \
+    completing its arc naturally? Balance at finish — upright and controlled, or falling to one side?
+       Common faults: falling away to off side (symptom of upstream issues — usually head position \
+    or front arm), abbreviated follow-through (increases deceleration stress), stumbling.
+
+    RULES:
+    - Use exactly 5 phases: "Run-up", "Gather", "Delivery stride", "Release", "Follow-through".
+    - status: "GOOD" or "NEEDS WORK". Be honest — don't mark everything GOOD.
+    - clip_ts: the timestamp in seconds (0.0-5.0) where this phase is MOST visible.
+    - observation: describe what you ACTUALLY SEE. Reference specific body parts and positions. \
+    Not "nice action" — instead "front knee extends from ~30° to near-full extension through delivery stride".
+    - tip: a SPECIFIC drill or technical cue, not vague advice. \
+    Examples: "Try bowling from 3 steps to isolate the release without run-up momentum", \
+    "Focus on pulling your front arm down to your hip — not across your body", \
+    "Film from behind to check your run-up stays in a straight corridor".
+    - summary: the single most important thing — if this bowler could fix ONE thing, what is it?
+    - expert_analysis body parts: ONLY use HEAD, LEFT_SHOULDER, RIGHT_SHOULDER, LEFT_HIP, RIGHT_HIP, \
+    LEFT_KNEE, RIGHT_KNEE, LEFT_ANKLE, RIGHT_ANKLE.
+    - injury_risk: genuine biomechanical concern (mixed action, excessive lateral trunk flexion >50°, \
+    front knee hyperextension, excessive shoulder counter-rotation).
+    - slow: needs improvement but not dangerous.
+    - good: strong technique worth maintaining and reinforcing.
+    - Max 3-5 body part annotations total across all phases. Quality over quantity.
     """
 
     /// Build the deep analysis prompt, optionally injecting measured speed context.

@@ -21,7 +21,7 @@ final class SessionViewModel: ObservableObject {
     /// The voice connection persists beyond bowling — the mate walks through results.
     enum MatePhase: Equatable {
         case idle                       // Not connected
-        case liveBowling                // Active session — coaching in real time
+        case liveBowling                // Active session — live expert analysis
         case postSessionReview          // Session ended — walking through analysis results
     }
 
@@ -1462,7 +1462,7 @@ final class SessionViewModel: ObservableObject {
                 feedbackParts.append("Pace estimate: \(detailedResult.paceEstimate)")
             }
 
-            // Detailed phase-by-phase breakdown for technical coaching
+            // Detailed phase-by-phase breakdown for technical analysis
             for phase in detailedResult.phases {
                 let status = phase.isGood ? "GOOD" : "NEEDS WORK"
                 var phaseInfo = "\(phase.name) [\(status)]: \(phase.observation)"
@@ -1480,7 +1480,7 @@ final class SessionViewModel: ObservableObject {
             }
 
             feedbackParts.append("""
-            INSTRUCTION: Give ONE specific, technical coaching point for the next ball. \
+            INSTRUCTION: Give ONE specific, technical point for the next ball. \
             Be biomechanical — reference body parts (knee, hip, shoulder, wrist, front arm). \
             Example: "Brace that front knee harder at delivery stride — it's collapsing 10 degrees." \
             or "Hold the non-bowling arm up a fraction longer through the crease." \
@@ -1748,7 +1748,7 @@ final class SessionViewModel: ObservableObject {
         }()
 
         return """
-        You are an elite cricket bowling coach reviewing a completed practice session.
+        You are an elite cricket bowling expert reviewing a completed practice session.
         You have deep expertise in biomechanics, action analysis, and player development.
         The bowler is wearing earbuds. They cannot touch the phone. Everything is voice.
 
@@ -1827,11 +1827,11 @@ final class SessionViewModel: ObservableObject {
         """
     }
 
-    /// Disconnect the coaching mate and connect a fresh review agent with all analysis data.
+    /// Disconnect the live mate and connect a fresh review agent with all analysis data.
     private func connectReviewAgent() async {
         log.debug("Connecting fresh review agent for post-session walkthrough")
 
-        // Disconnect coaching mate
+        // Disconnect live mate
         await liveService.disconnect()
 
         // Small pause for clean teardown
@@ -1946,7 +1946,7 @@ final class SessionViewModel: ObservableObject {
                 if liveService.isConnected {
                     await liveService.sendContext(
                         "[CALIBRATION SKIPPED] Could not detect both sets of stumps. Speed tracking is off for this session. " +
-                        "No need to dwell on it — carry on coaching. If the bowler asks about speed, mention they can set up stumps next time."
+                        "No need to dwell on it — carry on with the session. If the bowler asks about speed, mention they can set up stumps next time."
                     )
                 }
             }
