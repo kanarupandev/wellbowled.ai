@@ -260,10 +260,7 @@ final class SessionViewModel: ObservableObject {
             // Session continues — detection + TTS still work without Live API
         }
 
-        // 7. Auto-calibrate stumps for speed estimation (non-blocking)
-        if WBConfig.enableSpeedCalibration {
-            Task { await self.attemptAutoCalibration() }
-        }
+        // 7. Stump calibration is mate-driven via show_alignment_boxes tool call
     }
 
     func endSession() async {
@@ -1633,9 +1630,9 @@ final class SessionViewModel: ObservableObject {
 
         // Single natural greeting — the system prompt handles all conversational flow autonomously.
         let stumpNote = WBConfig.enableSpeedCalibration
-            ? "Two dashed alignment boxes will appear on screen shortly. If you can see stumps in the video, " +
-              "guide the bowler to position the phone so the stumps sit inside the boxes. " +
-              "If no stumps are visible, don't push it — the app will hide the boxes and move on."
+            ? "If you can see stumps in the video, call show_alignment_boxes immediately — " +
+              "two dashed boxes will appear and you can guide the bowler to align both sets of stumps. " +
+              "If no stumps visible, don't mention it — just start the session."
             : "Speed calibration is off for this session — focus on technique."
         await liveService.sendContext("""
         [SESSION STARTED] The bowler just opened the app and is at the nets. \
@@ -2071,76 +2068,62 @@ final class SessionViewModel: ObservableObject {
 
     /// Captures a camera frame after a short delay, sends to Gemini for stump detection.
     /// If both stumps found: locks calibration, enables 120fps, shows corridor.
-    /// Tries up to 3 times to detect stumps. Shows dashed boxes while scanning.
-    /// On success: locks calibration, shows corridor, tells mate stump positions.
-    /// On failure: hides boxes, session continues without speed.
-    private func attemptAutoCalibration() async {
-        guard session.isActive else { return }
-
-        // Wait 3s for camera to stabilise, then show boxes
-        try? await Task.sleep(nanoseconds: 3_000_000_000)
+    /// Called when the mate triggers stump alignment via tool call.
+    /// Shows boxes, scans for stumps, locks if found, hides if not.
+    func startStumpAlignment() async {
         guard session.isActive else { return }
         calibrationState = .detecting
+        log.info("Stump alignment started (mate-triggered)")
 
-        let retryDelays: [UInt64] = [0, 5_000_000_000, 7_000_000_000]
+        // Give the bowler a moment to position
+        try? await Task.sleep(nanoseconds: 2_000_000_000)
+        guard session.isActive, calibrationState == .detecting else { return }
 
-        for (attempt, delay) in retryDelays.enumerated() {
-            if delay > 0 {
-                try? await Task.sleep(nanoseconds: delay)
+        guard let snapshot = captureCurrentFrame() else {
+            calibrationState = .idle
+            if liveService.isConnected {
+                await liveService.sendContext("[CALIBRATION FAILED] Could not capture frame. Boxes hidden.")
             }
-            guard session.isActive, calibrationState == .detecting else { return }
-
-            guard let snapshot = captureCurrentFrame() else {
-                log.warning("Auto-calibration attempt \(attempt + 1): no frame")
-                continue
-            }
-
-            do {
-                let result = try await stumpDetectionService.detectStumps(
-                    image: snapshot,
-                    frameWidth: Int(snapshot.size.width * snapshot.scale),
-                    frameHeight: Int(snapshot.size.height * snapshot.scale),
-                    fps: WBConfig.speedCalibrationFPS
-                )
-
-                if let cal = result {
-                    // Success — lock, show corridor, tell mate
-                    session.calibration = cal
-                    calibrationState = .locked(cal)
-                    cameraService.setSpeedMode(true)
-                    log.info("Auto-calibration locked at attempt \(attempt + 1)")
-
-                    if liveService.isConnected {
-                        let bx = String(format: "%.2f", cal.bowlerStumpCenter.x)
-                        let by = String(format: "%.2f", cal.bowlerStumpCenter.y)
-                        let sx = String(format: "%.2f", cal.strikerStumpCenter.x)
-                        let sy = String(format: "%.2f", cal.strikerStumpCenter.y)
-                        await liveService.sendContext(
-                            "[CALIBRATION LOCKED] Both sets of stumps detected. Pitch corridor overlaid: bowler end (\(bx),\(by)) to striker end (\(sx),\(sy)). " +
-                            "You can now assess LINE and LENGTH relative to the corridor. " +
-                            "Speed tracking active — ball transit time measured between stump gates."
-                        )
-                    }
-                    return // Done — stumps found
-                } else {
-                    log.info("Auto-calibration attempt \(attempt + 1): stumps not found, retrying...")
-                    continue // Try again
-                }
-            } catch {
-                log.warning("Auto-calibration attempt \(attempt + 1) error: \(error.localizedDescription)")
-                continue // Try again
-            }
+            return
         }
 
-        // All attempts exhausted — hide boxes, carry on without speed
-        calibrationState = .idle
-        log.info("Auto-calibration: all attempts exhausted — no speed tracking")
-
-        if liveService.isConnected {
-            await liveService.sendContext(
-                "[CALIBRATION SKIPPED] Stumps not detected. Speed tracking off. " +
-                "Don't dwell on it — carry on with the session."
+        do {
+            let result = try await stumpDetectionService.detectStumps(
+                image: snapshot,
+                frameWidth: Int(snapshot.size.width * snapshot.scale),
+                frameHeight: Int(snapshot.size.height * snapshot.scale),
+                fps: WBConfig.speedCalibrationFPS
             )
+
+            if let cal = result {
+                session.calibration = cal
+                calibrationState = .locked(cal)
+                cameraService.setSpeedMode(true)
+                log.info("Stump alignment locked — speed tracking active")
+
+                if liveService.isConnected {
+                    let bx = String(format: "%.2f", cal.bowlerStumpCenter.x)
+                    let by = String(format: "%.2f", cal.bowlerStumpCenter.y)
+                    let sx = String(format: "%.2f", cal.strikerStumpCenter.x)
+                    let sy = String(format: "%.2f", cal.strikerStumpCenter.y)
+                    await liveService.sendContext(
+                        "[CALIBRATION LOCKED] Stumps detected. Corridor overlaid: bowler (\(bx),\(by)) to striker (\(sx),\(sy)). " +
+                        "LINE and LENGTH assessment active. Speed tracking on."
+                    )
+                }
+            } else {
+                calibrationState = .idle
+                log.info("Stump alignment: stumps not found")
+                if liveService.isConnected {
+                    await liveService.sendContext(
+                        "[CALIBRATION FAILED] Stumps not detected. Boxes hidden. " +
+                        "Ask the bowler to adjust and you can try again."
+                    )
+                }
+            }
+        } catch {
+            calibrationState = .idle
+            log.warning("Stump alignment error: \(error.localizedDescription)")
         }
     }
 
@@ -2462,6 +2445,11 @@ extension SessionViewModel: VoiceMateDelegate {
         if liveService.isConnected {
             await liveService.sendContext("[TIMER SET] Session timer set to \(minutes) minutes. \(remainingMins) minutes remaining. The countdown is visible on screen.")
         }
+    }
+
+    func voiceMate(didRequestShowAlignmentBoxes: Void) async {
+        guard session.isActive, WBConfig.enableSpeedCalibration else { return }
+        await startStumpAlignment()
     }
 
     func voiceMate(didSetChallengeTarget target: String) async {

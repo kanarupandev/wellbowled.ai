@@ -329,6 +329,15 @@ final class GeminiLiveService: NSObject, VoiceMateService {
                         ],
                         required: ["target"]
                     )
+                ),
+                LiveFunctionDeclaration(
+                    name: "show_alignment_boxes",
+                    description: "Show two stump alignment boxes on the camera view. Call this when you can see stumps in the video OR the bowler asks to set up speed tracking. The boxes guide the bowler to position both sets of stumps. The app will auto-detect and lock once aligned.",
+                    parameters: LiveFunctionParameters(
+                        type: "OBJECT",
+                        properties: [:],
+                        required: []
+                    )
                 )
             ]
         )
@@ -740,6 +749,15 @@ final class GeminiLiveService: NSObject, VoiceMateService {
                     self.sendToolResponse(
                         for: functionCall,
                         message: "Challenge target set: \(target)"
+                    )
+                }
+            case "show_alignment_boxes":
+                Task { [weak self] in
+                    guard let self else { return }
+                    await self.delegate?.voiceMate(didRequestShowAlignmentBoxes: ())
+                    self.sendToolResponse(
+                        for: functionCall,
+                        message: "Alignment boxes shown. Scanning for stumps."
                     )
                 }
             default:
