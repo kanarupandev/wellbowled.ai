@@ -2,6 +2,33 @@ import SwiftUI
 
 private let peacockBlue = Color(red: 0, green: 0.427, blue: 0.467)
 
+// MARK: - Quality Color (10 shades via saturation modulation)
+
+/// Maps execution quality (0.1–1.0) to a 10-shade color gradient.
+/// Low quality → desaturated grey-blue, high quality → vivid peacock blue / green.
+func qualityColor(for quality: Double) -> Color {
+    let clamped = min(max(quality, 0.1), 1.0)
+    // Snap to nearest 0.1 for consistent rendering
+    let step = (clamped * 10).rounded() / 10
+
+    // Hue: blend from cool grey-blue (210°) to peacock teal (185°) to green (145°)
+    // Saturation: 0.15 at low quality → 0.85 at high quality
+    // Brightness: fairly stable, slight lift at top end
+    let hue: Double
+    let saturation = 0.15 + (step - 0.1) * (0.85 - 0.15) / 0.9
+    let brightness = 0.55 + step * 0.25
+
+    switch step {
+    case ...0.3: hue = 210 / 360  // grey-blue
+    case ...0.5: hue = 200 / 360  // steel blue
+    case ...0.7: hue = 185 / 360  // teal (peacock territory)
+    case ...0.9: hue = 165 / 360  // blue-green
+    default:     hue = 145 / 360  // vivid green (elite)
+    }
+
+    return Color(hue: hue, saturation: saturation, brightness: brightness)
+}
+
 // MARK: - DNA Section for SessionResultsView
 
 struct BowlingDNASection: View {
@@ -102,6 +129,19 @@ struct BowlingDNAMatchCard: View {
                 }
             }
 
+            // Quality bar (if user DNA has quality data)
+            if let avg = match.bowlerDNA.averageQuality {
+                HStack(spacing: 4) {
+                    Text("Quality")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(.secondary)
+                    qualityBar(quality: avg)
+                    Text(String(format: "%.0f%%", avg * 100))
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundColor(qualityColor(for: avg))
+                }
+            }
+
             // Signature traits
             VStack(alignment: .leading, spacing: 4) {
                 ForEach(match.signatureTraits, id: \.self) { trait in
@@ -118,6 +158,20 @@ struct BowlingDNAMatchCard: View {
             }
         }
         .padding(.vertical, 4)
+    }
+
+    private func qualityBar(quality: Double) -> some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(Color.white.opacity(0.08))
+                    .frame(height: 6)
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(qualityColor(for: quality))
+                    .frame(width: geo.size.width * quality, height: 6)
+            }
+        }
+        .frame(height: 6)
     }
 
     private func countryFlag(_ code: String) -> String {

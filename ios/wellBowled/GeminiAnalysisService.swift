@@ -191,8 +191,22 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
       "seam_orientation": "upright" | "scrambled" | "angled",
       "revolutions": "low" | "medium" | "high",
       "follow_through_direction": "across" | "straight" | "wide",
-      "balance_at_finish": "balanced" | "falling" | "stumbling"
+      "balance_at_finish": "balanced" | "falling" | "stumbling",
+      "run_up_quality": 0.6,
+      "gather_quality": 0.5,
+      "delivery_stride_quality": 0.4,
+      "release_quality": 0.5,
+      "follow_through_quality": 0.3
     }
+
+    EXECUTION QUALITY RATINGS (0.1–1.0, round to nearest 0.1):
+    Rate HOW WELL each phase is executed, not just WHAT the technique is.
+    - 0.9–1.0: International elite — textbook or uniquely effective (e.g., McGrath's run-up rhythm)
+    - 0.7–0.8: Club/county level — solid technique with minor flaws
+    - 0.5–0.6: Regular recreational — decent intent, inconsistent execution
+    - 0.3–0.4: Beginner — obvious technical gaps, uncoordinated timing
+    - 0.1–0.2: Raw novice — no discernible technique in this phase
+    Be HONEST. Most recreational bowlers should score 0.3–0.6. Do not flatter.
     """
 
     /// Build the deep analysis prompt, optionally injecting measured speed context.
@@ -607,6 +621,12 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
                 return cleaned
             }
 
+            // Helper: parse quality value (0.1–1.0, snapped to nearest 0.1)
+            func quality(_ key: String) -> Double? {
+                guard let raw = dnaDict[key] as? Double, raw > 0 else { return nil }
+                return BowlingDNA.snapQuality(min(max(raw, 0.1), 1.0))
+            }
+
             dna = BowlingDNA(
                 runUpStride: norm("run_up_stride").flatMap(RunUpStrideCategory.init),
                 runUpSpeed: norm("run_up_speed").flatMap(RunUpSpeed.init),
@@ -623,7 +643,12 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
                 seamOrientation: norm("seam_orientation").flatMap(SeamOrientation.init),
                 revolutions: norm("revolutions").flatMap(Revolutions.init),
                 followThroughDirection: norm("follow_through_direction").flatMap(FollowThroughDir.init),
-                balanceAtFinish: norm("balance_at_finish").flatMap(BalanceAtFinish.init)
+                balanceAtFinish: norm("balance_at_finish").flatMap(BalanceAtFinish.init),
+                runUpQuality: quality("run_up_quality"),
+                gatherQuality: quality("gather_quality"),
+                deliveryStrideQuality: quality("delivery_stride_quality"),
+                releaseQuality: quality("release_quality"),
+                followThroughQuality: quality("follow_through_quality")
             )
             // Log which fields parsed vs failed for debugging DNA quality
             let dnaFields: [(String, Any?)] = [

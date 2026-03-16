@@ -137,7 +137,7 @@ struct BowlingDNAMatcher {
 
     /// Match user DNA against the famous bowler database.
     /// Returns top-N matches sorted by similarity (highest first).
-    /// Similarity is honest — best match may be 40-60% for a casual bowler.
+    /// Quality dampener ensures recreational bowlers don't get inflated matches.
     static func match(userDNA: BowlingDNA, topN: Int = 1) -> [BowlingDNAMatch] {
         let userVec = BowlingDNAVectorEncoder.encode(userDNA)
 
@@ -147,7 +147,12 @@ struct BowlingDNAMatcher {
             let (normalisedDistance, closestIdx, biggestIdx) = weightedEuclidean(userVec, bowlerVec)
 
             // normalisedDistance is 0…1 (0 = identical, 1 = maximally different)
-            let similarity = max(0, min(100, (1.0 - normalisedDistance) * 100))
+            let baseSimilarity = max(0, min(100, (1.0 - normalisedDistance) * 100))
+            let similarity = qualityDampened(
+                baseSimilarity: baseSimilarity,
+                userDNA: userDNA,
+                bowlerDNA: bowler.dna
+            )
             results.append((bowler, similarity, closestIdx, biggestIdx))
         }
 
@@ -211,5 +216,21 @@ struct BowlingDNAMatcher {
         let theoreticalMax = sqrt(maxSumSq / Double(validDims))
         let normalised = distance / theoreticalMax
         return (normalised, closestIdx, biggestIdx)
+    }
+
+    // MARK: - Quality Dampener
+
+    /// Adjusts base similarity by execution quality ratio.
+    /// If the user's average quality is lower than the bowler's, similarity is dampened.
+    /// Formula: adjustedSimilarity = base × min(1, userAvg / bowlerAvg)
+    /// If either side has no quality data, returns base unchanged (backward compatible).
+    static func qualityDampened(baseSimilarity: Double, userDNA: BowlingDNA, bowlerDNA: BowlingDNA) -> Double {
+        guard let userAvg = userDNA.averageQuality,
+              let bowlerAvg = bowlerDNA.averageQuality,
+              bowlerAvg > 0 else {
+            return baseSimilarity
+        }
+        let ratio = min(1.0, userAvg / bowlerAvg)
+        return baseSimilarity * ratio
     }
 }

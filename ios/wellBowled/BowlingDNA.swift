@@ -36,7 +36,30 @@ struct BowlingDNA: Codable, Equatable {
     var followThroughDirection: FollowThroughDir?  // across / straight / wide
     var balanceAtFinish: BalanceAtFinish?           // balanced / falling / stumbling
 
-    // Total: 18 categorical + 2 continuous = 20 dimensions
+    // Execution Quality (per-phase, 0.1–1.0, 10 shades)
+    // Famous bowlers: 0.8–1.0, recreational: 0.3–0.6
+    // nil = not yet assessed (backward compatible)
+    var runUpQuality: Double?
+    var gatherQuality: Double?
+    var deliveryStrideQuality: Double?
+    var releaseQuality: Double?
+    var followThroughQuality: Double?
+
+    // Total: 18 categorical + 2 continuous + 5 quality = 25 dimensions
+    //        (quality fields used for dampening, not vector distance)
+
+    /// Average execution quality across assessed phases (nil if none assessed).
+    var averageQuality: Double? {
+        let values = [runUpQuality, gatherQuality, deliveryStrideQuality,
+                      releaseQuality, followThroughQuality].compactMap { $0 }
+        guard !values.isEmpty else { return nil }
+        return values.reduce(0, +) / Double(values.count)
+    }
+
+    /// Snap a raw 0.0–1.0 quality value to the nearest 0.1 step.
+    static func snapQuality(_ raw: Double) -> Double {
+        (raw * 10).rounded() / 10
+    }
 }
 
 // MARK: - Phase 1: Run-Up Enums

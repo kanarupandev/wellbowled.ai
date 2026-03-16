@@ -206,4 +206,198 @@ final class BowlingDNATests: XCTestCase {
         let decoded = try JSONDecoder().decode(BowlingDNAMatch.self, from: data)
         XCTAssertEqual(match, decoded)
     }
+
+    // MARK: - Quality Snapping
+
+    func testSnapQualityRoundsToNearestTenth() {
+        XCTAssertEqual(BowlingDNA.snapQuality(0.34), 0.3, accuracy: 0.001)
+        XCTAssertEqual(BowlingDNA.snapQuality(0.35), 0.4, accuracy: 0.001)
+        XCTAssertEqual(BowlingDNA.snapQuality(0.78), 0.8, accuracy: 0.001)
+        XCTAssertEqual(BowlingDNA.snapQuality(0.95), 1.0, accuracy: 0.001)
+        XCTAssertEqual(BowlingDNA.snapQuality(0.0), 0.0, accuracy: 0.001)
+        XCTAssertEqual(BowlingDNA.snapQuality(1.0), 1.0, accuracy: 0.001)
+    }
+
+    // MARK: - Average Quality
+
+    func testAverageQualityAllPresent() {
+        var dna = BowlingDNA()
+        dna.runUpQuality = 0.8
+        dna.gatherQuality = 0.6
+        dna.deliveryStrideQuality = 0.7
+        dna.releaseQuality = 0.5
+        dna.followThroughQuality = 0.4
+        XCTAssertEqual(dna.averageQuality!, 0.6, accuracy: 0.001)
+    }
+
+    func testAverageQualityPartial() {
+        var dna = BowlingDNA()
+        dna.releaseQuality = 0.8
+        dna.followThroughQuality = 0.6
+        XCTAssertEqual(dna.averageQuality!, 0.7, accuracy: 0.001)
+    }
+
+    func testAverageQualityNilWhenNoFields() {
+        let dna = BowlingDNA()
+        XCTAssertNil(dna.averageQuality)
+    }
+
+    // MARK: - Quality Dampener
+
+    func testDampenerReducesSimilarityForLowerQualityUser() {
+        // User avg 0.4, bowler avg 0.9 → ratio ~0.44
+        var userDNA = FamousBowlerDatabase.mcGrath.dna
+        userDNA.runUpQuality = 0.4
+        userDNA.gatherQuality = 0.4
+        userDNA.deliveryStrideQuality = 0.4
+        userDNA.releaseQuality = 0.4
+        userDNA.followThroughQuality = 0.4
+
+        let bowlerDNA = FamousBowlerDatabase.mcGrath.dna
+
+        let dampened = BowlingDNAMatcher.qualityDampened(
+            baseSimilarity: 100.0,
+            userDNA: userDNA,
+            bowlerDNA: bowlerDNA
+        )
+
+        // Should be ~44% (0.4/0.9 * 100)
+        XCTAssertLessThan(dampened, 50.0, "Low quality user should get dampened well below base")
+        XCTAssertGreaterThan(dampened, 40.0, "Should not over-dampen")
+    }
+
+    func testDampenerDoesNotBoostAboveBase() {
+        // User avg 1.0, bowler avg 0.9 → ratio capped at 1.0
+        var userDNA = FamousBowlerDatabase.mcGrath.dna
+        userDNA.runUpQuality = 1.0
+        userDNA.gatherQuality = 1.0
+        userDNA.deliveryStrideQuality = 1.0
+        userDNA.releaseQuality = 1.0
+        userDNA.followThroughQuality = 1.0
+
+        let bowlerDNA = FamousBowlerDatabase.mcGrath.dna
+
+        let dampened = BowlingDNAMatcher.qualityDampened(
+            baseSimilarity: 85.0,
+            userDNA: userDNA,
+            bowlerDNA: bowlerDNA
+        )
+
+        XCTAssertEqual(dampened, 85.0, accuracy: 0.01, "Should not boost above base similarity")
+    }
+
+    func testDampenerPassesThroughWhenNoQuality() {
+        // No quality fields → returns base unchanged
+        let userDNA = BowlingDNA(armPath: .high)
+        let bowlerDNA = BowlingDNA(armPath: .high)
+
+        let dampened = BowlingDNAMatcher.qualityDampened(
+            baseSimilarity: 75.0,
+            userDNA: userDNA,
+            bowlerDNA: bowlerDNA
+        )
+
+        XCTAssertEqual(dampened, 75.0, "No quality data → no dampening (backward compat)")
+    }
+
+    func testDampenerPassesThroughWhenOnlyUserHasQuality() {
+        // Only user has quality, bowler doesn't → pass through
+        var userDNA = BowlingDNA(armPath: .high)
+        userDNA.releaseQuality = 0.5
+        let bowlerDNA = BowlingDNA(armPath: .high)
+
+        let dampened = BowlingDNAMatcher.qualityDampened(
+            baseSimilarity: 75.0,
+            userDNA: userDNA,
+            bowlerDNA: bowlerDNA
+        )
+
+        XCTAssertEqual(dampened, 75.0, "Missing bowler quality → no dampening")
+    }
+
+    // MARK: - Quality Dampener Integration
+
+    func testRecreationalBowlerGetsLowerSimilarityThanLegend() {
+        // Simulate a recreational bowler with same categorical DNA as McGrath
+        // but much lower execution quality
+        var recreationalDNA = FamousBowlerDatabase.mcGrath.dna
+        recreationalDNA.runUpQuality = 0.4
+        recreationalDNA.gatherQuality = 0.3
+        recreationalDNA.deliveryStrideQuality = 0.4
+        recreationalDNA.releaseQuality = 0.5
+        recreationalDNA.followThroughQuality = 0.3
+
+        let matches = BowlingDNAMatcher.match(userDNA: recreationalDNA, topN: 1)
+        XCTAssertFalse(matches.isEmpty)
+
+        // With quality dampening, should be well below 100%
+        XCTAssertLessThan(matches[0].similarityPercent, 55.0,
+            "Recreational bowler with 0.3-0.5 quality should NOT get >55% match to an elite bowler")
+    }
+
+    func testFamousBowlerStillGets100PercentSelfMatch() {
+        // Famous bowler matching themselves: quality ratio is 1.0, so no dampening
+        let matches = BowlingDNAMatcher.match(userDNA: FamousBowlerDatabase.mcGrath.dna, topN: 1)
+        XCTAssertEqual(matches[0].bowlerName, "Glenn McGrath")
+        XCTAssertEqual(matches[0].similarityPercent, 100.0, accuracy: 0.1)
+    }
+
+    // MARK: - Backward Compatibility
+
+    func testDNAWithoutQualityFieldsDecodesFromOldJSON() throws {
+        // Simulate old JSON without quality fields
+        let oldJSON = """
+        {
+            "runUpStride": "medium",
+            "runUpSpeed": "fast",
+            "armPath": "high"
+        }
+        """
+        let data = oldJSON.data(using: .utf8)!
+        let dna = try JSONDecoder().decode(BowlingDNA.self, from: data)
+
+        XCTAssertEqual(dna.runUpStride, .medium)
+        XCTAssertEqual(dna.runUpSpeed, .fast)
+        XCTAssertEqual(dna.armPath, .high)
+        XCTAssertNil(dna.runUpQuality, "Quality fields should be nil when absent from old JSON")
+        XCTAssertNil(dna.averageQuality)
+    }
+
+    func testDNAWithQualityFieldsRoundTrips() throws {
+        var dna = FamousBowlerDatabase.steyn.dna
+        dna.runUpQuality = 1.0
+        dna.gatherQuality = 0.9
+        dna.deliveryStrideQuality = 1.0
+        dna.releaseQuality = 1.0
+        dna.followThroughQuality = 0.9
+
+        let data = try JSONEncoder().encode(dna)
+        let decoded = try JSONDecoder().decode(BowlingDNA.self, from: data)
+        XCTAssertEqual(dna, decoded)
+        XCTAssertEqual(decoded.runUpQuality, 1.0)
+        XCTAssertEqual(decoded.releaseQuality, 1.0)
+    }
+
+    // MARK: - Famous Bowler Quality Scores
+
+    func testAllFamousBowlersHaveQualityScores() {
+        for bowler in FamousBowlerDatabase.allBowlers {
+            let dna = bowler.dna
+            XCTAssertNotNil(dna.runUpQuality, "\(bowler.name) missing runUpQuality")
+            XCTAssertNotNil(dna.gatherQuality, "\(bowler.name) missing gatherQuality")
+            XCTAssertNotNil(dna.deliveryStrideQuality, "\(bowler.name) missing deliveryStrideQuality")
+            XCTAssertNotNil(dna.releaseQuality, "\(bowler.name) missing releaseQuality")
+            XCTAssertNotNil(dna.followThroughQuality, "\(bowler.name) missing followThroughQuality")
+        }
+    }
+
+    func testFamousBowlerQualityInEliteRange() {
+        for bowler in FamousBowlerDatabase.allBowlers {
+            let avg = bowler.dna.averageQuality!
+            XCTAssertGreaterThanOrEqual(avg, 0.8,
+                "\(bowler.name) average quality \(avg) is below 0.8 — famous bowlers should be elite")
+            XCTAssertLessThanOrEqual(avg, 1.0,
+                "\(bowler.name) average quality \(avg) exceeds 1.0")
+        }
+    }
 }

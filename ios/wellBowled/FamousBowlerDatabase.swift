@@ -71,7 +71,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.5, releaseWristYNormalized: 0.3,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 1.0, deliveryStrideQuality: 0.9,
+            releaseQuality: 1.0, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Metronomic line and length — relentless accuracy",
@@ -93,7 +95,9 @@ enum FamousBowlerDatabase {
             armPath: .sling, releaseHeight: .medium, wristPosition: .cocked,
             wristOmegaNormalized: 0.75, releaseWristYNormalized: 0.5,
             seamOrientation: .angled, revolutions: .medium,
-            followThroughDirection: .across, balanceAtFinish: .balanced
+            followThroughDirection: .across, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 1.0, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Devastating reverse swing at pace — could move it both ways",
@@ -115,7 +119,9 @@ enum FamousBowlerDatabase {
             armPath: .roundArm, releaseHeight: .medium, wristPosition: .cocked,
             wristOmegaNormalized: 0.2, releaseWristYNormalized: 0.6,
             seamOrientation: .angled, revolutions: .high,
-            followThroughDirection: .across, balanceAtFinish: .balanced
+            followThroughDirection: .across, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.8,
+            releaseQuality: 1.0, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Prodigious leg-spin with massive revolutions on the ball",
@@ -137,7 +143,9 @@ enum FamousBowlerDatabase {
             armPath: .sling, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 1.0, releaseWristYNormalized: 0.25,
             seamOrientation: .scrambled, revolutions: .low,
-            followThroughDirection: .wide, balanceAtFinish: .stumbling
+            followThroughDirection: .wide, balanceAtFinish: .stumbling,
+            runUpQuality: 1.0, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.8
         ),
         signatureTraits: [
             "Fastest recorded delivery in cricket (161.3 kph)",
@@ -159,7 +167,9 @@ enum FamousBowlerDatabase {
             armPath: .roundArm, releaseHeight: .medium, wristPosition: .cocked,
             wristOmegaNormalized: 0.15, releaseWristYNormalized: 0.55,
             seamOrientation: .angled, revolutions: .high,
-            followThroughDirection: .across, balanceAtFinish: .balanced
+            followThroughDirection: .across, balanceAtFinish: .balanced,
+            runUpQuality: 0.8, gatherQuality: 0.9, deliveryStrideQuality: 0.8,
+            releaseQuality: 1.0, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Most Test wickets ever (800) with unique flexion-based action",
@@ -181,7 +191,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.45, releaseWristYNormalized: 0.3,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 1.0, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Master of swing — conventional and reverse at will",
@@ -203,7 +215,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.8, releaseWristYNormalized: 0.25,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .across, balanceAtFinish: .falling
+            followThroughDirection: .across, balanceAtFinish: .falling,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.8
         ),
         signatureTraits: [
             "Devastating inswinging yorker — best in white-ball cricket",
@@ -225,7 +239,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .cocked,
             wristOmegaNormalized: 0.2, releaseWristYNormalized: 0.45,
             seamOrientation: .angled, revolutions: .medium,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.8, gatherQuality: 0.9, deliveryStrideQuality: 0.8,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Master of carrom ball and multiple variations from same action",
@@ -247,7 +263,9 @@ enum FamousBowlerDatabase {
             armPath: .sling, releaseHeight: .medium, wristPosition: .cocked,
             wristOmegaNormalized: 0.85, releaseWristYNormalized: 0.4,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 1.0, deliveryStrideQuality: 0.9,
+            releaseQuality: 1.0, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Compact run-up generating frightening pace from minimal effort",
@@ -269,7 +287,9 @@ enum FamousBowlerDatabase {
             armPath: .sling, releaseHeight: .low, wristPosition: .sideArm,
             wristOmegaNormalized: 0.8, releaseWristYNormalized: 0.55,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .across, balanceAtFinish: .falling
+            followThroughDirection: .across, balanceAtFinish: .falling,
+            runUpQuality: 0.8, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 1.0, followThroughQuality: 0.8
         ),
         signatureTraits: [
             "Unorthodox sling action — virtually impossible to pick up early",
@@ -291,7 +311,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.6, releaseWristYNormalized: 0.34,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Elite left-arm swing control with relentless line and length",
@@ -313,7 +335,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.9, releaseWristYNormalized: 0.28,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 1.0, gatherQuality: 0.9, deliveryStrideQuality: 1.0,
+            releaseQuality: 1.0, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Explosive high-pace action with late outswing at full speed",
@@ -338,7 +362,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.9, releaseWristYNormalized: 0.28,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .falling
+            followThroughDirection: .straight, balanceAtFinish: .falling,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Explosive pace from front-on action regularly clocking 150+ kph",
@@ -359,7 +385,9 @@ enum FamousBowlerDatabase {
             armPath: .sling, releaseHeight: .medium, wristPosition: .behind,
             wristOmegaNormalized: 0.9, releaseWristYNormalized: 0.4,
             seamOrientation: .scrambled, revolutions: .low,
-            followThroughDirection: .wide, balanceAtFinish: .stumbling
+            followThroughDirection: .wide, balanceAtFinish: .stumbling,
+            runUpQuality: 0.9, gatherQuality: 0.8, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.8
         ),
         signatureTraits: [
             "Devastating left-arm thunderbolts with slingy action at 150+ kph",
@@ -380,7 +408,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.75, releaseWristYNormalized: 0.3,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Tall seamer with classical side-on action and bounce",
@@ -401,7 +431,9 @@ enum FamousBowlerDatabase {
             armPath: .sling, releaseHeight: .medium, wristPosition: .sideArm,
             wristOmegaNormalized: 0.95, releaseWristYNormalized: 0.45,
             seamOrientation: .scrambled, revolutions: .low,
-            followThroughDirection: .wide, balanceAtFinish: .stumbling
+            followThroughDirection: .wide, balanceAtFinish: .stumbling,
+            runUpQuality: 1.0, gatherQuality: 0.8, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.8
         ),
         signatureTraits: [
             "Catapult sling action generating ferocious pace from the hip",
@@ -422,7 +454,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.55, releaseWristYNormalized: 0.28,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "McGrath-like accuracy from towering height with steep bounce",
@@ -443,7 +477,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.8, releaseWristYNormalized: 0.28,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Genuine pace from classical high-arm side-on action",
@@ -464,7 +500,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.6, releaseWristYNormalized: 0.3,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Tireless workhorse with relentless energy and aggression",
@@ -485,7 +523,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.65, releaseWristYNormalized: 0.3,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Masterful seam and swing bowling with deceptive pace",
@@ -506,7 +546,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.75, releaseWristYNormalized: 0.3,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Aggressive fast bowler with genuine pace and bounce",
@@ -527,7 +569,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.45, releaseWristYNormalized: 0.32,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Supreme outswing bowler who tormented English batsmen",
@@ -548,7 +592,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.65, releaseWristYNormalized: 0.32,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .wide, balanceAtFinish: .falling
+            followThroughDirection: .wide, balanceAtFinish: .falling,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Big-hearted fast-medium bowler with intimidating presence",
@@ -573,7 +619,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.8, releaseWristYNormalized: 0.3,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "First bowler to 300 Test wickets — classical fast bowling",
@@ -594,7 +642,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.65, releaseWristYNormalized: 0.32,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.8, deliveryStrideQuality: 0.8,
+            releaseQuality: 0.9, followThroughQuality: 0.8
         ),
         signatureTraits: [
             "Magnificent all-rounder swinging the ball both ways at pace",
@@ -615,7 +665,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.75, releaseWristYNormalized: 0.3,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .wide, balanceAtFinish: .stumbling
+            followThroughDirection: .wide, balanceAtFinish: .stumbling,
+            runUpQuality: 0.8, gatherQuality: 0.8, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.8
         ),
         signatureTraits: [
             "Headington 1981 — 8/43 to win the unwinnable Ashes Test",
@@ -636,7 +688,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.7, releaseWristYNormalized: 0.32,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Explosive reverse swing specialist at genuine pace",
@@ -657,7 +711,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.8, releaseWristYNormalized: 0.25,
             seamOrientation: .scrambled, revolutions: .low,
-            followThroughDirection: .wide, balanceAtFinish: .falling
+            followThroughDirection: .wide, balanceAtFinish: .falling,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Towering height generating extreme bounce at 150 kph",
@@ -678,7 +734,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.75, releaseWristYNormalized: 0.3,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "2005 Ashes hero — reverse swing at 90mph with all-rounder brilliance",
@@ -699,7 +757,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.5, releaseWristYNormalized: 0.32,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Outstanding swing bowler moving the ball late both ways",
@@ -720,7 +780,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.75, releaseWristYNormalized: 0.3,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "England's finest fast bowler of the 1960s-70s era",
@@ -741,7 +803,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.9, releaseWristYNormalized: 0.28,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Bodyline series spearhead — extreme pace with pinpoint accuracy",
@@ -762,7 +826,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.95, releaseWristYNormalized: 0.27,
             seamOrientation: .scrambled, revolutions: .low,
-            followThroughDirection: .wide, balanceAtFinish: .falling
+            followThroughDirection: .wide, balanceAtFinish: .falling,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "The Typhoon — devastating pace that won the 1954-55 Ashes",
@@ -783,7 +849,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.45, releaseWristYNormalized: 0.32,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Inswing and leg-cutter master — England's post-war workhorse",
@@ -804,7 +872,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.7, releaseWristYNormalized: 0.3,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Metronomic accuracy earning the nickname The Greyhound",
@@ -825,7 +895,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.55, releaseWristYNormalized: 0.3,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Outstanding swing bowler in home conditions at Edgbaston",
@@ -846,7 +918,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.9, releaseWristYNormalized: 0.28,
             seamOrientation: .scrambled, revolutions: .low,
-            followThroughDirection: .wide, balanceAtFinish: .falling
+            followThroughDirection: .wide, balanceAtFinish: .falling,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Express pace regularly exceeding 150 kph with skiddy trajectory",
@@ -867,7 +941,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.85, releaseWristYNormalized: 0.28,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Effortless 150 kph pace from a silky smooth action",
@@ -892,7 +968,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.75, releaseWristYNormalized: 0.25,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "6ft7 generating extreme bounce from just back of a length",
@@ -913,7 +991,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.7, releaseWristYNormalized: 0.28,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .across, balanceAtFinish: .falling
+            followThroughDirection: .across, balanceAtFinish: .falling,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "519 Test wickets — first to 500 through sheer longevity",
@@ -934,7 +1014,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.75, releaseWristYNormalized: 0.22,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Big Bird — 6ft8 delivering yorkers from near-vertical release",
@@ -955,7 +1037,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.9, releaseWristYNormalized: 0.27,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 1.0, gatherQuality: 1.0, deliveryStrideQuality: 1.0,
+            releaseQuality: 1.0, followThroughQuality: 1.0
         ),
         signatureTraits: [
             "Whispering Death — silent approach at express pace",
@@ -976,7 +1060,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.8, releaseWristYNormalized: 0.3,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Pioneer of the West Indian pace quartet revolution",
@@ -997,7 +1083,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.85, releaseWristYNormalized: 0.28,
             seamOrientation: .scrambled, revolutions: .low,
-            followThroughDirection: .wide, balanceAtFinish: .falling
+            followThroughDirection: .wide, balanceAtFinish: .falling,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Fearsome pace from one of the longest run-ups in cricket",
@@ -1018,7 +1106,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.8, releaseWristYNormalized: 0.3,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Fearsome pace partner to Wes Hall in the 1960s",
@@ -1039,7 +1129,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.8, releaseWristYNormalized: 0.28,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Genuinely quick with classical high-arm action",
@@ -1060,7 +1152,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.75, releaseWristYNormalized: 0.3,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Modern West Indian pace leader with classical action",
@@ -1081,7 +1175,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.85, releaseWristYNormalized: 0.28,
             seamOrientation: .scrambled, revolutions: .low,
-            followThroughDirection: .wide, balanceAtFinish: .falling
+            followThroughDirection: .wide, balanceAtFinish: .falling,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Raw express pace regularly exceeding 150 kph",
@@ -1102,7 +1198,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.75, releaseWristYNormalized: 0.3,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "5/11 vs England at Headingley — destructive at his best",
@@ -1123,7 +1221,9 @@ enum FamousBowlerDatabase {
             armPath: .sling, releaseHeight: .medium, wristPosition: .behind,
             wristOmegaNormalized: 0.9, releaseWristYNormalized: 0.4,
             seamOrientation: .scrambled, revolutions: .low,
-            followThroughDirection: .wide, balanceAtFinish: .stumbling
+            followThroughDirection: .wide, balanceAtFinish: .stumbling,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Explosive slingy action generating 150+ kph from small frame",
@@ -1144,7 +1244,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.9, releaseWristYNormalized: 0.27,
             seamOrientation: .scrambled, revolutions: .low,
-            followThroughDirection: .wide, balanceAtFinish: .falling
+            followThroughDirection: .wide, balanceAtFinish: .falling,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Raw express pace — among the fastest of the WI pace era",
@@ -1165,7 +1267,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.5, releaseWristYNormalized: 0.35,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Explosive all-rounder with genuine pace for women's cricket",
@@ -1190,7 +1294,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.85, releaseWristYNormalized: 0.3,
             seamOrientation: .angled, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Devastating reverse-swinging yorker — toe-crushing specialist",
@@ -1211,7 +1317,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.8, releaseWristYNormalized: 0.3,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Complete fast bowler — pace, swing, and reverse swing pioneer",
@@ -1232,7 +1340,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.75, releaseWristYNormalized: 0.3,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Prodigious swing bowling from left-arm over at genuine pace",
@@ -1253,7 +1363,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.55, releaseWristYNormalized: 0.3,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Immaculate seam position producing movement both ways",
@@ -1274,7 +1386,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.8, releaseWristYNormalized: 0.27,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .across, balanceAtFinish: .falling
+            followThroughDirection: .across, balanceAtFinish: .falling,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Left-arm pace spearhead — devastating inswing to right-handers",
@@ -1295,7 +1409,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.85, releaseWristYNormalized: 0.28,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .falling
+            followThroughDirection: .straight, balanceAtFinish: .falling,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Youngest fast bowler to take a Test hat-trick at age 16",
@@ -1316,7 +1432,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.65, releaseWristYNormalized: 0.32,
             seamOrientation: .angled, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "T20 specialist with brilliant death bowling variations",
@@ -1337,7 +1455,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.6, releaseWristYNormalized: 0.32,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Skilful swing bowler thriving in subcontinental conditions",
@@ -1358,7 +1478,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.45, releaseWristYNormalized: 0.32,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Pakistan's first great fast bowler — 12/99 vs England at The Oval",
@@ -1383,7 +1505,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.85, releaseWristYNormalized: 0.28,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 1.0, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 1.0, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "White Lightning — express pace with hostile aggression",
@@ -1404,7 +1528,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.6, releaseWristYNormalized: 0.3,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 1.0, deliveryStrideQuality: 0.9,
+            releaseQuality: 1.0, followThroughQuality: 1.0
         ),
         signatureTraits: [
             "Immaculate line and length with subtle seam movement",
@@ -1425,7 +1551,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.75, releaseWristYNormalized: 0.3,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .falling
+            followThroughDirection: .straight, balanceAtFinish: .falling,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Tireless fast bowler with boundless energy and enthusiasm",
@@ -1446,7 +1574,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.8, releaseWristYNormalized: 0.28,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Youngest South African to 200 Test wickets — generational talent",
@@ -1467,7 +1597,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.8, releaseWristYNormalized: 0.25,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .falling
+            followThroughDirection: .straight, balanceAtFinish: .falling,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "6ft5 generating extreme bounce from back of a length",
@@ -1488,7 +1620,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.45, releaseWristYNormalized: 0.32,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Prodigious seam and swing at gentle pace in helpful conditions",
@@ -1509,7 +1643,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.9, releaseWristYNormalized: 0.28,
             seamOrientation: .scrambled, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .falling
+            followThroughDirection: .straight, balanceAtFinish: .falling,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Express pace regularly exceeding 150 kph in all formats",
@@ -1530,7 +1666,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.6, releaseWristYNormalized: 0.3,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .falling
+            followThroughDirection: .straight, balanceAtFinish: .falling,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Fastest bowler in women's cricket history — 130+ kph",
@@ -1551,7 +1689,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.5, releaseWristYNormalized: 0.32,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Complete all-rounder with precise seam bowling",
@@ -1572,7 +1712,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.45, releaseWristYNormalized: 0.34,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Reliable new-ball bowler with consistent line and length",
@@ -1597,7 +1739,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.7, releaseWristYNormalized: 0.3,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 1.0, deliveryStrideQuality: 0.9,
+            releaseQuality: 1.0, followThroughQuality: 1.0
         ),
         signatureTraits: [
             "First to 400 Test wickets — complete fast bowling mastery",
@@ -1618,7 +1762,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.65, releaseWristYNormalized: 0.3,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .across, balanceAtFinish: .balanced
+            followThroughDirection: .across, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Elite left-arm swing bowler with devastating new-ball spells",
@@ -1639,7 +1785,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.6, releaseWristYNormalized: 0.3,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Masterful swing bowler thriving with the new ball",
@@ -1660,7 +1808,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.9, releaseWristYNormalized: 0.28,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .falling
+            followThroughDirection: .straight, balanceAtFinish: .falling,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.8
         ),
         signatureTraits: [
             "NZ's fastest ever — 150+ kph with outswing at top speed",
@@ -1681,7 +1831,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.6, releaseWristYNormalized: 0.32,
             seamOrientation: .scrambled, revolutions: .low,
-            followThroughDirection: .across, balanceAtFinish: .falling
+            followThroughDirection: .across, balanceAtFinish: .falling,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Relentless short-pitch bowling plan targeting the body",
@@ -1702,7 +1854,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.6, releaseWristYNormalized: 0.3,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Prodigious swing and seam from a classical action",
@@ -1723,7 +1877,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.65, releaseWristYNormalized: 0.25,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "6ft8 generating steep bounce from back of a length",
@@ -1744,7 +1900,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.6, releaseWristYNormalized: 0.3,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Sharp swing bowler with late movement at 135-140 kph",
@@ -1765,7 +1923,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.7, releaseWristYNormalized: 0.3,
             seamOrientation: .scrambled, revolutions: .low,
-            followThroughDirection: .wide, balanceAtFinish: .stumbling
+            followThroughDirection: .wide, balanceAtFinish: .stumbling,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Wholehearted fast bowler giving everything in every spell",
@@ -1786,7 +1946,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.5, releaseWristYNormalized: 0.32,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Pace spearhead of New Zealand women's bowling attack",
@@ -1811,7 +1973,9 @@ enum FamousBowlerDatabase {
             armPath: .sling, releaseHeight: .low, wristPosition: .sideArm,
             wristOmegaNormalized: 0.8, releaseWristYNormalized: 0.65,
             seamOrientation: .angled, revolutions: .low,
-            followThroughDirection: .across, balanceAtFinish: .falling
+            followThroughDirection: .across, balanceAtFinish: .falling,
+            runUpQuality: 0.8, gatherQuality: 0.8, deliveryStrideQuality: 0.8,
+            releaseQuality: 1.0, followThroughQuality: 0.8
         ),
         signatureTraits: [
             "Unique round-arm slinging action — lowest release in fast bowling",
@@ -1836,7 +2000,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.7, releaseWristYNormalized: 0.3,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "India's greatest all-rounder — 434 Test wickets",
@@ -1857,7 +2023,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.75, releaseWristYNormalized: 0.3,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "India's fastest bowler of his era — genuine 145+ kph pace",
@@ -1878,7 +2046,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.6, releaseWristYNormalized: 0.32,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .across, balanceAtFinish: .balanced
+            followThroughDirection: .across, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "India's finest left-arm seamer — swing both ways on demand",
@@ -1899,7 +2069,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.75, releaseWristYNormalized: 0.3,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Immaculate seam position producing movement both ways",
@@ -1920,7 +2092,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.65, releaseWristYNormalized: 0.27,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .falling
+            followThroughDirection: .straight, balanceAtFinish: .falling,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Tall seamer using 6ft4 height for steep bounce",
@@ -1941,7 +2115,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.75, releaseWristYNormalized: 0.3,
             seamOrientation: .scrambled, revolutions: .low,
-            followThroughDirection: .wide, balanceAtFinish: .falling
+            followThroughDirection: .wide, balanceAtFinish: .falling,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Raw pace at 145+ kph with aggressive intent",
@@ -1962,7 +2138,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.5, releaseWristYNormalized: 0.32,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "India's premier swing bowler with late conventional movement",
@@ -1983,7 +2161,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.55, releaseWristYNormalized: 0.3,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Highest wicket-taker in women's ODI history (255 wickets)",
@@ -2004,7 +2184,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.45, releaseWristYNormalized: 0.34,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Sharp swing bowling with late movement at the top",
@@ -2025,7 +2207,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.45, releaseWristYNormalized: 0.34,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Tall all-rounder generating bounce at brisk pace",
@@ -2050,7 +2234,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.6, releaseWristYNormalized: 0.3,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Zimbabwe's greatest fast bowler — 216 Test wickets",
@@ -2075,7 +2261,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.55, releaseWristYNormalized: 0.3,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "England's greatest women's fast bowler — pace and swing",
@@ -2096,7 +2284,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.5, releaseWristYNormalized: 0.32,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "2017 World Cup final hero — 6/46 to win at Lord's",
@@ -2117,7 +2307,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.55, releaseWristYNormalized: 0.3,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Complete all-rounder — Australia's greatest women's cricketer",
@@ -2138,7 +2330,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.5, releaseWristYNormalized: 0.32,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Australia's premier women's swing bowler with new ball",
@@ -2159,7 +2353,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.6, releaseWristYNormalized: 0.3,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .falling
+            followThroughDirection: .straight, balanceAtFinish: .falling,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Express pace for women's cricket — regularly clocking 120+ kph",
@@ -2180,7 +2376,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.45, releaseWristYNormalized: 0.34,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .across, balanceAtFinish: .balanced
+            followThroughDirection: .across, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Pakistan's leading women's pace bowler with left-arm angle",
@@ -2201,7 +2399,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.45, releaseWristYNormalized: 0.34,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Emerging Pakistani all-rounder with lively seam bowling",
@@ -2222,7 +2422,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.6, releaseWristYNormalized: 0.3,
             seamOrientation: .scrambled, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .falling
+            followThroughDirection: .straight, balanceAtFinish: .falling,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Genuine express pace in women's cricket — 125+ kph regularly",
@@ -2243,7 +2445,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.6, releaseWristYNormalized: 0.3,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .falling
+            followThroughDirection: .straight, balanceAtFinish: .falling,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Australia's fastest women's bowler — genuine pace at 120+ kph",
@@ -2266,7 +2470,9 @@ enum FamousBowlerDatabase {
             armPath: .high, releaseHeight: .high, wristPosition: .behind,
             wristOmegaNormalized: 0.85, releaseWristYNormalized: 0.28,
             seamOrientation: .upright, revolutions: .low,
-            followThroughDirection: .straight, balanceAtFinish: .balanced
+            followThroughDirection: .straight, balanceAtFinish: .balanced,
+            runUpQuality: 0.9, gatherQuality: 0.9, deliveryStrideQuality: 0.9,
+            releaseQuality: 0.9, followThroughQuality: 0.9
         ),
         signatureTraits: [
             "Greatest Australian fast bowler — 355 Test wickets",
