@@ -51,10 +51,17 @@ struct LiveSessionView: View {
             // Delivery flash overlay (large centered count that fades)
             if let count = deliveryFlashCount {
                 Text("\(count)")
-                    .font(.system(size: 120, weight: .black, design: .rounded))
-                    .foregroundStyle(peacockBlue)
-                    .shadow(color: .black.opacity(0.6), radius: 10, x: 0, y: 4)
-                    .transition(.scale.combined(with: .opacity))
+                    .font(.system(size: 140, weight: .black, design: .rounded))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [peacockBlue, .cyan],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .shadow(color: peacockBlue.opacity(0.6), radius: 20, x: 0, y: 0)
+                    .shadow(color: .black.opacity(0.5), radius: 8, x: 0, y: 4)
+                    .transition(.scale(scale: 0.3).combined(with: .opacity))
             }
 
             // Overlay
@@ -146,25 +153,35 @@ struct LiveSessionView: View {
                         .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
 
-                // Speaking indicator
+                // Speaking indicator — waveform style
                 if viewModel.isMateSpeaking {
-                    HStack(spacing: 3) {
-                        ForEach(0..<3, id: \.self) { i in
+                    HStack(spacing: 2) {
+                        ForEach(0..<5, id: \.self) { i in
                             Capsule()
-                                .fill(peacockBlue)
-                                .frame(width: 3, height: 10)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [peacockBlue, .cyan],
+                                        startPoint: .bottom,
+                                        endPoint: .top
+                                    )
+                                )
+                                .frame(width: 3, height: speakingBarHeight(for: i))
                                 .animation(
-                                    .easeInOut(duration: 0.4)
-                                    .repeatForever()
-                                    .delay(Double(i) * 0.15),
+                                    .easeInOut(duration: [0.35, 0.45, 0.3, 0.5, 0.4][i])
+                                    .repeatForever(autoreverses: true)
+                                    .delay(Double(i) * 0.1),
                                     value: viewModel.isMateSpeaking
                                 )
                         }
-                        Text("Mate is speaking")
-                            .font(.caption2)
+                        Text("Mate")
+                            .font(.caption2.bold())
                             .foregroundColor(peacockBlue)
                     }
-                    .padding(.top, 4)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(.ultraThinMaterial.opacity(0.8))
+                    .cornerRadius(12)
+                    .transition(.scale.combined(with: .opacity))
                 }
 
                 // Error / reconnecting banner
@@ -307,13 +324,13 @@ struct LiveSessionView: View {
         }
         .onChange(of: viewModel.session.deliveryCount) { _, newCount in
             guard newCount > 0 else { return }
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.5, blendDuration: 0.1)) {
                 deliveryFlashCount = newCount
             }
-            // Auto-dismiss flash after 1.2s
+            // Auto-dismiss flash after 1.5s
             Task {
-                try? await Task.sleep(nanoseconds: 1_200_000_000)
-                withAnimation(.easeOut(duration: 0.4)) {
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                withAnimation(.easeOut(duration: 0.5)) {
                     deliveryFlashCount = nil
                 }
             }
@@ -335,6 +352,12 @@ struct LiveSessionView: View {
                 await viewModel.disconnectMate()
             }
         }
+    }
+
+    // MARK: - Helpers
+
+    private func speakingBarHeight(for index: Int) -> CGFloat {
+        [8, 14, 18, 12, 10][index]
     }
 
     // MARK: - Computed
