@@ -51,60 +51,6 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
     If the bowler has a distinctive feature (unusual grip, sling action, spinner's loop), name it.
     """
 
-    // MARK: - DNA Extraction Prompt
-
-    private static let dnaExtractionPrompt = """
-    You are a cricket biomechanics specialist extracting a bowler's action signature from a 5-second delivery clip.
-
-    Watch the COMPLETE action from run-up entry to follow-through completion before classifying any field.
-
-    Respond with STRICT JSON matching this schema:
-    {
-      "run_up_stride": "short" | "medium" | "long",
-      "run_up_speed": "slow" | "moderate" | "fast" | "explosive",
-      "approach_angle": "straight" | "angled" | "wide",
-      "gather_alignment": "front_on" | "semi" | "side_on",
-      "back_foot_contact": "braced" | "sliding" | "jumping",
-      "trunk_lean": "upright" | "slight" | "pronounced",
-      "delivery_stride_length": "short" | "normal" | "over_striding",
-      "front_arm_action": "pull" | "sweep" | "delayed",
-      "head_stability": "stable" | "tilted" | "falling",
-      "arm_path": "high" | "round_arm" | "sling",
-      "release_height": "high" | "medium" | "low",
-      "wrist_position": "behind" | "cocked" | "side_arm",
-      "seam_orientation": "upright" | "scrambled" | "angled",
-      "revolutions": "low" | "medium" | "high",
-      "follow_through_direction": "across" | "straight" | "wide",
-      "balance_at_finish": "balanced" | "falling" | "stumbling"
-    }
-
-    BIOMECHANICAL REFERENCE for each field:
-    - gather_alignment: Check hip-shoulder orientation at back-foot contact (BFC). \
-    "side_on" = back foot parallel to crease, chest facing gully. "front_on" = chest facing batsman. \
-    "semi" = between the two (~30-45 degrees open).
-    - back_foot_contact: "braced" = planted firmly, absorbing force. "jumping" = airborne bound. \
-    "sliding" = foot drags or skids on landing.
-    - trunk_lean: Lateral flexion of the torso at release. "upright" = <20 degrees. \
-    "slight" = 20-40 degrees. "pronounced" = >40 degrees (injury risk flag).
-    - front_arm_action: "pull" = drives down and through (textbook). "sweep" = flings out laterally. \
-    "delayed" = stays up late, delays circumduction (associated with higher pace).
-    - arm_path: "high" = release near 12 o'clock (McGrath, Anderson). "round_arm" = ~10 o'clock (Malinga-style). \
-    "sling" = chest-height release, catapult motion.
-    - wrist_position: "behind" = fingers directly behind the ball at release (seam bowler default). \
-    "cocked" = wrist angled, seam tilted (swing variant). "side_arm" = wrist rotated laterally.
-    - seam_orientation: "upright" = bolt upright like Anderson (maximises conventional swing). \
-    "angled" = seam tilted toward slip or fine leg. "scrambled" = wobbling, no clean axis.
-    - head_stability: "stable" = head over front foot at release, eyes level. \
-    "tilted" = head leaning to off side. "falling" = head dropping away from the action.
-
-    Use null for ANY field you cannot confidently determine from the video angle or quality. \
-    Partial DNA is valid — do not guess. Only classify what you can clearly see.
-
-    The schema above captures the 16 core dimensions. If you recognise something distinctive \
-    about this action that the schema doesn't capture (e.g. Bumrah-style hyperextension, \
-    Malinga's elastic energy storage, a spinner's stock ball vs variation), the enum values \
-    should still reflect the closest match — the downstream matcher will handle nuance.
-    """
 
     // MARK: - Deep Analysis Prompt (On-Demand)
 
@@ -344,89 +290,9 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
     - If none found, return { "deliveries": [] }.
     """
 
-    // MARK: - DNA Extraction
-
-    /// Extracts BowlingDNA from a clip using Gemini vision + MediaPipe-derived wrist data.
-    func extractBowlingDNA(
-        clipURL: URL,
-        wristOmega: Double?,
-        releaseWristY: Double?
-    ) async throws -> BowlingDNA {
-        let videoData = try Data(contentsOf: clipURL)
-        let base64Video = videoData.base64EncodedString()
-
-        let payload: [String: Any] = [
-            "contents": [[
-                "parts": [
-                    ["inlineData": ["mimeType": "video/mp4", "data": base64Video]],
-                    ["text": Self.dnaExtractionPrompt]
-                ]
-            ]],
-            "generationConfig": [
-                "temperature": 0.2,
-                "responseMimeType": "application/json"
-            ]
-        ]
-
-        log.debug("Extracting BowlingDNA from: \(clipURL.lastPathComponent)")
-        let data = try await requestJSON(
-            payload: payload,
-            candidateModels: [WBConfig.deepAnalysisModel, WBConfig.analysisModel]
-        )
-
-        var dna = try parseDNAResponse(data)
-
-        // Fill in MediaPipe-derived fields
-        if let omega = wristOmega {
-            dna.wristOmegaNormalized = Self.normalizeOmega(omega)
-        }
-        if let y = releaseWristY {
-            dna.releaseWristYNormalized = min(max(y, 0), 1)
-        }
-
-        return dna
-    }
-
     /// Normalize wrist angular velocity: clamp((|omega| - 800) / 1200, 0, 1)
     static func normalizeOmega(_ omega: Double) -> Double {
         return min(max((abs(omega) - 800.0) / 1200.0, 0.0), 1.0)
-    }
-
-    private func parseDNAResponse(_ data: Data) throws -> BowlingDNA {
-        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-
-        guard let candidates = json?["candidates"] as? [[String: Any]],
-              let content = candidates.first?["content"] as? [String: Any],
-              let parts = content["parts"] as? [[String: Any]],
-              let text = parts.first(where: { $0["text"] != nil })?["text"] as? String else {
-            throw AnalysisError.parseError
-        }
-
-        guard let textData = text.data(using: .utf8),
-              let result = try JSONSerialization.jsonObject(with: textData) as? [String: Any] else {
-            throw AnalysisError.parseError
-        }
-
-        log.debug("DNA result: \(text.prefix(200))")
-
-        return BowlingDNA(
-            runUpStride: (result["run_up_stride"] as? String).flatMap(RunUpStrideCategory.init),
-            runUpSpeed: (result["run_up_speed"] as? String).flatMap(RunUpSpeed.init),
-            approachAngle: (result["approach_angle"] as? String).flatMap(ApproachAngle.init),
-            gatherAlignment: (result["gather_alignment"] as? String).flatMap(BodyAlignment.init),
-            backFootContact: (result["back_foot_contact"] as? String).flatMap(BackFootContact.init),
-            trunkLean: (result["trunk_lean"] as? String).flatMap(TrunkLean.init),
-            deliveryStrideLength: (result["delivery_stride_length"] as? String).flatMap(StrideLength.init),
-            frontArmAction: (result["front_arm_action"] as? String).flatMap(FrontArmAction.init),
-            headStability: (result["head_stability"] as? String).flatMap(HeadStability.init),
-            armPath: (result["arm_path"] as? String).flatMap(ArmPath.init),
-            releaseHeight: (result["release_height"] as? String).flatMap(ReleaseHeight.init),
-            wristPosition: (result["wrist_position"] as? String).flatMap(WristPosition.init),
-            seamOrientation: (result["seam_orientation"] as? String).flatMap(SeamOrientation.init),
-            revolutions: (result["revolutions"] as? String).flatMap(Revolutions.init),
-            followThroughDirection: (result["follow_through_direction"] as? String).flatMap(FollowThroughDir.init),
-            balanceAtFinish: (result["balance_at_finish"] as? String).flatMap(BalanceAtFinish.init)
-        )
     }
 
     // MARK: - DeliveryAnalyzing
