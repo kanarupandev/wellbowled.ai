@@ -327,21 +327,11 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
             ]
         ]
 
-        let url = WBConfig.generateContentURL(model: WBConfig.analysisModel)
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 120
-        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
-
         log.debug("Extracting BowlingDNA from: \(clipURL.lastPathComponent)")
-        let (data, response) = try await URLSession.shared.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
-            log.error("DNA extraction API error: HTTP \(statusCode)")
-            throw AnalysisError.apiError(statusCode)
-        }
+        let data = try await requestJSON(
+            payload: payload,
+            candidateModels: [WBConfig.deepAnalysisModel, WBConfig.analysisModel]
+        )
 
         var dna = try parseDNAResponse(data)
 
