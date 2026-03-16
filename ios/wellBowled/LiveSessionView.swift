@@ -579,7 +579,7 @@ private struct SessionDeliveryResultPage: View {
                                 if let speedKph = delivery.speedKph {
                                     VStack {
                                         HStack {
-                                            SpeedBadge(kph: speedKph, confidence: delivery.speedConfidence)
+                                            SessionSpeedBadge(kph: speedKph, confidence: delivery.speedConfidence)
                                             Spacer()
                                         }
                                         .padding(.leading, 16)
@@ -1549,7 +1549,7 @@ private struct SessionFeedbackLine: View {
 
 // MARK: - Speed Badge
 
-private struct SpeedBadge: View {
+private struct SessionSpeedBadge: View {
     let kph: Double
     let confidence: Double?
 

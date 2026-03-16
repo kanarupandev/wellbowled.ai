@@ -122,13 +122,13 @@ final class StumpDetectionService {
         }
 
         state = .locked(calibration)
-        log.info(
-            "Stumps detected — bowler:(\(String(format: "%.3f", bowler.normalizedCenter.x))," +
-            "\(String(format: "%.3f", bowler.normalizedCenter.y))) " +
-            "striker:(\(String(format: "%.3f", striker.normalizedCenter.x))," +
-            "\(String(format: "%.3f", striker.normalizedCenter.y))) " +
-            "conf: \(String(format: "%.2f/%.2f", bowler.confidence, striker.confidence))"
-        )
+        let bowlerX = String(format: "%.3f", bowler.normalizedCenter.x)
+        let bowlerY = String(format: "%.3f", bowler.normalizedCenter.y)
+        let strikerX = String(format: "%.3f", striker.normalizedCenter.x)
+        let strikerY = String(format: "%.3f", striker.normalizedCenter.y)
+        let confidenceSummary = String(format: "%.2f/%.2f", bowler.confidence, striker.confidence)
+        let detectionSummary = "Stumps detected - bowler:(\(bowlerX),\(bowlerY)) striker:(\(strikerX),\(strikerY)) conf: \(confidenceSummary)"
+        log.info("\(detectionSummary, privacy: .public)")
         return calibration
     }
 
