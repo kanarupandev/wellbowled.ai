@@ -30,14 +30,22 @@ struct LiveSessionView: View {
 
             // Calibration corridor overlay (TV broadcast style)
             if isSessionActive, WBConfig.enableSpeedCalibration {
+                let overlayMode: CalibrationOverlayView.OverlayMode = {
+                    switch viewModel.calibrationState {
+                    case .locked: return .active
+                    case .detecting: return .calibrating
+                    case .idle, .failed: return viewModel.session.calibration != nil ? .active : .calibrating
+                    }
+                }()
                 CalibrationOverlayView(
-                    mode: viewModel.session.calibration != nil ? .active : .hidden,
-                    calibrationState: viewModel.session.calibration.map { .locked($0) } ?? .idle,
+                    mode: overlayMode,
+                    calibrationState: viewModel.calibrationState,
                     bowlerGuideRect: StumpDetectionService.defaultBowlerGuideRect(),
                     strikerGuideRect: StumpDetectionService.defaultStrikerGuideRect(),
                     onManualTap: nil
                 )
                 .allowsHitTesting(false)
+                .animation(.easeInOut(duration: 0.5), value: viewModel.calibrationState)
             }
 
             // Delivery flash overlay (large centered count that fades)

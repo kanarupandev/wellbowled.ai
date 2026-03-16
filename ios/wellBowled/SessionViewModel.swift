@@ -60,10 +60,14 @@ final class SessionViewModel: ObservableObject {
     @Published private(set) var matePhase: MatePhase = .idle
     @Published var reviewDeliveryIndex: Int = 0
 
+    // Stump calibration state (published for CalibrationOverlayView)
+    @Published private(set) var calibrationState: StumpDetectionService.CalibrationState = .idle
+
     // MARK: - Services
 
     let cameraService = CameraService()
     private let liveService = GeminiLiveService()
+    private let stumpDetectionService = StumpDetectionService()
     private let audioManager = AudioSessionManager.shared
     private let detector = DeliveryDetector(fps: 30.0)
     private let tts = TTSService()
@@ -143,6 +147,8 @@ final class SessionViewModel: ObservableObject {
         log.debug("Starting session...")
         errorMessage = nil
         session.start(mode: .freePlay)
+        calibrationState = .idle
+        cameraService.setSpeedMode(false)
         cameraFlipDisabled = false
         challengeTargetBySequence = [:]
         challengeEngine.reset(shuffle: true)
@@ -231,6 +237,11 @@ final class SessionViewModel: ObservableObject {
             debugLog += "FAIL: \(error.localizedDescription)\n"
             errorMessage = "Connection failed: \(error.localizedDescription)"
             // Session continues — detection + TTS still work without Live API
+        }
+
+        // 7. Auto-calibrate stumps for speed estimation (non-blocking)
+        if WBConfig.enableSpeedCalibration {
+            Task { await self.attemptAutoCalibration() }
         }
     }
 
@@ -1570,6 +1581,79 @@ final class SessionViewModel: ObservableObject {
         Ask what they want to work on and how long they have. \
         Check you can see their full action in the video feed.
         """)
+    }
+
+    // MARK: - Auto Stump Calibration
+
+    /// Captures a camera frame after a short delay, sends to Gemini for stump detection.
+    /// If both stumps found: locks calibration, enables 120fps, shows corridor.
+    /// If not found: session continues without speed — mate mentions it naturally.
+    private func attemptAutoCalibration() async {
+        guard session.isActive else { return }
+        calibrationState = .detecting
+
+        // Wait 3s for camera to stabilise and user to frame the pitch
+        try? await Task.sleep(nanoseconds: 3_000_000_000)
+        guard session.isActive else { return }
+
+        // Capture a frame from the camera preview
+        guard let snapshot = captureCurrentFrame() else {
+            log.warning("Auto-calibration: could not capture frame")
+            calibrationState = .failed("Could not capture camera frame")
+            return
+        }
+
+        if liveService.isConnected {
+            await liveService.sendContext("[CALIBRATING] Looking for stumps in the video feed for speed tracking...")
+        }
+
+        do {
+            let calibration = try await stumpDetectionService.detectStumps(
+                image: snapshot,
+                frameWidth: Int(snapshot.size.width * snapshot.scale),
+                frameHeight: Int(snapshot.size.height * snapshot.scale),
+                fps: WBConfig.speedCalibrationFPS
+            )
+
+            if let cal = calibration {
+                session.calibration = cal
+                calibrationState = .locked(cal)
+                cameraService.setSpeedMode(true)
+                log.info("Auto-calibration locked. Speed tracking active at \(WBConfig.speedCalibrationFPS)fps")
+
+                if liveService.isConnected {
+                    await liveService.sendContext(
+                        "[CALIBRATION LOCKED] Both sets of stumps detected. Speed tracking is now active at \(WBConfig.speedCalibrationFPS)fps. " +
+                        "Ball speed will be measured for each delivery using frame-differencing between the stump gates. " +
+                        "Mention this briefly to the bowler — they'll see speed on each delivery card."
+                    )
+                }
+            } else {
+                calibrationState = stumpDetectionService.state
+                log.info("Auto-calibration: stumps not found — session continues without speed tracking")
+
+                if liveService.isConnected {
+                    await liveService.sendContext(
+                        "[CALIBRATION SKIPPED] Could not detect both sets of stumps. Speed tracking is off for this session. " +
+                        "No need to dwell on it — carry on coaching. If the bowler asks about speed, mention they can set up stumps next time."
+                    )
+                }
+            }
+        } catch {
+            calibrationState = .failed(error.localizedDescription)
+            log.warning("Auto-calibration failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Grab a UIImage from the current camera preview layer.
+    private func captureCurrentFrame() -> UIImage? {
+        let layer = cameraService.previewLayer
+        let size = layer.bounds.size
+        guard size.width > 0, size.height > 0 else { return nil }
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { ctx in
+            layer.render(in: ctx.cgContext)
+        }
     }
 
     static func cameraSwitchContext(for position: AVCaptureDevice.Position) -> String {
