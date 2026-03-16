@@ -2074,21 +2074,18 @@ final class SessionViewModel: ObservableObject {
     /// If not found: session continues without speed — mate mentions it naturally.
     private func attemptAutoCalibration() async {
         guard session.isActive else { return }
-        calibrationState = .detecting
+        // Stay idle — don't show boxes until we actually find stumps
+        calibrationState = .idle
 
-        // Wait 3s for camera to stabilise and user to frame the pitch
+        // Wait 3s for camera to stabilise
         try? await Task.sleep(nanoseconds: 3_000_000_000)
         guard session.isActive else { return }
 
         // Capture a frame from the camera preview
         guard let snapshot = captureCurrentFrame() else {
             log.warning("Auto-calibration: could not capture frame")
-            calibrationState = .failed("Could not capture camera frame")
+            calibrationState = .idle
             return
-        }
-
-        if liveService.isConnected {
-            await liveService.sendContext("[CALIBRATING] Checking the video for stumps now. If the bowler hasn't aligned them yet, ask them to adjust.")
         }
 
         do {

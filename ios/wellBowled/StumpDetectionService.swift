@@ -25,6 +25,11 @@ final class StumpDetectionService {
         case detecting
         case locked(StumpCalibration)
         case failed(String)
+
+        var isDetecting: Bool {
+            if case .detecting = self { return true }
+            return false
+        }
     }
 
     // MARK: - Gemini Prompt

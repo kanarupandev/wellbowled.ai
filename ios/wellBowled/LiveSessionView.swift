@@ -28,24 +28,18 @@ struct LiveSessionView: View {
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
 
-            // Calibration corridor overlay (TV broadcast style)
-            if isSessionActive, WBConfig.enableSpeedCalibration {
-                let overlayMode: CalibrationOverlayView.OverlayMode = {
-                    switch viewModel.calibrationState {
-                    case .locked: return .active
-                    case .detecting: return .calibrating
-                    case .idle, .failed: return viewModel.session.calibration != nil ? .active : .calibrating
-                    }
-                }()
+            // Stump alignment boxes — only shown when detecting (user requested or stumps visible)
+            if isSessionActive, WBConfig.enableSpeedCalibration, viewModel.calibrationState.isDetecting {
                 CalibrationOverlayView(
-                    mode: overlayMode,
+                    mode: .calibrating,
                     calibrationState: viewModel.calibrationState,
                     bowlerGuideRect: StumpDetectionService.defaultBowlerGuideRect(),
                     strikerGuideRect: StumpDetectionService.defaultStrikerGuideRect(),
                     onManualTap: nil
                 )
                 .allowsHitTesting(false)
-                .animation(.easeInOut(duration: 0.5), value: viewModel.calibrationState)
+                .transition(.opacity)
+                .animation(.easeInOut(duration: 0.3), value: viewModel.calibrationState)
             }
 
             // Delivery flash overlay (large centered count that fades)
