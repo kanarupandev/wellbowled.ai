@@ -275,10 +275,12 @@ enum WBConfig {
     static let pitchLengthMetres: Double = 20.12
 
     /// Width ratio of each calibration guide box (fraction of frame width).
-    static let calibrationBoxWidthRatio: CGFloat = 0.20
+    /// Portrait front-on pitch: stumps span ~9 inches, box needs generous margin.
+    static let calibrationBoxWidthRatio: CGFloat = 0.40
 
     /// Height ratio of each calibration guide box (fraction of frame height).
-    static let calibrationBoxHeightRatio: CGFloat = 0.25
+    /// Tall enough for stumps + bails to sit comfortably inside.
+    static let calibrationBoxHeightRatio: CGFloat = 0.35
 
     /// Consecutive stable detections needed to lock stump position.
     static let calibrationStabilityFrames: Int = 15

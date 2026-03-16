@@ -1585,23 +1585,21 @@ private struct SessionSpeedBadge: View {
     let kph: Double
     let errorMarginKph: Double?
 
-    private var speedText: String {
-        if let margin = errorMarginKph {
-            return "\(String(format: "%.0f", kph)) ±\(String(format: "%.0f", margin)) kph"
-        }
-        return "~\(String(format: "%.0f", kph)) kph"
-    }
-
     var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "gauge.with.needle.fill")
-                .font(.caption2)
-            Text(speedText)
-                .font(.system(size: 14, weight: .bold, design: .rounded).monospacedDigit())
+        HStack(spacing: 3) {
+            Text("~")
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .foregroundColor(.white.opacity(0.6))
+            Text(String(format: "%.0f", kph))
+                .font(.system(size: 16, weight: .black, design: .rounded).monospacedDigit())
+                .foregroundColor(.white)
+            Text("kph")
+                .font(.system(size: 9, weight: .semibold, design: .rounded))
+                .foregroundColor(.white.opacity(0.5))
+                .padding(.top, 3)
         }
-        .foregroundColor(.white)
         .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.vertical, 5)
         .background(
             Capsule()
                 .fill(peacockBlue.opacity(0.85))

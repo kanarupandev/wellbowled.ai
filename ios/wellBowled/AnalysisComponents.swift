@@ -60,13 +60,17 @@ struct SpeedBadge: View {
     let speed: String
 
     var body: some View {
-        HStack(spacing: 8) {
-            Text("~\(speed)")
-                .font(.system(size: 32, weight: .black))
+        HStack(spacing: 4) {
+            Text("~")
+                .font(.system(size: 20, weight: .medium))
+                .foregroundColor(.white.opacity(0.5))
+            Text(speed)
+                .font(.system(size: 32, weight: .black, design: .rounded).monospacedDigit())
                 .foregroundStyle(DesignSystem.Gradients.main)
-            Image(systemName: "figure.cricket")
-                .font(.system(size: 24))
-                .foregroundColor(.white)
+            Text("kph")
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundColor(.white.opacity(0.45))
+                .padding(.top, 10)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
