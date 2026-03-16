@@ -2239,26 +2239,25 @@ extension SessionViewModel: VoiceMateDelegate {
                     await disconnectMate()
                 }
 
-                // Direct playback voice commands
-                if lower.contains("pause") || lower.contains("freeze") || lower.contains("stop") {
-                    handlePlaybackCommand(action: "pause", timestamp: nil, rate: nil)
-                } else if lower.contains("play") || lower.contains("resume") {
-                    handlePlaybackCommand(action: "play", timestamp: nil, rate: nil)
+                // Direct playback voice commands — instant client-side response
+                if lower.contains("pause") || lower.contains("freeze") {
+                    playbackCommand = PlaybackCommand(action: .pause, timestamp: nil, rate: nil)
                 } else if lower.contains("normal speed") || lower.contains("normal rate") || lower.contains("1x") {
-                    handlePlaybackCommand(action: "play", timestamp: nil, rate: 1.0)
+                    playbackCommand = PlaybackCommand(action: .play, timestamp: nil, rate: 1.0)
+                } else if lower.contains("play") || lower.contains("resume") {
+                    playbackCommand = PlaybackCommand(action: .play, timestamp: nil, rate: nil)
                 } else if lower.contains("slow") || lower.contains("slo-mo") || lower.contains("slow mo") {
-                    // Parse specific rates: "0.25", "0.5", "quarter", "half"
                     let rate: Float
                     if lower.contains("0.25") || lower.contains("quarter") || lower.contains("ultra") {
                         rate = 0.25
                     } else if lower.contains("0.5") || lower.contains("half") {
                         rate = 0.5
                     } else {
-                        rate = 0.25 // default slow-mo
+                        rate = 0.25
                     }
-                    handlePlaybackCommand(action: "slow_mo", timestamp: nil, rate: rate)
+                    playbackCommand = PlaybackCommand(action: .slowMo, timestamp: nil, rate: rate)
                 } else if lower.contains("fast") || lower.contains("2x") || lower.contains("double") {
-                    handlePlaybackCommand(action: "play", timestamp: nil, rate: 2.0)
+                    playbackCommand = PlaybackCommand(action: .play, timestamp: nil, rate: 2.0)
                 }
             }
         }
