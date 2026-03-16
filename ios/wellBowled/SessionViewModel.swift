@@ -1633,8 +1633,9 @@ final class SessionViewModel: ObservableObject {
 
         // Single natural greeting — the system prompt handles all conversational flow autonomously.
         let stumpNote = WBConfig.enableSpeedCalibration
-            ? "The app will automatically check for stumps in the video. If it finds them, alignment boxes will appear and speed tracking will activate. " +
-              "Do NOT mention stumps, boxes, or alignment unless the bowler brings it up first. Just start the session naturally."
+            ? "Two dashed alignment boxes will appear on screen shortly. If you can see stumps in the video, " +
+              "guide the bowler to position the phone so the stumps sit inside the boxes. " +
+              "If no stumps are visible, don't push it — the app will hide the boxes and move on."
             : "Speed calibration is off for this session — focus on technique."
         await liveService.sendContext("""
         [SESSION STARTED] The bowler just opened the app and is at the nets. \
@@ -2070,63 +2071,76 @@ final class SessionViewModel: ObservableObject {
 
     /// Captures a camera frame after a short delay, sends to Gemini for stump detection.
     /// If both stumps found: locks calibration, enables 120fps, shows corridor.
-    /// If not found: session continues without speed — mate mentions it naturally.
+    /// Tries up to 3 times to detect stumps. Shows dashed boxes while scanning.
+    /// On success: locks calibration, shows corridor, tells mate stump positions.
+    /// On failure: hides boxes, session continues without speed.
     private func attemptAutoCalibration() async {
         guard session.isActive else { return }
-        // Stay idle — don't show boxes until we actually find stumps
-        calibrationState = .idle
 
-        // Wait 3s for camera to stabilise
+        // Wait 3s for camera to stabilise, then show boxes
         try? await Task.sleep(nanoseconds: 3_000_000_000)
         guard session.isActive else { return }
+        calibrationState = .detecting
 
-        // Capture a frame from the camera preview
-        guard let snapshot = captureCurrentFrame() else {
-            log.warning("Auto-calibration: could not capture frame")
-            calibrationState = .idle
-            return
+        let retryDelays: [UInt64] = [0, 5_000_000_000, 7_000_000_000]
+
+        for (attempt, delay) in retryDelays.enumerated() {
+            if delay > 0 {
+                try? await Task.sleep(nanoseconds: delay)
+            }
+            guard session.isActive, calibrationState == .detecting else { return }
+
+            guard let snapshot = captureCurrentFrame() else {
+                log.warning("Auto-calibration attempt \(attempt + 1): no frame")
+                continue
+            }
+
+            do {
+                let result = try await stumpDetectionService.detectStumps(
+                    image: snapshot,
+                    frameWidth: Int(snapshot.size.width * snapshot.scale),
+                    frameHeight: Int(snapshot.size.height * snapshot.scale),
+                    fps: WBConfig.speedCalibrationFPS
+                )
+
+                if let cal = result {
+                    // Success — lock, show corridor, tell mate
+                    session.calibration = cal
+                    calibrationState = .locked(cal)
+                    cameraService.setSpeedMode(true)
+                    log.info("Auto-calibration locked at attempt \(attempt + 1)")
+
+                    if liveService.isConnected {
+                        let bx = String(format: "%.2f", cal.bowlerStumpCenter.x)
+                        let by = String(format: "%.2f", cal.bowlerStumpCenter.y)
+                        let sx = String(format: "%.2f", cal.strikerStumpCenter.x)
+                        let sy = String(format: "%.2f", cal.strikerStumpCenter.y)
+                        await liveService.sendContext(
+                            "[CALIBRATION LOCKED] Both sets of stumps detected. Pitch corridor overlaid: bowler end (\(bx),\(by)) to striker end (\(sx),\(sy)). " +
+                            "You can now assess LINE and LENGTH relative to the corridor. " +
+                            "Speed tracking active — ball transit time measured between stump gates."
+                        )
+                    }
+                    return // Done — stumps found
+                } else {
+                    log.info("Auto-calibration attempt \(attempt + 1): stumps not found, retrying...")
+                    continue // Try again
+                }
+            } catch {
+                log.warning("Auto-calibration attempt \(attempt + 1) error: \(error.localizedDescription)")
+                continue // Try again
+            }
         }
 
-        do {
-            let calibration = try await stumpDetectionService.detectStumps(
-                image: snapshot,
-                frameWidth: Int(snapshot.size.width * snapshot.scale),
-                frameHeight: Int(snapshot.size.height * snapshot.scale),
-                fps: WBConfig.speedCalibrationFPS
+        // All attempts exhausted — hide boxes, carry on without speed
+        calibrationState = .idle
+        log.info("Auto-calibration: all attempts exhausted — no speed tracking")
+
+        if liveService.isConnected {
+            await liveService.sendContext(
+                "[CALIBRATION SKIPPED] Stumps not detected. Speed tracking off. " +
+                "Don't dwell on it — carry on with the session."
             )
-
-            if let cal = calibration {
-                session.calibration = cal
-                calibrationState = .locked(cal)
-                cameraService.setSpeedMode(true)
-                log.info("Auto-calibration locked. Speed tracking active at \(WBConfig.speedCalibrationFPS)fps")
-
-                if liveService.isConnected {
-                    let bx = String(format: "%.2f", cal.bowlerStumpCenter.x)
-                    let by = String(format: "%.2f", cal.bowlerStumpCenter.y)
-                    let sx = String(format: "%.2f", cal.strikerStumpCenter.x)
-                    let sy = String(format: "%.2f", cal.strikerStumpCenter.y)
-                    await liveService.sendContext(
-                        "[CALIBRATION LOCKED] Both sets of stumps detected. A pitch corridor is now overlaid on the camera connecting bowler end (\(bx),\(by)) to striker end (\(sx),\(sy)). " +
-                        "You can now assess LINE (off stump, middle, leg) and LENGTH (full, good, short) relative to the corridor. " +
-                        "Use this when giving feedback — e.g. 'that pitched on a good length just outside off.' " +
-                        "Speed tracking is active — ball transit time measured between the stump gates."
-                    )
-                }
-            } else {
-                calibrationState = stumpDetectionService.state
-                log.info("Auto-calibration: stumps not found — session continues without speed tracking")
-
-                if liveService.isConnected {
-                    await liveService.sendContext(
-                        "[CALIBRATION SKIPPED] Could not detect both sets of stumps. Speed tracking is off for this session. " +
-                        "No need to dwell on it — carry on with the session. If the bowler asks about speed, mention they can set up stumps next time."
-                    )
-                }
-            }
-        } catch {
-            calibrationState = .failed(error.localizedDescription)
-            log.warning("Auto-calibration failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 
