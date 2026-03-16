@@ -87,12 +87,24 @@ protocol VoiceMateDelegate: AnyObject {
     /// Model requested session end via tool call.
     @MainActor
     func voiceMate(didRequestEndSession reason: String) async
+
+    /// Model requested delivery navigation via tool call (review mode).
+    @MainActor
+    func voiceMate(didRequestNavigateDelivery action: String, deliveryNumber: Int?) async
 }
 
 extension VoiceMateDelegate {
     func voiceMate(didTranscribeUser text: String) {}
     @MainActor
     func voiceMate(didRequestEndSession reason: String) async {}
+    @MainActor
+    func voiceMate(didRequestNavigateDelivery action: String, deliveryNumber: Int?) async {}
+}
+
+protocol VoiceMateNavigationDelegate: AnyObject {
+    /// Mate requested delivery navigation via tool call.
+    @MainActor
+    func voiceMate(didRequestNavigateDelivery action: String, deliveryNumber: Int?) async
 }
 
 // MARK: - Clip Extraction

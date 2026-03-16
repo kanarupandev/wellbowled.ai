@@ -228,7 +228,7 @@ final class GeminiLiveService: NSObject, VoiceMateService {
             functionDeclarations: [
                 LiveFunctionDeclaration(
                     name: "end_session",
-                    description: "End the bowling session when the player asks to stop or time is up.",
+                    description: "End the bowling session when the player asks to stop or time is up. In review mode, this disconnects and wraps up.",
                     parameters: LiveFunctionParameters(
                         type: "OBJECT",
                         properties: [
@@ -239,6 +239,26 @@ final class GeminiLiveService: NSObject, VoiceMateService {
                             )
                         ],
                         required: ["reason"]
+                    )
+                ),
+                LiveFunctionDeclaration(
+                    name: "navigate_delivery",
+                    description: "Navigate to a specific delivery during post-session review. Use when the bowler asks to see a particular delivery, or says next/previous.",
+                    parameters: LiveFunctionParameters(
+                        type: "OBJECT",
+                        properties: [
+                            "action": LiveFunctionProperty(
+                                type: "STRING",
+                                description: "Navigation action",
+                                enum: ["next", "previous", "goto"]
+                            ),
+                            "delivery_number": LiveFunctionProperty(
+                                type: "STRING",
+                                description: "Delivery number (1-based) for goto action. Ignored for next/previous.",
+                                enum: nil
+                            )
+                        ],
+                        required: ["action"]
                     )
                 )
             ]
@@ -559,6 +579,17 @@ final class GeminiLiveService: NSObject, VoiceMateService {
                     self.sendToolResponse(
                         for: functionCall,
                         message: "Session ending: \(reason)"
+                    )
+                }
+            case "navigate_delivery":
+                let action = functionCall.args["action"] ?? "next"
+                let deliveryNumber = functionCall.args["delivery_number"].flatMap { Int($0) }
+                Task { [weak self] in
+                    guard let self else { return }
+                    await self.delegate?.voiceMate(didRequestNavigateDelivery: action, deliveryNumber: deliveryNumber)
+                    self.sendToolResponse(
+                        for: functionCall,
+                        message: "Navigating: \(action)"
                     )
                 }
             default:

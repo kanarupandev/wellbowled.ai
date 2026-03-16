@@ -17,6 +17,14 @@ final class SessionViewModel: ObservableObject {
         case active
     }
 
+    /// Tracks the mate's conversational phase across the full session lifecycle.
+    /// The voice connection persists beyond bowling — the mate walks through results.
+    enum MatePhase: Equatable {
+        case idle                       // Not connected
+        case liveBowling                // Active session — coaching in real time
+        case postSessionReview          // Session ended — walking through analysis results
+    }
+
     enum SessionVideoSaveStatus: Equatable {
         case idle
         case saving
@@ -47,6 +55,10 @@ final class SessionViewModel: ObservableObject {
     @Published private(set) var lastSessionRecordingURL: URL?
     @Published private(set) var sessionVideoSaveStatus: SessionVideoSaveStatus = .idle
     @Published private(set) var cameraFlipDisabled: Bool = false
+
+    // Persistent voice mate state
+    @Published private(set) var matePhase: MatePhase = .idle
+    @Published var reviewDeliveryIndex: Int = 0
 
     // MARK: - Services
 
@@ -212,6 +224,7 @@ final class SessionViewModel: ObservableObject {
             debugLog += "Key: \(WBConfig.hasAPIKey ? "YES" : "NO")\n"
             try await liveService.connect()
             debugLog += "Connected!\n"
+            matePhase = .liveBowling
             await maybeSendProactiveGreetingIfNeeded()
         } catch {
             debugLog += "FAIL: \(error.localizedDescription)\n"
@@ -243,15 +256,26 @@ final class SessionViewModel: ObservableObject {
         tts.stop()
         stopLiveSegmentDetection()
 
-        // Disconnect Live API
-        await liveService.disconnect()
+        // KEEP Live API connected — transition to review mode instead of disconnecting.
+        // The mate stays on to walk through analysis results with the bowler.
+        if liveService.isConnected {
+            matePhase = .postSessionReview
+            reviewDeliveryIndex = 0
+            let deliveryCount = session.deliveryCount
+            await liveService.sendContext("""
+            [SESSION ENDED — REVIEW MODE] The bowling session is over. \(deliveryCount) deliveries bowled. \
+            You are now in review mode. Stay connected — you will receive analysis results as they complete. \
+            Walk the bowler through each delivery's analysis naturally. \
+            Summarize the session briefly first, then wait for results to come in. \
+            The bowler can say "next" or "previous" to navigate deliveries, or ask about specific aspects. \
+            When the bowler says "done" or "that's all", wrap up with a final summary.
+            """)
+            log.debug("Mate transitioned to post-session review mode")
+        } else {
+            matePhase = .idle
+        }
 
-        // Stop audio playback
-        audioManager.stopLiveInputCapture()
-        audioManager.stopPlaybackEngine()
-        audioManager.deactivateSession()
-
-        // Stop recording + camera
+        // Stop recording + camera (but keep audio alive for voice mate)
         cameraService.stopRecording()
         cameraService.stopSession()
 
@@ -298,10 +322,7 @@ final class SessionViewModel: ObservableObject {
         cameraService.onAudioSample = nil
         detector.stop()
         tts.stop()
-        await liveService.disconnect()
-        audioManager.stopLiveInputCapture()
-        audioManager.stopPlaybackEngine()
-        audioManager.deactivateSession()
+        await disconnectMate()
         cameraService.stopRecording()
         cameraService.stopSession()
 
@@ -345,6 +366,45 @@ final class SessionViewModel: ObservableObject {
 
         lastSessionRecordingURL = recordingURL
         startClipPreparation(recordingURL: recordingURL)
+    }
+
+    /// Fully disconnect the voice mate. Called when the user exits to home.
+    /// This tears down the Live API WebSocket and audio session.
+    func disconnectMate() async {
+        log.debug("Disconnecting mate (full teardown)")
+        await liveService.disconnect()
+        audioManager.stopLiveInputCapture()
+        audioManager.stopPlaybackEngine()
+        audioManager.deactivateSession()
+        matePhase = .idle
+        lastTranscript = ""
+        isMateSpeaking = false
+    }
+
+    /// Navigate to a specific delivery in review mode and tell the mate.
+    func reviewDelivery(at index: Int) async {
+        guard matePhase == .postSessionReview else { return }
+        guard index >= 0, index < session.deliveryCount else { return }
+        reviewDeliveryIndex = index
+        let delivery = session.deliveries[index]
+        let seq = index + 1
+
+        var context = "[REVIEWING DELIVERY \(seq)] The bowler is now looking at delivery \(seq)."
+        if let phases = delivery.phases, !phases.isEmpty {
+            let good = phases.filter(\.isGood).map(\.name).joined(separator: ", ")
+            let work = phases.filter { !$0.isGood }.map(\.name).joined(separator: ", ")
+            context += " Phases — Good: \(good.isEmpty ? "none" : good). Needs work: \(work.isEmpty ? "none" : work)."
+        }
+        if let speedKph = delivery.speedKph {
+            context += " Speed: \(String(format: "%.1f", speedKph)) kph."
+        }
+        if let report = delivery.report {
+            context += " Report: \(report)"
+        }
+
+        if liveService.isConnected {
+            await liveService.sendContext(context)
+        }
     }
 
     func cancelReplayPreparation() {
@@ -1606,9 +1666,25 @@ extension SessionViewModel: VoiceMateDelegate {
         Task { @MainActor in
             guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
             log.debug("User transcript received: \(text, privacy: .public)")
-            if Self.shouldEndSession(from: text) {
+
+            if session.isActive && Self.shouldEndSession(from: text) {
                 log.debug("End-session intent detected from user transcript")
                 await endSession()
+                return
+            }
+
+            // Review mode voice navigation
+            if matePhase == .postSessionReview {
+                let lower = text.lowercased()
+                if lower.contains("next") {
+                    let nextIdx = min(reviewDeliveryIndex + 1, session.deliveryCount - 1)
+                    await reviewDelivery(at: nextIdx)
+                } else if lower.contains("previous") || lower.contains("back") {
+                    let prevIdx = max(reviewDeliveryIndex - 1, 0)
+                    await reviewDelivery(at: prevIdx)
+                } else if lower.contains("done") || lower.contains("that's all") || lower.contains("finish") {
+                    await disconnectMate()
+                }
             }
         }
     }
@@ -1638,13 +1714,16 @@ extension SessionViewModel: VoiceMateDelegate {
                 return
             }
 
-            // Auto-reconnect while session is active (e.g. server goAway, iOS TCP abort)
+            // Auto-reconnect while session is active or in review mode
+            let shouldReconnect = session.isActive || matePhase == .postSessionReview
+            guard shouldReconnect else { return }
+
             errorMessage = "Reconnecting..."
             debugLog += "Reconnecting...\n"
 
             try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5s backoff
 
-            guard session.isActive else { return } // user may have ended session during backoff
+            guard session.isActive || matePhase == .postSessionReview else { return }
 
             do {
                 try await liveService.connect()
@@ -1660,7 +1739,31 @@ extension SessionViewModel: VoiceMateDelegate {
 
     func voiceMate(didRequestEndSession reason: String) async {
         log.debug("Mate requested session end: \(reason, privacy: .public)")
-        await endSession()
+        if session.isActive {
+            await endSession()
+        } else if matePhase == .postSessionReview {
+            await disconnectMate()
+        }
+    }
+
+    func voiceMate(didRequestNavigateDelivery action: String, deliveryNumber: Int?) async {
+        guard matePhase == .postSessionReview else { return }
+        log.debug("Mate navigation request: action=\(action, privacy: .public) deliveryNumber=\(deliveryNumber ?? -1)")
+
+        switch action {
+        case "next":
+            let nextIdx = min(reviewDeliveryIndex + 1, session.deliveryCount - 1)
+            await reviewDelivery(at: nextIdx)
+        case "previous":
+            let prevIdx = max(reviewDeliveryIndex - 1, 0)
+            await reviewDelivery(at: prevIdx)
+        case "goto":
+            if let num = deliveryNumber, num >= 1, num <= session.deliveryCount {
+                await reviewDelivery(at: num - 1)
+            }
+        default:
+            break
+        }
     }
 
 }

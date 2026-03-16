@@ -180,6 +180,7 @@ struct LiveSessionView: View {
                     Button {
                         Task {
                             await viewModel.endSession()
+                            await viewModel.disconnectMate()
                             liveViewLog.debug("Close button tapped: ending session and dismissing live view")
                             dismiss()
                         }
@@ -299,8 +300,11 @@ struct LiveSessionView: View {
             }
         }
         .onDisappear {
-            liveViewLog.debug("LiveSessionView disappeared: ensuring session is ended")
-            Task { await viewModel.endSession() }
+            liveViewLog.debug("LiveSessionView disappeared: ensuring session and mate are ended")
+            Task {
+                await viewModel.endSession()
+                await viewModel.disconnectMate()
+            }
         }
     }
 
@@ -368,6 +372,7 @@ struct LiveSessionView: View {
 
         showResults = false
         await viewModel.endSession()
+        await viewModel.disconnectMate()
         liveViewLog.debug("Exiting to Home from LiveSessionView")
         dismiss()
     }
@@ -385,6 +390,27 @@ struct SessionResultsView: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
+
+            // Mate transcript overlay (persistent voice in review mode)
+            if viewModel.matePhase == .postSessionReview && !viewModel.lastTranscript.isEmpty {
+                VStack {
+                    Spacer()
+                    Text(viewModel.lastTranscript)
+                        .font(.caption.weight(.medium))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(.black.opacity(0.75))
+                        )
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 70)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+                .animation(.easeInOut(duration: 0.3), value: viewModel.lastTranscript)
+                .zIndex(100)
+            }
 
             if deliveries.isEmpty {
                 // Clip preparation state
@@ -448,6 +474,15 @@ struct SessionResultsView: View {
             }
         }
         .interactiveDismissDisabled(true)
+        .onChange(of: selectedDeliveryIndex) { _, newIndex in
+            Task { await viewModel.reviewDelivery(at: newIndex) }
+        }
+        .onChange(of: viewModel.reviewDeliveryIndex) { _, newIndex in
+            // Mate navigated via voice — sync the carousel
+            if newIndex != selectedDeliveryIndex && newIndex < deliveries.count {
+                withAnimation { selectedDeliveryIndex = newIndex }
+            }
+        }
     }
 }
 
