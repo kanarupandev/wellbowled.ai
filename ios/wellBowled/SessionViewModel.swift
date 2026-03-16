@@ -268,21 +268,10 @@ final class SessionViewModel: ObservableObject {
         tts.stop()
         stopLiveSegmentDetection()
 
-        // KEEP Live API connected — transition to review mode instead of disconnecting.
-        // The mate stays on to walk through analysis results with the bowler.
-        if liveService.isConnected {
-            matePhase = .postSessionReview
-            reviewDeliveryIndex = 0
-            let deliveryCount = session.deliveryCount
-            await liveService.sendContext("""
-            [SESSION ENDED — REVIEW MODE] The bowling session is over. \(deliveryCount) deliveries bowled. \
-            You are now in review mode. Stay connected — you will receive analysis results as they complete. \
-            Walk the bowler through each delivery's analysis naturally. \
-            Summarize the session briefly first, then wait for results to come in. \
-            The bowler can say "next" or "previous" to navigate deliveries, or ask about specific aspects. \
-            When the bowler says "done" or "that's all", wrap up with a final summary.
-            """)
-            log.debug("Mate transitioned to post-session review mode")
+        // Connect a FRESH review agent — dedicated to walking through analysis results.
+        // This is a new Live API session with a purpose-built system prompt containing all data.
+        if liveService.isConnected || WBConfig.enableLiveAPI {
+            Task { await self.connectReviewAgent() }
         } else {
             matePhase = .idle
         }
@@ -1436,22 +1425,37 @@ final class SessionViewModel: ObservableObject {
             } else if !detailedResult.paceEstimate.isEmpty {
                 feedbackParts.append("Pace estimate: \(detailedResult.paceEstimate)")
             }
-            let goodPhases = detailedResult.phases.filter { $0.isGood }.map(\.name)
-            let needsWorkPhases = detailedResult.phases.filter { !$0.isGood }.map(\.name)
-            if !goodPhases.isEmpty {
-                feedbackParts.append("Good phases: \(goodPhases.joined(separator: ", "))")
+
+            // Detailed phase-by-phase breakdown for technical coaching
+            for phase in detailedResult.phases {
+                let status = phase.isGood ? "GOOD" : "NEEDS WORK"
+                var phaseInfo = "\(phase.name) [\(status)]: \(phase.observation)"
+                if !phase.tip.isEmpty {
+                    phaseInfo += " — Fix: \(phase.tip)"
+                }
+                feedbackParts.append(phaseInfo)
             }
-            if !needsWorkPhases.isEmpty {
-                feedbackParts.append("Needs work: \(needsWorkPhases.joined(separator: ", "))")
-            }
+
             if let match = session.deliveries[index].dnaMatches?.first {
-                feedbackParts.append("DNA match: \(match.bowlerName) (\(match.country)) at \(match.similarityPercent)%. Closest phase: \(match.closestPhase). Biggest difference: \(match.biggestDifference).")
+                feedbackParts.append("DNA match: \(match.bowlerName) (\(match.country)) at \(Int(match.similarityPercent))%. Closest phase: \(match.closestPhase). Biggest difference: \(match.biggestDifference).")
             }
             if let challengeText {
                 feedbackParts.append("Challenge result: \(challengeText)")
             }
-            feedbackParts.append("Give the bowler a natural spoken debrief — what was good, what needs work, one actionable fix for next ball.")
+
+            feedbackParts.append("""
+            INSTRUCTION: Give ONE specific, technical coaching point for the next ball. \
+            Be biomechanical — reference body parts (knee, hip, shoulder, wrist, front arm). \
+            Example: "Brace that front knee harder at delivery stride — it's collapsing 10 degrees." \
+            or "Hold the non-bowling arm up a fraction longer through the crease." \
+            Keep it to one sentence. The bowler is about to bowl again.
+            """)
             await liveService.sendContext(feedbackParts.joined(separator: " "))
+
+            // Also feed to review agent if in review mode
+            if matePhase == .postSessionReview {
+                await feedAnalysisToReviewAgent(deliveryIndex: index)
+            }
         }
 
         refreshSessionSummary()
@@ -1581,6 +1585,158 @@ final class SessionViewModel: ObservableObject {
         Ask what they want to work on and how long they have. \
         Check you can see their full action in the video feed.
         """)
+    }
+
+    // MARK: - Review Agent (Fresh Dedicated Voice for Post-Session Walkthrough)
+
+    /// Build a dedicated review agent system prompt with all analysis data baked in.
+    private func buildReviewAgentPrompt() -> String {
+        let deliveries = session.deliveries
+        let count = deliveries.count
+
+        var deliveryDetails: [String] = []
+        for (i, d) in deliveries.enumerated() {
+            var lines: [String] = ["Delivery \(i + 1):"]
+            if let kph = d.speedKph {
+                lines.append("  Speed: \(String(format: "%.1f", kph)) kph")
+            }
+            if let report = d.report, !report.isEmpty {
+                lines.append("  Report: \(report)")
+            }
+            if let phases = d.phases, !phases.isEmpty {
+                let good = phases.filter(\.isGood).map(\.name).joined(separator: ", ")
+                let work = phases.filter({ !$0.isGood }).map(\.name).joined(separator: ", ")
+                if !good.isEmpty { lines.append("  Good: \(good)") }
+                if !work.isEmpty { lines.append("  Needs work: \(work)") }
+                for phase in phases {
+                    if !phase.observation.isEmpty {
+                        lines.append("  \(phase.name): \(phase.observation)")
+                    }
+                    if !phase.tip.isEmpty {
+                        lines.append("    Tip: \(phase.tip)")
+                    }
+                }
+            }
+            if let dna = d.dna, let matches = d.dnaMatches, let top = matches.first {
+                lines.append("  DNA match: \(top.bowlerName) (\(top.country)) \(Int(top.similarityPercent))%")
+            }
+            deliveryDetails.append(lines.joined(separator: "\n"))
+        }
+
+        let allDeliveries = deliveryDetails.joined(separator: "\n\n")
+
+        // Speed summary
+        let speeds = deliveries.compactMap(\.speedKph)
+        var speedSummary = ""
+        if !speeds.isEmpty {
+            let avg = speeds.reduce(0, +) / Double(speeds.count)
+            let min = speeds.min()!
+            let max = speeds.max()!
+            speedSummary = "Speed summary: avg \(String(format: "%.1f", avg)) kph, min \(String(format: "%.1f", min)), max \(String(format: "%.1f", max))"
+        }
+
+        return """
+        You are a cricket bowling analysis expert reviewing a completed practice session.
+        Your sole purpose is to walk the bowler through their session results — delivery by delivery.
+        The bowler is wearing earbuds. They cannot touch the phone. Everything is voice.
+
+        \(WBConfig.matePersona.personaStyle == .aussie ? "Speak with a casual Australian accent. Cricket slang welcome." :
+          WBConfig.matePersona.personaStyle == .tamil ? "SPEAK ENTIRELY IN TAMIL. Cricket terms in English." :
+          WBConfig.matePersona.personaStyle == .tanglish ? "Speak in Tanglish — natural Tamil-English mix." :
+          "Speak in clear, warm English.")
+
+        SESSION DATA:
+        Total deliveries: \(count)
+        \(speedSummary)
+
+        \(allDeliveries)
+
+        BEHAVIOR:
+        - START IMMEDIATELY. Do not wait to be asked. Begin with a brief session overview (10 seconds max).
+        - Then walk through each delivery. Lead with what was good, then what needs work, then the actionable tip.
+        - If speed data is available, reference it naturally: "That was 127 kph — good pace."
+        - If a DNA match is interesting, mention it: "That delivery had a bit of Starc about it."
+        - Between deliveries, pause briefly and say "Next one" or "Moving on to delivery 3."
+        - If the bowler interrupts with a question, answer it, then continue the walkthrough.
+        - After all deliveries: give a 15-second session wrap-up. Top strength. Top area to work on. What to focus on next session.
+        - Be honest. Don't sugar-coat. But be constructive.
+
+        NAVIGATION:
+        - The bowler can say "next", "previous", "go to delivery 3", or "skip to the summary".
+        - You have the `navigate_delivery` tool to sync the UI carousel.
+        - When navigating, call the tool AND speak about the delivery.
+
+        PROACTIVE:
+        - If you notice a pattern across deliveries (e.g. same issue recurring), call it out.
+        - If speed drops across the session, mention fatigue.
+        - If one delivery stands out (best or worst), highlight it.
+        - Compare first vs last delivery for progress/regression.
+
+        ENDING:
+        - When the bowler says "done", "thanks", "that's all" — give a short sign-off.
+        - Call `end_session` tool to disconnect.
+
+        RULES:
+        - Max 3 sentences per delivery. Don't monologue.
+        - Reference the ACTUAL data. Never fabricate measurements.
+        - Cricket terminology. You know the game.
+        """
+    }
+
+    /// Disconnect the coaching mate and connect a fresh review agent with all analysis data.
+    private func connectReviewAgent() async {
+        log.debug("Connecting fresh review agent for post-session walkthrough")
+
+        // Disconnect coaching mate
+        await liveService.disconnect()
+
+        // Small pause for clean teardown
+        try? await Task.sleep(nanoseconds: 500_000_000)
+
+        // Set review-specific system prompt
+        liveService.systemInstructionOverride = buildReviewAgentPrompt()
+
+        // Connect fresh agent
+        do {
+            try await liveService.connect()
+            matePhase = .postSessionReview
+            reviewDeliveryIndex = 0
+            log.info("Review agent connected. Deliveries: \(session.deliveryCount)")
+
+            // Proactive kickoff — the agent's system prompt tells it to start immediately,
+            // but send an explicit trigger to be sure
+            await liveService.sendContext(
+                "[BEGIN REVIEW] The bowler is now viewing the results screen. " +
+                "Start your walkthrough immediately. The bowler is listening."
+            )
+        } catch {
+            log.error("Review agent connection failed: \(error.localizedDescription, privacy: .public)")
+            matePhase = .idle
+        }
+    }
+
+    /// Feed a newly completed analysis result to the review agent proactively.
+    private func feedAnalysisToReviewAgent(deliveryIndex: Int) async {
+        guard matePhase == .postSessionReview, liveService.isConnected else { return }
+        let delivery = session.deliveries[deliveryIndex]
+        let seq = deliveryIndex + 1
+
+        var parts: [String] = ["[NEW ANALYSIS READY for delivery \(seq)]"]
+        if let kph = delivery.speedKph {
+            parts.append("Speed: \(String(format: "%.1f", kph)) kph")
+        }
+        if let phases = delivery.phases, !phases.isEmpty {
+            let good = phases.filter(\.isGood).map { "\($0.name): \($0.observation)" }.joined(separator: "; ")
+            let work = phases.filter({ !$0.isGood }).map { "\($0.name): \($0.observation) — Tip: \($0.tip)" }.joined(separator: "; ")
+            if !good.isEmpty { parts.append("Good: \(good)") }
+            if !work.isEmpty { parts.append("Needs work: \(work)") }
+        }
+        if let matches = delivery.dnaMatches, let top = matches.first {
+            parts.append("DNA: \(top.bowlerName) \(Int(top.similarityPercent))%")
+        }
+        parts.append("Walk through this delivery now if the bowler hasn't heard about it yet.")
+
+        await liveService.sendContext(parts.joined(separator: " "))
     }
 
     // MARK: - Auto Stump Calibration

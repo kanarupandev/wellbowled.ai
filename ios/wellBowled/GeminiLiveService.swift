@@ -267,6 +267,10 @@ final class GeminiLiveService: NSObject, VoiceMateService {
 
     // MARK: - Connect
 
+    /// Custom system instruction override for the next connection (e.g. review agent).
+    /// Set before calling connect(). Cleared after use.
+    var systemInstructionOverride: String?
+
     func connect() async throws {
         guard !isConnected else {
             log.debug("connect() called but already connected, skipping")
@@ -412,8 +416,16 @@ final class GeminiLiveService: NSObject, VoiceMateService {
     // MARK: - Setup
 
     private func sendSetup() async throws {
-        // Include session resumption handle on reconnect to restore conversation context
-        let resumption = sessionResumptionHandle.map { LiveSessionResumption(handle: $0) }
+        // Use override if set (e.g. review agent), otherwise default mate prompt
+        let instruction = systemInstructionOverride ?? WBConfig.mateSystemInstruction
+        systemInstructionOverride = nil  // single use
+
+        // Fresh agent = no session resumption; returning mate = resume
+        let resumption: LiveSessionResumption? = {
+            // Skip resumption when using a custom instruction (fresh agent)
+            guard instruction == WBConfig.mateSystemInstruction else { return nil }
+            return sessionResumptionHandle.map { LiveSessionResumption(handle: $0) }
+        }()
         if resumption != nil {
             log.info("Sending session resumption handle on reconnect")
         }
@@ -430,7 +442,7 @@ final class GeminiLiveService: NSObject, VoiceMateService {
                     )
                 ),
                 systemInstruction: LiveSystemInstruction(
-                    parts: [LiveTextPart(text: WBConfig.mateSystemInstruction)]
+                    parts: [LiveTextPart(text: instruction)]
                 ),
                 outputAudioTranscription: LiveOutputAudioTranscription(),
                 contextWindowCompression: LiveContextWindowCompression(
