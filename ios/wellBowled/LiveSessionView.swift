@@ -28,18 +28,29 @@ struct LiveSessionView: View {
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
 
-            // Stump alignment boxes — only shown when detecting (user requested or stumps visible)
-            if isSessionActive, WBConfig.enableSpeedCalibration, viewModel.calibrationState.isDetecting {
-                CalibrationOverlayView(
-                    mode: .calibrating,
-                    calibrationState: viewModel.calibrationState,
-                    bowlerGuideRect: StumpDetectionService.defaultBowlerGuideRect(),
-                    strikerGuideRect: StumpDetectionService.defaultStrikerGuideRect(),
-                    onManualTap: nil
-                )
-                .allowsHitTesting(false)
-                .transition(.opacity)
-                .animation(.easeInOut(duration: 0.3), value: viewModel.calibrationState)
+            // Stump calibration overlay:
+            // Phase 1 (.detecting): 2 dashed boxes for alignment
+            // Phase 2 (.locked): pitch corridor connecting stump bases (TV umpire style)
+            if isSessionActive, WBConfig.enableSpeedCalibration {
+                let overlayMode: CalibrationOverlayView.OverlayMode = {
+                    switch viewModel.calibrationState {
+                    case .detecting: return .calibrating
+                    case .locked: return .active
+                    case .idle, .failed: return .hidden
+                    }
+                }()
+                if overlayMode != .hidden {
+                    CalibrationOverlayView(
+                        mode: overlayMode,
+                        calibrationState: viewModel.calibrationState,
+                        bowlerGuideRect: StumpDetectionService.defaultBowlerGuideRect(),
+                        strikerGuideRect: StumpDetectionService.defaultStrikerGuideRect(),
+                        onManualTap: nil
+                    )
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+                    .animation(.easeInOut(duration: 0.5), value: viewModel.calibrationState)
+                }
             }
 
             // Delivery flash overlay (large centered count that fades)
