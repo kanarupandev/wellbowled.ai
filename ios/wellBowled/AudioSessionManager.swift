@@ -98,9 +98,9 @@ final class AudioSessionManager {
         }
 
         micTapLock.lock()
-        defer { micTapLock.unlock() }
         micChunkHandler = onChunk
         micChunkCount = 0
+        micTapLock.unlock()
 
         inputNode.removeTap(onBus: 0)
         inputNode.installTap(onBus: 0, bufferSize: 2048, format: inputFormat) { [weak self] buffer, _ in
