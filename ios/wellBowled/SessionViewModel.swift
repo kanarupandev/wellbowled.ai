@@ -1633,9 +1633,8 @@ final class SessionViewModel: ObservableObject {
 
         // Single natural greeting — the system prompt handles all conversational flow autonomously.
         let stumpNote = WBConfig.enableSpeedCalibration
-            ? "There are guide boxes on screen for stump alignment (top = bowler end, bottom = striker end). " +
-              "If you can see stumps in the video, guide the bowler to line them up in the boxes — this enables speed tracking. " +
-              "If no stumps visible, move on — speed isn't essential."
+            ? "The app will automatically check for stumps in the video. If it finds them, alignment boxes will appear and speed tracking will activate. " +
+              "Do NOT mention stumps, boxes, or alignment unless the bowler brings it up first. Just start the session naturally."
             : "Speed calibration is off for this session — focus on technique."
         await liveService.sendContext("""
         [SESSION STARTED] The bowler just opened the app and is at the nets. \
