@@ -120,6 +120,7 @@ final class SessionViewModel: ObservableObject {
     private var reconnectAttempts = 0
 
     // Live segment detection queues
+    private var reviewAgentTimeoutTask: Task<Void, Never>?
     private var liveSegmentTimerTask: Task<Void, Never>?
     private var liveDetectionQueue: [(url: URL, startTime: Double)] = []
     private var liveDeepAnalysisQueue: [UUID] = []
@@ -391,6 +392,8 @@ final class SessionViewModel: ObservableObject {
     /// This tears down the Live API WebSocket and audio session.
     func disconnectMate() async {
         log.debug("Disconnecting mate (full teardown)")
+        reviewAgentTimeoutTask?.cancel()
+        reviewAgentTimeoutTask = nil
         await liveService.disconnect()
         audioManager.stopLiveInputCapture()
         audioManager.stopPlaybackEngine()
@@ -1921,9 +1924,22 @@ final class SessionViewModel: ObservableObject {
             }
             situationContext += " The bowler is listening."
             await liveService.sendContext(situationContext)
+
+            // 10-minute review agent timeout
+            startReviewAgentTimeout()
         } catch {
             log.error("Review agent connection failed: \(error.localizedDescription, privacy: .public)")
             matePhase = .idle
+        }
+    }
+
+    private func startReviewAgentTimeout() {
+        reviewAgentTimeoutTask?.cancel()
+        reviewAgentTimeoutTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 10 * 60 * 1_000_000_000) // 10 minutes
+            guard let self, !Task.isCancelled, self.matePhase == .postSessionReview else { return }
+            log.info("Review agent 10-minute timeout — disconnecting")
+            await self.disconnectMate()
         }
     }
 
