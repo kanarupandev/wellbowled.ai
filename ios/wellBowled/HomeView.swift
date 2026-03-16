@@ -367,6 +367,7 @@ private struct ImportedSessionReplayContainer: View {
         }
         .onDisappear {
             viewModel.cancelReplayPreparation()
+            Task { await viewModel.disconnectMate() }
         }
     }
 }

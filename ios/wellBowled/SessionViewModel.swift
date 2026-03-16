@@ -234,16 +234,10 @@ final class SessionViewModel: ObservableObject {
             log.debug("Recording start failed (session continues without clip extraction): \(error.localizedDescription, privacy: .public)")
         }
 
-        // 3b. Start live segment detection queues
-        if WBConfig.enableLiveAutoAnalysis {
-            startLiveSegmentDetection()
-        }
+        // 3b. Start live segment detection queues (Gemini Flash is the sole delivery detector)
+        startLiveSegmentDetection()
 
-        // 4. Start delivery detection
-        detector.start()
-        log.debug("Delivery detection started")
-
-        // 5. Wire camera outputs
+        // 4. Wire camera outputs
         wireCameraOutputs()
         log.debug("Camera outputs wired")
 
@@ -714,16 +708,13 @@ final class SessionViewModel: ObservableObject {
         let minFrameInterval = 1.0 / WBConfig.liveAPIFrameRate
         var lastEncodedFrameTime: CFAbsoluteTime = 0
 
-        // Video frames → MediaPipe detection + Live API
+        // Video frames → Live API (Gemini Flash segment detection handles delivery detection)
         let ciCtx = self.ciContext  // capture to avoid accessing MainActor self from bg
         cameraService.onVideoFrame = { [weak self] sampleBuffer, timestamp in
             guard let self else { return }
 
             // Track recording start time for clip extraction offset
             self.recordingOffsetStore.markIfNeeded(timestamp)
-
-            // Feed MediaPipe detector (thread-safe: processFrame is designed for bg calls)
-            self.detector.processFrame(sampleBuffer, at: timestamp)
 
             // Feed Live API at configured rate only; avoid expensive frame encoding on every camera frame.
             let now = CFAbsoluteTimeGetCurrent()
@@ -913,6 +904,18 @@ final class SessionViewModel: ObservableObject {
         isPreparingClips = false
         log.debug("Clip preparation completed: progress=\(self.clipPreparationProgress, privacy: .public)")
         refreshSessionSummary()
+
+        // Connect review agent if not already connected (imported recordings reach here
+        // without a prior endSession call, so the review agent hasn't been spun up yet).
+        if matePhase != .postSessionReview && readyCount > 0 && WBConfig.enableLiveAPI {
+            do {
+                try audioManager.configure()
+                try audioManager.startPlaybackEngine()
+            } catch {
+                log.error("Audio setup for review agent failed: \(error.localizedDescription, privacy: .public)")
+            }
+            await connectReviewAgent()
+        }
     }
 
     private func detectDeliveryCandidatesWithGemini(
@@ -2096,59 +2099,9 @@ extension SessionViewModel: DeliveryDetectionDelegate {
         wristOmega: Double,
         releaseWristY: Double?
     ) {
-        Task { @MainActor in
-            // When live segment detection is active, MediaPipe is fully silent —
-            // Gemini Flash segment scanner is the sole source of truth for deliveries.
-            // MediaPipe has too many false positives to notify the buddy.
-            if WBConfig.enableLiveAutoAnalysis {
-                log.debug("MediaPipe spike at \(timestamp)s — ignored (Gemini Flash is sole detector)")
-                return
-            }
-
-            // Fallback: when live segment detection is disabled, MediaPipe creates deliveries
-            let count = session.deliveryCount + 1
-            var challengeTarget: String?
-            if session.mode == .challenge {
-                challengeTarget = session.currentChallenge
-                if let target = challengeTarget {
-                    challengeTargetBySequence[count] = target
-                }
-            }
-
-            let delivery = Delivery(
-                timestamp: timestamp,
-                status: .clipping,
-                sequence: count,
-                wristOmega: wristOmega,
-                releaseWristY: releaseWristY
-            )
-            session.addDelivery(delivery)
-            deepAnalysisStatusByDelivery[delivery.id] = DeliveryDeepAnalysisStatus(
-                stage: .idle,
-                elapsedSeconds: 0,
-                statusMessage: "",
-                failureMessage: nil
-            )
-
-            log.debug("Delivery #\(count) detected at \(timestamp)s (\(bowlingArm.rawValue, privacy: .public) arm, \(paceBand.label, privacy: .public))")
-            tts.speak("\(count).")
-            flowPhase = .active
-
-            if liveService.isConnected {
-                let elapsed = Int(Date().timeIntervalSince(sessionStartTime ?? Date()))
-                let remaining = max(0, Int(WBConfig.liveSessionMaxDurationSeconds) - elapsed)
-                var context = "[DELIVERY \(count) detected] Bowling arm: \(bowlingArm.rawValue). " +
-                    "Pace band: \(paceBand.label). Session time: \(elapsed)s elapsed, ~\(remaining)s remaining."
-                if let challengeTarget {
-                    context += " Active challenge: \(challengeTarget)."
-                }
-                await liveService.sendContext(context)
-            }
-
-            if session.mode == .challenge {
-                await issueNextChallengeTarget()
-            }
-        }
+        // MediaPipe detection is disabled — Gemini Flash segment scanner is the sole
+        // source of truth for deliveries. This delegate method is retained only to
+        // satisfy the DeliveryDetectionDelegate protocol conformance.
     }
 }
 
