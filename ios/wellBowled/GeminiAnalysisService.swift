@@ -269,10 +269,16 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
     // MARK: - Segment Delivery Detection Prompt
 
     private static let segmentDeliveryDetectionPrompt = """
-    You are analyzing one cricket bowling video segment.
-    Detect each bowling RELEASE instant (the ball leaving the hand).
+    You are analyzing a video segment. Your job: detect cricket bowling deliveries ONLY.
 
-    Return STRICT JSON only:
+    FIRST: Is there actual cricket bowling happening in this video?
+    - Is there a bowler with a ball running in and delivering with an overarm action?
+    - Is there a cricket pitch, stumps, or net visible?
+    - If NO cricket bowling is visible — return { "deliveries": [] } immediately.
+    - Do NOT hallucinate deliveries. A person walking, waving, or any non-bowling motion is NOT a delivery.
+    - A wall, empty room, backyard without bowling, or static scene = ZERO deliveries.
+
+    IF genuine cricket bowling IS happening, detect each RELEASE instant (ball leaving the hand):
     {
       "deliveries": [
         {
@@ -283,19 +289,21 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
     }
 
     Rules:
-    - `release_time_sec` is seconds from segment start.
-    - Keep times sorted ascending.
-    - Ignore non-bowling motion and partial run-ups without release.
-    - Use confidence in [0, 1].
+    - `release_time_sec` is seconds from segment start, sorted ascending.
+    - confidence 0.0-1.0: only report 0.8+ for clear, unambiguous overarm bowling releases.
+    - Ignore partial run-ups without a release, throws, catches, or practice swings.
+    - When in doubt, do NOT report it. False positives are worse than missed detections.
     - If none found, return { "deliveries": [] }.
     """
 
     private static let segmentDeliveryDetectionHighRecallPrompt = """
-    You are analyzing one cricket bowling video segment in HIGH-RECALL mode.
-    Detect each likely bowling RELEASE instant (ball leaving the hand) from an overarm bowling action.
-    Prefer recall over precision: include plausible releases with lower confidence instead of dropping them.
+    You are analyzing a video segment in HIGH-RECALL mode for cricket bowling deliveries.
 
-    Return STRICT JSON only:
+    FIRST: Is there actual cricket bowling happening? If not, return { "deliveries": [] }.
+    Do NOT hallucinate. A static scene, empty room, or non-cricket activity = ZERO deliveries.
+
+    IF genuine bowling IS happening, detect each likely RELEASE (ball leaving hand, overarm action).
+    Include plausible releases with lower confidence — prefer recall over precision.
     {
       "deliveries": [
         {
@@ -306,11 +314,9 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
     }
 
     Rules:
-    - `release_time_sec` is seconds from segment start.
-    - Keep times sorted ascending.
-    - Ignore obvious non-bowling movement.
-    - If uncertain, still include the candidate with lower confidence.
-    - Use confidence in [0, 1].
+    - `release_time_sec` seconds from segment start, sorted ascending.
+    - confidence 0.0-1.0. Include uncertain candidates at 0.5+.
+    - Ignore obvious non-bowling motion (walking, waving, throwing).
     - If none found, return { "deliveries": [] }.
     """
 

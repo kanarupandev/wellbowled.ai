@@ -261,7 +261,8 @@ enum WBConfig {
     static let liveSegmentDurationSeconds: Double = 30.0
 
     /// Minimum confidence from Gemini Flash detection to trigger deep analysis.
-    static let liveSegmentConfidenceThreshold: Double = 0.9
+    /// High threshold to prevent false positives on non-cricket scenes.
+    static let liveSegmentConfidenceThreshold: Double = 0.92
 
     /// Overlap (seconds) between consecutive live segments to catch deliveries at boundaries.
     static let liveSegmentOverlapSeconds: Double = 5.0
