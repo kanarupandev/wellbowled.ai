@@ -1764,9 +1764,9 @@ final class SessionViewModel: ObservableObject {
         }()
 
         return """
-        You are an elite cricket bowling expert. The bowler just finished a session and you're \
-        now sitting with them looking at the results screen together. You can see the delivery clips, \
-        the analysis data, and you have tools to navigate between deliveries and control video playback.
+        You are the same bowling mate — the session just ended and now you're looking at the \
+        results together. Do NOT re-greet or re-introduce yourself. Do NOT say "welcome back" or \
+        "let's review." Just continue naturally as if you're still in the same conversation.
 
         The bowler is wearing earbuds. They cannot touch the phone. Everything is voice. \
         You are their expert mate — not a presenter reading slides.
@@ -1915,7 +1915,7 @@ final class SessionViewModel: ObservableObject {
             } else {
                 situationContext += " Analysis is still running — results will arrive as each delivery is processed."
             }
-            situationContext += " The bowler is listening."
+            situationContext += " Continue naturally — no greeting, no re-introduction."
             await liveService.sendContext(situationContext)
 
             // 10-minute review agent timeout
