@@ -2074,12 +2074,11 @@ final class SessionViewModel: ObservableObject {
     private func startStumpAlignment() async {
         guard session.isActive else { return }
 
-        // If already detecting or locked, don't restart
-        if calibrationState == .detecting { return }
+        // If already locked, don't restart
         if case .locked = calibrationState { return }
 
-        calibrationState = .detecting
-        log.info("Stump alignment started (mate-triggered)")
+        // .detecting already set by the delegate before this task started
+        log.info("Stump alignment scanning started")
 
         // Scan every 3 seconds for up to 20 seconds (7 attempts)
         let maxAttempts = 7
@@ -2457,7 +2456,9 @@ extension SessionViewModel: VoiceMateDelegate {
 
     func voiceMateDidRequestShowAlignmentBoxes() async {
         guard session.isActive, WBConfig.enableSpeedCalibration else { return }
-        await startStumpAlignment()
+        // Show boxes immediately, run scan in background so tool response isn't delayed
+        calibrationState = .detecting
+        Task { await self.startStumpAlignment() }
     }
 
     func voiceMate(didSetChallengeTarget target: String) async {
