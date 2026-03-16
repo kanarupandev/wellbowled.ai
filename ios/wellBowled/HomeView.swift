@@ -288,7 +288,7 @@ struct HomeView: View {
 
     private var valueProps: some View {
         VStack(alignment: .leading, spacing: 8) {
-            valueRow(icon: "bolt.fill", text: "Low-latency live feedback in under 1 second response loops.")
+            valueRow(icon: "bolt.fill", text: "Real-time voice coaching from your AI mate at the nets.")
             valueRow(icon: "film.stack.fill", text: "Auto-captured delivery clips with deep on-demand analysis.")
             valueRow(icon: "figure.cricket", text: "Action-signature DNA matching against iconic bowlers.")
         }
