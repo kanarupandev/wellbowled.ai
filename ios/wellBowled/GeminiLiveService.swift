@@ -364,7 +364,10 @@ final class GeminiLiveService: NSObject, VoiceMateService {
         }
         print("[GeminiLive] Connecting to \(url.host ?? "unknown")...")
 
-        let session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 300   // 5 min — WebSocket must survive deep analysis waits
+        config.timeoutIntervalForResource = 900  // 15 min — full session lifetime
+        let session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
         self.urlSession = session
 
         let task = session.webSocketTask(with: url)
