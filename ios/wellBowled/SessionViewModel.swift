@@ -282,20 +282,21 @@ final class SessionViewModel: ObservableObject {
         tts.stop()
         stopLiveSegmentDetection()
 
-        // Connect a FRESH review agent — dedicated to walking through analysis results.
-        // This is a new Live API session with a purpose-built system prompt containing all data.
-        if liveService.isConnected || WBConfig.enableLiveAPI {
-            Task { await self.connectReviewAgent() }
-        } else {
-            matePhase = .idle
-        }
-
         // Stop recording + camera (but keep audio alive for voice mate)
         cameraService.stopRecording()
         cameraService.stopSession()
 
-        // End session
+        // End session BEFORE connecting review agent — but review agent uses matePhase
+        // which is checked independently from session.isActive for auto-reconnect.
         session.end()
+
+        // Connect a FRESH review agent — dedicated to walking through analysis results.
+        // Must be AFTER session.end() but AWAITED so matePhase is set before we continue.
+        if liveService.isConnected || WBConfig.enableLiveAPI {
+            await connectReviewAgent()
+        } else {
+            matePhase = .idle
+        }
         sessionRemainingSeconds = 0
         UIApplication.shared.isIdleTimerDisabled = true
         lastTranscript = ""
@@ -1761,11 +1762,21 @@ final class SessionViewModel: ObservableObject {
 
         HOW YOU BEHAVE — like a real human expert, not a template:
 
+        YOUR CONNECTION IS PERMANENT:
+        You stay connected for as long as the bowler is on the results screen. You are ALWAYS \
+        listening and watching. There is NO timeout — you don't end the conversation unless \
+        the bowler says "done" or "thanks". You are like a mate sitting next to them.
+
         WHEN YOU FIRST CONNECT:
         Analysis may still be running. You'll receive a message telling you the current state. \
-        If analysis isn't done yet, be natural about it — you're looking at the screen too, \
-        you can see it's processing. Say something brief and natural. Don't rush. Don't monologue. \
-        When the bowler talks to you, respond. When they're quiet, you can be quiet too.
+        If analysis isn't done yet, DON'T just wait silently. Give a running commentary: \
+        - What you're seeing on screen ("Clip 1 is loading, I can see the run-up...")
+        - Tease what you'll look at ("I want to check that front arm position...")
+        - React to the video as it plays — like a mate watching cricket together
+        - USE PLAYBACK TOOLS while waiting: pause at interesting frames, slow-mo the release, \
+          seek to specific moments. Show the bowler what you're noticing in real time.
+        When the bowler talks to you, respond immediately. When they're quiet, keep the \
+        commentary going — you're the expert filling the silence with insight.
 
         WHEN ANALYSIS DATA ARRIVES:
         You will receive "[ANALYSIS READY — delivery N]" messages with FULL data for each delivery: \
@@ -1797,21 +1808,42 @@ final class SessionViewModel: ObservableObject {
         TOOLS:
         - `navigate_delivery`: move between deliveries (next / previous / goto index).
         - `control_playback`:
-          * "play" — resume normal speed
+          * "play" — resume normal speed. Use rate "1.0" for normal, "2.0" for fast.
           * "pause" — freeze frame
-          * "slow_mo" with rate "0.25" or "0.5" — slow motion
+          * "slow_mo" with rate "0.25" (ultra slow-mo) or "0.5" (half speed)
           * "seek" with timestamp "2.1" — jump to moment in clip (0.0–5.0s)
           * "focus_phase" with timestamp and rate — loop a specific moment in slow-mo
         - Use these WHEN YOU'RE MAKING A POINT. "Let me show you what I mean" → seek + slow_mo. \
         Don't use them robotically on every delivery. Use them when the visual matters.
+        - CRITICAL: When the user asks you to change speed, pause, play, slow-mo, or any \
+        playback control — IMMEDIATELY call `control_playback` with the right action. \
+        Don't just acknowledge — execute it. Examples:
+          * "Set to half speed" → call control_playback(action: "slow_mo", rate: "0.5")
+          * "Normal speed" → call control_playback(action: "play", rate: "1.0")
+          * "Pause" → call control_playback(action: "pause")
+          * "Show me the release" → call control_playback(action: "seek", timestamp: "<release timestamp>")
+          * "Ultra slow-mo" → call control_playback(action: "slow_mo", rate: "0.25")
+        The bowler's hands are busy — voice is the ONLY way they control playback. Respond instantly.
+
+        PROACTIVE PLAYBACK — YOU CONTROL THE VIDEO:
+        You can see the screen. Act on it without being asked:
+        - When discussing a specific moment, PAUSE the video and SEEK to that timestamp
+        - When showing technique detail, switch to 0.25x slow-mo so the bowler can see it
+        - When the bowler asks "show me", immediately seek + slow-mo to the relevant clip timestamp
+        - Use "focus_phase" to loop a specific moment: e.g. the front foot landing, the release point
+        - After showing something in slow-mo, resume normal speed ("play")
+        - Don't ask permission to control playback — just do it, like a coach with a remote
 
         ANSWERING QUESTIONS:
         The bowler will ask things. Answer like an expert mate, not a chatbot:
         - Use the session data when it's relevant. Quote actual numbers, actual phase results.
         - Use your own bowling knowledge when they ask about technique, famous bowlers, drills, \
         swing physics, pitch conditions. You know bowling deeply — use it.
-        - If they ask about something you can show on video, show it. Seek to the moment.
+        - If they ask about something you can show on video, IMMEDIATELY seek to the moment \
+        and slow-mo it. Don't just describe — SHOW.
         - If they stray from bowling, gently redirect.
+        - If the bowler is quiet, fill the silence: "Let me show you something on this delivery..." \
+        and use playback tools to highlight technique points proactively.
 
         WHAT NOT TO DO:
         - Don't read out data like a report. Form opinions. Say what YOU think.
@@ -2193,7 +2225,8 @@ extension SessionViewModel: VoiceMateDelegate {
                 return
             }
 
-            // Review mode voice navigation
+            // Review mode voice commands — direct client-side parsing for instant response.
+            // The Gemini agent also handles these via tool calls, but client-side is faster.
             if matePhase == .postSessionReview {
                 let lower = text.lowercased()
                 if lower.contains("next") {
@@ -2204,6 +2237,28 @@ extension SessionViewModel: VoiceMateDelegate {
                     await reviewDelivery(at: prevIdx)
                 } else if lower.contains("done") || lower.contains("that's all") || lower.contains("finish") {
                     await disconnectMate()
+                }
+
+                // Direct playback voice commands
+                if lower.contains("pause") || lower.contains("freeze") || lower.contains("stop") {
+                    handlePlaybackCommand(action: "pause", timestamp: nil, rate: nil)
+                } else if lower.contains("play") || lower.contains("resume") {
+                    handlePlaybackCommand(action: "play", timestamp: nil, rate: nil)
+                } else if lower.contains("normal speed") || lower.contains("normal rate") || lower.contains("1x") {
+                    handlePlaybackCommand(action: "play", timestamp: nil, rate: 1.0)
+                } else if lower.contains("slow") || lower.contains("slo-mo") || lower.contains("slow mo") {
+                    // Parse specific rates: "0.25", "0.5", "quarter", "half"
+                    let rate: Float
+                    if lower.contains("0.25") || lower.contains("quarter") || lower.contains("ultra") {
+                        rate = 0.25
+                    } else if lower.contains("0.5") || lower.contains("half") {
+                        rate = 0.5
+                    } else {
+                        rate = 0.25 // default slow-mo
+                    }
+                    handlePlaybackCommand(action: "slow_mo", timestamp: nil, rate: rate)
+                } else if lower.contains("fast") || lower.contains("2x") || lower.contains("double") {
+                    handlePlaybackCommand(action: "play", timestamp: nil, rate: 2.0)
                 }
             }
         }
@@ -2228,16 +2283,14 @@ extension SessionViewModel: VoiceMateDelegate {
         Task { @MainActor in
             debugLog += "DISCONNECT: \(reason)\n"
 
-            guard session.isActive else {
-                // Session already ended: do not surface raw transport errors in UI.
-                log.debug("Ignoring disconnect after session end: \(reason, privacy: .public)")
+            // Auto-reconnect while session is active OR in review mode
+            let shouldReconnect = session.isActive || matePhase == .postSessionReview
+            guard shouldReconnect else {
+                log.debug("Ignoring disconnect (not active, not reviewing): \(reason, privacy: .public)")
                 return
             }
 
-            // Auto-reconnect while session is active or in review mode
-            let shouldReconnect = session.isActive || matePhase == .postSessionReview
-            guard shouldReconnect else { return }
-
+            log.debug("Auto-reconnecting after disconnect: \(reason, privacy: .public), matePhase=\(String(describing: self.matePhase))")
             errorMessage = "Reconnecting..."
             debugLog += "Reconnecting...\n"
 
@@ -2249,7 +2302,9 @@ extension SessionViewModel: VoiceMateDelegate {
                 try await liveService.connect()
                 errorMessage = nil
                 debugLog += "Reconnected!\n"
-                await maybeSendProactiveGreetingIfNeeded()
+                if session.isActive {
+                    await maybeSendProactiveGreetingIfNeeded()
+                }
             } catch {
                 debugLog += "RECONNECT FAIL: \(error.localizedDescription)\n"
                 errorMessage = "Reconnect failed: \(error.localizedDescription)"
