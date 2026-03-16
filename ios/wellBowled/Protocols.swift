@@ -106,7 +106,7 @@ protocol VoiceMateDelegate: AnyObject {
 
     /// Model requested showing stump alignment boxes via tool call.
     @MainActor
-    func voiceMate(didRequestShowAlignmentBoxes: Void) async
+    func voiceMateDidRequestShowAlignmentBoxes() async
 }
 
 extension VoiceMateDelegate {
@@ -120,7 +120,7 @@ extension VoiceMateDelegate {
     @MainActor
     func voiceMate(didSetChallengeTarget target: String) async {}
     @MainActor
-    func voiceMate(didRequestShowAlignmentBoxes: Void) async {}
+    func voiceMateDidRequestShowAlignmentBoxes() async {}
 }
 
 

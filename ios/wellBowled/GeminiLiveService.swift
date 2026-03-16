@@ -754,10 +754,10 @@ final class GeminiLiveService: NSObject, VoiceMateService {
             case "show_alignment_boxes":
                 Task { [weak self] in
                     guard let self else { return }
-                    await self.delegate?.voiceMate(didRequestShowAlignmentBoxes: ())
+                    await self.delegate?.voiceMateDidRequestShowAlignmentBoxes()
                     self.sendToolResponse(
                         for: functionCall,
-                        message: "Alignment boxes shown. Scanning for stumps."
+                        message: "Alignment boxes shown. Scanning for stumps for 20 seconds."
                     )
                 }
             default:
