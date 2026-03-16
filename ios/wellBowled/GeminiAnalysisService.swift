@@ -79,6 +79,14 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
           "clip_ts": 0.8
         }
       ],
+      "drills": [
+        {
+          "name": "Front arm pull-down",
+          "why": "Your front arm is flying out — leaking energy and pulling your head off-line.",
+          "how": "Stand at the crease, no run-up. Bowl 5 balls focusing ONLY on pulling the front arm straight down to your hip pocket at release. Exaggerate it.",
+          "reps": "5 balls"
+        }
+      ],
       "expert_analysis": {
         "phases": [
           {
@@ -213,6 +221,15 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
     - 0.3–0.4: Beginner — obvious technical gaps, uncoordinated timing
     - 0.1–0.2: Raw novice — no discernible technique in this phase
     Be HONEST. Most recreational bowlers should score 0.3–0.6. Do not flatter.
+
+    DRILLS — include 1-2 immediate high-ROI drills in the "drills" array:
+    Pick the 1-2 phases marked "NEEDS WORK" that would give the biggest improvement if fixed. \
+    For each, give a specific, actionable drill:
+    - "name": short name (e.g. "Standing start release", "Front arm pull-down")
+    - "why": one sentence — what's wrong and why this drill fixes it
+    - "how": exact instructions the bowler can follow right now (reps, setup, focus point)
+    - "reps": how many (e.g. "5 balls", "3 sets of 5")
+    If all phases are GOOD, return an empty drills array. Do NOT invent drills for things that are fine.
     """
 
     /// Build the deep analysis prompt, optionally injecting measured speed context.
@@ -689,13 +706,26 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
         // Parse Gemini's visual speed confidence (0.0-1.0)
         let speedConfidence = (result["speed_confidence"] as? Double).flatMap { min(max($0, 0), 1.0) }
 
+        // Parse drills
+        let drills: [Drill]? = {
+            guard let drillsArray = result["drills"] as? [[String: Any]] else { return nil }
+            return drillsArray.compactMap { d in
+                guard let name = d["name"] as? String,
+                      let why = d["why"] as? String,
+                      let how = d["how"] as? String,
+                      let reps = d["reps"] as? String else { return nil }
+                return Drill(name: name, why: why, how: how, reps: reps)
+            }
+        }()
+
         return DeliveryDeepAnalysisResult(
             paceEstimate: paceEstimate,
             summary: summary,
             phases: phases,
             expertAnalysis: expertAnalysis,
             dna: dna,
-            speedConfidence: speedConfidence
+            speedConfidence: speedConfidence,
+            drills: drills
         )
     }
 

@@ -245,7 +245,8 @@ final class DeepAnalysisResultCodableTests: XCTestCase {
             phases: [],
             expertAnalysis: nil,
             dna: dna,
-            speedConfidence: nil
+            speedConfidence: nil,
+            drills: nil
         )
 
         let data = try JSONEncoder().encode(result)
@@ -264,7 +265,8 @@ final class DeepAnalysisResultCodableTests: XCTestCase {
             phases: [],
             expertAnalysis: nil,
             dna: nil,
-            speedConfidence: nil
+            speedConfidence: nil,
+            drills: nil
         )
 
         let data = try JSONEncoder().encode(result)

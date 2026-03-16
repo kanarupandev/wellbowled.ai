@@ -7,6 +7,15 @@ struct DeliveryDeepAnalysisResult: Codable {
     let expertAnalysis: ExpertAnalysis?
     let dna: BowlingDNA?
     let speedConfidence: Double? // 0.0-1.0 Gemini's visual assessment of speed measurement quality
+    let drills: [Drill]?
+}
+
+struct Drill: Codable, Equatable, Identifiable {
+    var id: String { name }
+    let name: String
+    let why: String
+    let how: String
+    let reps: String
 }
 
 struct ChipGuidanceResponse: Codable, Equatable {

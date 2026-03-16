@@ -1487,14 +1487,12 @@ final class SessionViewModel: ObservableObject {
             if let challengeText {
                 feedbackParts.append("Challenge result: \(challengeText)")
             }
+            if let drills = detailedResult.drills, !drills.isEmpty {
+                let drillSummary = drills.map { "\($0.name): \($0.why)" }.joined(separator: ". ")
+                feedbackParts.append("Drills: \(drillSummary)")
+            }
 
-            feedbackParts.append("""
-            INSTRUCTION: Give ONE specific, technical point for the next ball. \
-            Be biomechanical — reference body parts (knee, hip, shoulder, wrist, front arm). \
-            Example: "Brace that front knee harder at delivery stride — it's collapsing 10 degrees." \
-            or "Hold the non-bowling arm up a fraction longer through the crease." \
-            Keep it to one sentence. The bowler is about to bowl again.
-            """)
+            feedbackParts.append("Give ONE specific cue for the next ball. One sentence. Be real.")
             await liveService.sendContext(feedbackParts.joined(separator: " "))
 
             // Rotate to next challenge target after evaluation
