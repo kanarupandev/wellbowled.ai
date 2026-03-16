@@ -117,14 +117,27 @@ final class DNAParsingRobustnessTests: XCTestCase {
 
     func testUnexpectedEnumValueReturnsNil() {
         let dict: [String: Any] = [
-            "arm_path": "SUPER_HIGH",      // invalid
-            "gather_alignment": "Front-On", // wrong case
+            "arm_path": "SUPER_HIGH",      // invalid — not a valid enum value
             "release_height": 42            // wrong type (Int, not String)
         ]
         let dna = parseDNA(from: dict)
         XCTAssertNil(dna?.armPath, "Invalid enum value should parse as nil")
-        XCTAssertNil(dna?.gatherAlignment, "Wrong case should parse as nil")
         XCTAssertNil(dna?.releaseHeight, "Wrong type should parse as nil")
+    }
+
+    func testNormalizationHandlesCaseAndHyphens() {
+        // Gemini sometimes returns "Front-On" or "side on" instead of "front_on" / "side_on"
+        let dict: [String: Any] = [
+            "gather_alignment": "Front-On",
+            "arm_path": "Round Arm",
+            "wrist_position": "Side-Arm",
+            "delivery_stride_length": "Over Striding"
+        ]
+        let dna = parseDNA(from: dict)
+        XCTAssertEqual(dna?.gatherAlignment, .frontOn, "Front-On should normalize to front_on")
+        XCTAssertEqual(dna?.armPath, .roundArm, "Round Arm should normalize to round_arm")
+        XCTAssertEqual(dna?.wristPosition, .sideArm, "Side-Arm should normalize to side_arm")
+        XCTAssertEqual(dna?.deliveryStrideLength, .overStriding, "Over Striding should normalize to over_striding")
     }
 
     func testEmptyDictReturnsNil() {
@@ -163,25 +176,34 @@ final class DNAParsingRobustnessTests: XCTestCase {
         XCTAssertEqual(dna?.releaseHeight, .high)
     }
 
-    // Helper: mimics the DNA parsing logic from GeminiAnalysisService
+    // Helper: mimics the DNA parsing logic from GeminiAnalysisService (with normalization)
     private func parseDNA(from dict: [String: Any]) -> BowlingDNA? {
-        var dna = BowlingDNA(
-            runUpStride: (dict["run_up_stride"] as? String).flatMap(RunUpStrideCategory.init),
-            runUpSpeed: (dict["run_up_speed"] as? String).flatMap(RunUpSpeed.init),
-            approachAngle: (dict["approach_angle"] as? String).flatMap(ApproachAngle.init),
-            gatherAlignment: (dict["gather_alignment"] as? String).flatMap(BodyAlignment.init),
-            backFootContact: (dict["back_foot_contact"] as? String).flatMap(BackFootContact.init),
-            trunkLean: (dict["trunk_lean"] as? String).flatMap(TrunkLean.init),
-            deliveryStrideLength: (dict["delivery_stride_length"] as? String).flatMap(StrideLength.init),
-            frontArmAction: (dict["front_arm_action"] as? String).flatMap(FrontArmAction.init),
-            headStability: (dict["head_stability"] as? String).flatMap(HeadStability.init),
-            armPath: (dict["arm_path"] as? String).flatMap(ArmPath.init),
-            releaseHeight: (dict["release_height"] as? String).flatMap(ReleaseHeight.init),
-            wristPosition: (dict["wrist_position"] as? String).flatMap(WristPosition.init),
-            seamOrientation: (dict["seam_orientation"] as? String).flatMap(SeamOrientation.init),
-            revolutions: (dict["revolutions"] as? String).flatMap(Revolutions.init),
-            followThroughDirection: (dict["follow_through_direction"] as? String).flatMap(FollowThroughDir.init),
-            balanceAtFinish: (dict["balance_at_finish"] as? String).flatMap(BalanceAtFinish.init)
+        // Same normalization as GeminiAnalysisService.parseDeepAnalysisResponse
+        func norm(_ key: String) -> String? {
+            guard let raw = dict[key] as? String else { return nil }
+            return raw.lowercased()
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .replacingOccurrences(of: " ", with: "_")
+                .replacingOccurrences(of: "-", with: "_")
+        }
+
+        let dna = BowlingDNA(
+            runUpStride: norm("run_up_stride").flatMap(RunUpStrideCategory.init),
+            runUpSpeed: norm("run_up_speed").flatMap(RunUpSpeed.init),
+            approachAngle: norm("approach_angle").flatMap(ApproachAngle.init),
+            gatherAlignment: norm("gather_alignment").flatMap(BodyAlignment.init),
+            backFootContact: norm("back_foot_contact").flatMap(BackFootContact.init),
+            trunkLean: norm("trunk_lean").flatMap(TrunkLean.init),
+            deliveryStrideLength: norm("delivery_stride_length").flatMap(StrideLength.init),
+            frontArmAction: norm("front_arm_action").flatMap(FrontArmAction.init),
+            headStability: norm("head_stability").flatMap(HeadStability.init),
+            armPath: norm("arm_path").flatMap(ArmPath.init),
+            releaseHeight: norm("release_height").flatMap(ReleaseHeight.init),
+            wristPosition: norm("wrist_position").flatMap(WristPosition.init),
+            seamOrientation: norm("seam_orientation").flatMap(SeamOrientation.init),
+            revolutions: norm("revolutions").flatMap(Revolutions.init),
+            followThroughDirection: norm("follow_through_direction").flatMap(FollowThroughDir.init),
+            balanceAtFinish: norm("balance_at_finish").flatMap(BalanceAtFinish.init)
         )
         // Same nullification logic as GeminiAnalysisService
         let keyFields: [Any?] = [dna.runUpStride, dna.armPath, dna.gatherAlignment,

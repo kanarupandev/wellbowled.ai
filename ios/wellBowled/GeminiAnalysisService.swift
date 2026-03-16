@@ -717,23 +717,36 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
         // Parse DNA from the same response
         var dna: BowlingDNA?
         if let dnaDict = result["dna"] as? [String: Any] {
+            // Log raw DNA values from Gemini for debugging parse failures
+            log.info("DNA raw from Gemini: \(dnaDict)")
+
+            // Helper: normalize Gemini's string to snake_case lowercase for enum matching
+            func norm(_ key: String) -> String? {
+                guard let raw = dnaDict[key] as? String else { return nil }
+                let cleaned = raw.lowercased()
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .replacingOccurrences(of: " ", with: "_")
+                    .replacingOccurrences(of: "-", with: "_")
+                return cleaned
+            }
+
             dna = BowlingDNA(
-                runUpStride: (dnaDict["run_up_stride"] as? String).flatMap(RunUpStrideCategory.init),
-                runUpSpeed: (dnaDict["run_up_speed"] as? String).flatMap(RunUpSpeed.init),
-                approachAngle: (dnaDict["approach_angle"] as? String).flatMap(ApproachAngle.init),
-                gatherAlignment: (dnaDict["gather_alignment"] as? String).flatMap(BodyAlignment.init),
-                backFootContact: (dnaDict["back_foot_contact"] as? String).flatMap(BackFootContact.init),
-                trunkLean: (dnaDict["trunk_lean"] as? String).flatMap(TrunkLean.init),
-                deliveryStrideLength: (dnaDict["delivery_stride_length"] as? String).flatMap(StrideLength.init),
-                frontArmAction: (dnaDict["front_arm_action"] as? String).flatMap(FrontArmAction.init),
-                headStability: (dnaDict["head_stability"] as? String).flatMap(HeadStability.init),
-                armPath: (dnaDict["arm_path"] as? String).flatMap(ArmPath.init),
-                releaseHeight: (dnaDict["release_height"] as? String).flatMap(ReleaseHeight.init),
-                wristPosition: (dnaDict["wrist_position"] as? String).flatMap(WristPosition.init),
-                seamOrientation: (dnaDict["seam_orientation"] as? String).flatMap(SeamOrientation.init),
-                revolutions: (dnaDict["revolutions"] as? String).flatMap(Revolutions.init),
-                followThroughDirection: (dnaDict["follow_through_direction"] as? String).flatMap(FollowThroughDir.init),
-                balanceAtFinish: (dnaDict["balance_at_finish"] as? String).flatMap(BalanceAtFinish.init)
+                runUpStride: norm("run_up_stride").flatMap(RunUpStrideCategory.init),
+                runUpSpeed: norm("run_up_speed").flatMap(RunUpSpeed.init),
+                approachAngle: norm("approach_angle").flatMap(ApproachAngle.init),
+                gatherAlignment: norm("gather_alignment").flatMap(BodyAlignment.init),
+                backFootContact: norm("back_foot_contact").flatMap(BackFootContact.init),
+                trunkLean: norm("trunk_lean").flatMap(TrunkLean.init),
+                deliveryStrideLength: norm("delivery_stride_length").flatMap(StrideLength.init),
+                frontArmAction: norm("front_arm_action").flatMap(FrontArmAction.init),
+                headStability: norm("head_stability").flatMap(HeadStability.init),
+                armPath: norm("arm_path").flatMap(ArmPath.init),
+                releaseHeight: norm("release_height").flatMap(ReleaseHeight.init),
+                wristPosition: norm("wrist_position").flatMap(WristPosition.init),
+                seamOrientation: norm("seam_orientation").flatMap(SeamOrientation.init),
+                revolutions: norm("revolutions").flatMap(Revolutions.init),
+                followThroughDirection: norm("follow_through_direction").flatMap(FollowThroughDir.init),
+                balanceAtFinish: norm("balance_at_finish").flatMap(BalanceAtFinish.init)
             )
             // Log which fields parsed vs failed for debugging DNA quality
             let dnaFields: [(String, Any?)] = [
@@ -743,11 +756,13 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
             ]
             let parsed = dnaFields.filter { $0.1 != nil }.count
             let total = dnaDict.count
-            log.debug("DNA extracted: \(parsed)/\(total) key fields parsed from \(dnaDict.keys.sorted().joined(separator: ", "))")
+            log.info("DNA parsed: \(parsed)/6 key fields from \(total) raw fields — keys: \(dnaDict.keys.sorted().joined(separator: ", "))")
             if parsed == 0 {
                 log.warning("DNA extraction returned all-nil fields — raw values: \(dnaDict)")
                 dna = nil // Don't create empty DNA — better to show "no match" than broken match
             }
+        } else {
+            log.warning("No 'dna' key in deep analysis response — keys present: \(result.keys.sorted().joined(separator: ", "))")
         }
 
         return DeliveryDeepAnalysisResult(
