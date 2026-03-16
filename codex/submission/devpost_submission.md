@@ -12,7 +12,7 @@ wellBowled puts an elite bowling coach in your earbuds using Gemini Live API. Th
 **How Gemini powers every feature:**
 - **Gemini 2.5 Flash (Native Audio)** — Live API voice mate: sees your video stream, hears your voice, gives spoken biomechanical feedback. Drives the session via tool calls (timer, challenges, session end).
 - **Gemini 2.5 Flash** — Delivery detection from 30-second rolling segments. Challenge evaluation (hit/miss). Phase-focused guidance.
-- **Gemini 3 Pro** — Expert deep analysis of 5-second clips: 5-phase biomechanical breakdown, pace estimation, execution quality rating, bowling DNA extraction, and famous bowler matching against 100 international players.
+- **Gemini 3 Pro** — Expert deep analysis of 5-second clips: 5-phase biomechanical breakdown, pace estimation, execution quality rating, bowling DNA extraction, and famous bowler matching against 103 international bowlers.
 
 The mate proactively sets challenge targets, evaluates each delivery, tracks scores, and rotates challenges. Post-session, a dedicated review agent walks through each delivery with voice-controlled video playback. Gemini isn't a feature — it IS the product.
 

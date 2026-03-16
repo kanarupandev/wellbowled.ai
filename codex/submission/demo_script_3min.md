@@ -67,7 +67,7 @@ Rule: Show product, not talking heads. Make Gemini role explicit.
 - Quality rating visible
 
 **Voiceover:**
-> "Every delivery gets a 5-second clip analyzed by Gemini 3 Pro — biomechanical phases, pace estimate, execution quality, and bowling DNA. Matched against 100 international bowlers. Quality dampener ensures honest scores — a recreational bowler won't get 90% match with the greats."
+> "Every delivery gets a 5-second clip analyzed by Gemini 3 Pro — biomechanical phases, pace estimate, execution quality, and bowling DNA. Matched against 103 famous bowlers. Quality dampener ensures honest scores — a recreational bowler won't get 90% match with the greats."
 
 ---
 

@@ -93,7 +93,7 @@
 │                                                                                           │
 │   5-second delivery clip (.mp4)                                                           │
 │       │                                                                                   │
-│       ├──▶ Standard Analysis (gemini-3-flash-preview)                                    │
+│       ├──▶ Standard Analysis (gemini-2.5-flash)                                    │
 │       │    → pace, length, line, type, observation, confidence                            │
 │       │                                                                                   │
 │       ├──▶ Deep Analysis (gemini-3-pro-preview)                                          │
@@ -103,7 +103,7 @@
 │       │    → 20-dimension BowlingDNA signature                                            │
 │       │    → 5 execution quality ratings (0.1–1.0)                                       │
 │       │                                                                                   │
-│       ├──▶ Challenge Evaluation (gemini-3-flash-preview)                                 │
+│       ├──▶ Challenge Evaluation (gemini-2.5-flash)                                 │
 │       │    → target match (true/false), detected length/line                              │
 │       │                                                                                   │
 │       └──▶ Stump Detection (single frame, gemini-3-pro-preview)                          │
@@ -248,13 +248,13 @@
 │      Calls: 1 per delivery (post-session)                       │
 │                                                                  │
 │   3. STANDARD ANALYSIS (generateContent — REST)                 │
-│      Model: gemini-3-flash-preview                              │
+│      Model: gemini-2.5-flash                              │
 │      Input: 5s video clip (base64 MP4)                          │
 │      Output: Pace, length, line, type, observation              │
 │      Calls: 1 per delivery (quick pass)                         │
 │                                                                  │
 │   4. CHALLENGE EVALUATION (generateContent — REST)              │
-│      Model: gemini-3-flash-preview                              │
+│      Model: gemini-2.5-flash                              │
 │      Input: 5s clip + target description                        │
 │      Output: Match/no-match + explanation                        │
 │      Calls: 1 per challenge delivery                             │
@@ -266,7 +266,7 @@
 │      Calls: 1 per session (calibration)                          │
 │                                                                  │
 │   6. DELIVERY DETECTION (generateContent — REST)                │
-│      Model: gemini-3-flash-preview                              │
+│      Model: gemini-2.5-flash                              │
 │      Input: Video segment (30-60s chunks)                       │
 │      Output: Release timestamps + confidence                     │
 │      Calls: Used in upload/import mode (segment scanning)        │
