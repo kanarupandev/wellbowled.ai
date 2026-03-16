@@ -140,6 +140,24 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
             }
           }
         ]
+      },
+      "dna": {
+        "run_up_stride": "medium",
+        "run_up_speed": "fast",
+        "approach_angle": "straight",
+        "gather_alignment": "semi",
+        "back_foot_contact": "braced",
+        "trunk_lean": "slight",
+        "delivery_stride_length": "normal",
+        "front_arm_action": "pull",
+        "head_stability": "stable",
+        "arm_path": "high",
+        "release_height": "high",
+        "wrist_position": "behind",
+        "seam_orientation": "upright",
+        "revolutions": "medium",
+        "follow_through_direction": "straight",
+        "balance_at_finish": "balanced"
       }
     }
 
