@@ -2103,10 +2103,15 @@ final class SessionViewModel: ObservableObject {
                 log.info("Auto-calibration locked. Speed tracking active at \(WBConfig.speedCalibrationFPS)fps")
 
                 if liveService.isConnected {
+                    let bx = String(format: "%.2f", cal.bowlerStumpCenter.x)
+                    let by = String(format: "%.2f", cal.bowlerStumpCenter.y)
+                    let sx = String(format: "%.2f", cal.strikerStumpCenter.x)
+                    let sy = String(format: "%.2f", cal.strikerStumpCenter.y)
                     await liveService.sendContext(
-                        "[CALIBRATION LOCKED] Both sets of stumps detected. Speed tracking is now active at \(WBConfig.speedCalibrationFPS)fps. " +
-                        "Ball speed will be measured for each delivery using frame-differencing between the stump gates. " +
-                        "Mention this briefly to the bowler — they'll see speed on each delivery card."
+                        "[CALIBRATION LOCKED] Both sets of stumps detected. A pitch corridor is now overlaid on the camera connecting bowler end (\(bx),\(by)) to striker end (\(sx),\(sy)). " +
+                        "You can now assess LINE (off stump, middle, leg) and LENGTH (full, good, short) relative to the corridor. " +
+                        "Use this when giving feedback — e.g. 'that pitched on a good length just outside off.' " +
+                        "Speed tracking is active — ball transit time measured between the stump gates."
                     )
                 }
             } else {
