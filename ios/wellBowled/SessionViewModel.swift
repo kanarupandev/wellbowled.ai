@@ -1629,19 +1629,15 @@ final class SessionViewModel: ObservableObject {
         flowPhase = .starting
 
         // Single natural greeting — the system prompt handles all conversational flow autonomously.
-        let stumpNote = WBConfig.enableSpeedCalibration
-            ? "If you can see stumps in the video, call show_alignment_boxes immediately — " +
-              "two dashed boxes will appear and you can guide the bowler to align both sets of stumps. " +
-              "If no stumps visible, don't mention it — just start the session."
-            : "Speed calibration is off for this session — focus on technique."
         await liveService.sendContext("""
-        [SESSION STARTED] The bowler just opened the app and is at the nets. \
-        \(stumpNote) \
-        Greet them naturally, ask what they want to work on and how much time they've got. \
-        Once they tell you, use set_session_duration to start the countdown. \
-        If they don't mention time, set it to 5 minutes by default and tell them: \
-        "I'll set us up for 5 minutes — just say if you want more time." \
-        After you've seen 2-3 deliveries, use set_challenge_target to start the challenge loop.
+        [SESSION STARTED] Look at the video feed. Assess what you actually see before speaking. \
+        Do NOT assume anything — no nets, no stumps, no environment. Describe nothing you haven't seen. \
+        Wait 2-3 seconds to process the video before your first word. \
+        Then: one short greeting. Ask what they want to work on. Ask how long they have. \
+        Call set_session_duration when they tell you (default 5 minutes if they don't say). \
+        If you see stumps in the video, call show_alignment_boxes — boxes will appear on screen. \
+        If no stumps visible, say nothing about stumps. \
+        Keep every response to one sentence. Be real. Be brief.
         """)
     }
 
