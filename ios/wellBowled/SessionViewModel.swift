@@ -1459,42 +1459,30 @@ final class SessionViewModel: ObservableObject {
         deepAnalysisTasksByDelivery[deliveryID] = nil
         log.debug("Deep analysis completed: delivery=\(index + 1), phases=\(detailedResult.phases.count), poseFrames=\(poseFrames.count), dnaAvailable=\(dnaResult != nil), poseFailureReason=\(poseFailureReason ?? "-", privacy: .public)")
 
-        // Feed analysis results back to the buddy for natural spoken debrief
+        // Feed analysis results back to the buddy — CONCISE to avoid overwhelming the Live API
+        // turn buffer. The mate already saw the delivery live; give it the key data only.
         if liveService.isConnected {
-            var feedbackParts: [String] = ["[ANALYSIS COMPLETE for delivery \(index + 1)]"]
-            feedbackParts.append("Summary: \(detailedResult.summary)")
+            var feedbackParts: [String] = ["[ANALYSIS COMPLETE D\(index + 1)]"]
+            feedbackParts.append(detailedResult.summary)
             if let speedKph = session.deliveries[index].speedKph, let margin = session.deliveries[index].speedErrorMarginKph {
-                feedbackParts.append("Estimated speed: \(String(format: "%.0f", speedKph)) ±\(String(format: "%.0f", margin)) kph (video-based estimate, not radar)")
-            } else if let speedKph = session.deliveries[index].speedKph {
-                feedbackParts.append("Estimated speed: ~\(String(format: "%.0f", speedKph)) kph (video-based estimate)")
+                feedbackParts.append("Speed: ~\(String(format: "%.0f", speedKph))±\(String(format: "%.0f", margin)) kph")
             } else if !detailedResult.paceEstimate.isEmpty {
-                feedbackParts.append("Pace estimate: \(detailedResult.paceEstimate)")
+                feedbackParts.append("Pace: \(detailedResult.paceEstimate)")
             }
 
-            // Detailed phase-by-phase breakdown for technical analysis
-            for phase in detailedResult.phases {
-                let status = phase.isGood ? "GOOD" : "NEEDS WORK"
-                var phaseInfo = "\(phase.name) [\(status)]: \(phase.observation)"
-                if !phase.tip.isEmpty {
-                    phaseInfo += " — Fix: \(phase.tip)"
-                }
-                feedbackParts.append(phaseInfo)
+            // Only the key phase finding — not the full breakdown
+            if let weakPhase = detailedResult.phases.first(where: { !$0.isGood }) {
+                feedbackParts.append("Key fix: \(weakPhase.name) — \(weakPhase.tip)")
             }
 
             if let match = session.deliveries[index].dnaMatches?.first {
-                feedbackParts.append("DNA match: \(match.bowlerName) (\(match.country)) at \(Int(match.similarityPercent))%. Closest phase: \(match.closestPhase). Biggest difference: \(match.biggestDifference).")
+                feedbackParts.append("DNA: \(Int(match.similarityPercent))% \(match.bowlerName)")
             }
             if let challengeText {
-                feedbackParts.append("Challenge result: \(challengeText)")
+                feedbackParts.append(challengeText)
             }
 
-            feedbackParts.append("""
-            INSTRUCTION: Give ONE specific, technical point for the next ball. \
-            Be biomechanical — reference body parts (knee, hip, shoulder, wrist, front arm). \
-            Example: "Brace that front knee harder at delivery stride — it's collapsing 10 degrees." \
-            or "Hold the non-bowling arm up a fraction longer through the crease." \
-            Keep it to one sentence. The bowler is about to bowl again.
-            """)
+            feedbackParts.append("Give ONE biomechanical cue for the next ball. One sentence.")
             await liveService.sendContext(feedbackParts.joined(separator: " "))
 
             // Rotate to next challenge target after evaluation

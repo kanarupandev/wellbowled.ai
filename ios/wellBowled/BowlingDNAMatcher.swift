@@ -137,7 +137,7 @@ struct BowlingDNAMatcher {
 
     /// Match user DNA against the famous bowler database.
     /// Returns top-N matches sorted by similarity (highest first).
-    /// Similarity is honest — best match may be 40-60% for a casual bowler.
+    /// Similarity uses power-scaled distance — casual bowler 30-50%, good club 50-65%, elite-like 65-75%.
     static func match(userDNA: BowlingDNA, topN: Int = 1) -> [BowlingDNAMatch] {
         let userVec = BowlingDNAVectorEncoder.encode(userDNA)
 
@@ -147,7 +147,12 @@ struct BowlingDNAMatcher {
             let (normalisedDistance, closestIdx, biggestIdx) = weightedEuclidean(userVec, bowlerVec)
 
             // normalisedDistance is 0…1 (0 = identical, 1 = maximally different)
-            let similarity = max(0, min(100, (1.0 - normalisedDistance) * 100))
+            // Power curve (exponent 3) compresses inflated similarities from coarse
+            // 3-value ordinal encoding. Without this, random matches score ~42% and
+            // most real matches cluster at 70-95% — unrealistically high.
+            // With pow(x,3): raw 90% → 73%, raw 80% → 51%, raw 70% → 34%.
+            let rawProportion = 1.0 - normalisedDistance
+            let similarity = max(0, min(100, pow(rawProportion, 3.0) * 100))
             results.append((bowler, similarity, closestIdx, biggestIdx))
         }
 
