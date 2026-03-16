@@ -198,7 +198,7 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
     front knee hyperextension, excessive shoulder counter-rotation).
     - slow: needs improvement but not dangerous.
     - good: strong technique worth maintaining and reinforcing.
-    - Max 3-5 body part annotations total across all phases. Quality over quantity.
+    - Max 3-5 body part annotations total across all phases. Only include annotations you are >90% confident about. Quality over quantity.
 
     USE YOUR KNOWLEDGE:
     The phase guide above is a framework, not a ceiling. You have deep cricket biomechanics knowledge — \

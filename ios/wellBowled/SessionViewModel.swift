@@ -2467,14 +2467,14 @@ extension SessionViewModel {
                             postRoll: WBConfig.clipPostRoll
                         )
 
-                        // Create delivery
+                        // Create delivery — wristOmega/releaseWristY are nil because
+                        // MediaPipe's didDetectDelivery is silenced (Gemini Flash is sole
+                        // detector). DNA extraction handles nil gracefully via sentinel values.
                         let count = session.deliveryCount + 1
                         let delivery = Delivery(
                             timestamp: globalTimestamp,
                             status: .queued,
-                            sequence: count,
-                            wristOmega: nil,
-                            releaseWristY: nil
+                            sequence: count
                         )
                         session.addDelivery(delivery)
                         session.deliveries[count - 1].videoURL = clipURL
