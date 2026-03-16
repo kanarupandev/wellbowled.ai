@@ -168,9 +168,9 @@ extension CoachChatPage {
             self.isVideoPlaying = true
             print("🔄 [FocusLoop] Playing at rate: \(self.player?.rate ?? -1)")
 
-            self.focusLoopTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
-                guard let self else { timer.invalidate(); return }
-                self.player?.seek(to: targetTime, toleranceBefore: .zero, toleranceAfter: .zero) { seeked in
+            let loopPlayer = self.player
+            self.focusLoopTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+                loopPlayer?.seek(to: targetTime, toleranceBefore: .zero, toleranceAfter: .zero) { seeked in
                     print("🔄 [FocusLoop] Loop seek completed: \(seeked)")
                 }
             }
