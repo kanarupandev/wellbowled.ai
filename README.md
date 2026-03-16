@@ -6,10 +6,11 @@ A native iOS app that puts an elite cricket bowling coach in your earbuds. Gemin
 
 - **Real-time voice coaching** via Gemini Live API — the mate sees your video, hears your voice, and gives spoken biomechanical feedback after each delivery
 - **Automatic delivery detection** from 30-second rolling video segments using Gemini 2.5 Flash
-- **Challenge-driven training** — the mate sets targets ("Yorker on off stump"), evaluates hit/miss, tracks your score, and rotates challenges
+- **Challenge loop** — the mate proactively sets challenge targets ("Yorker on off stump") via tool calls, each delivery is evaluated against the target by a separate Gemini call, hit/miss + score displayed on screen, targets auto-rotate after each evaluation
 - **Deep biomechanical analysis** of 5-second delivery clips using Gemini 3 Pro — 5-phase breakdown, pace estimation, execution quality rating
 - **Bowling DNA matching** against 103 famous international bowlers with quality-dampened similarity scoring
-- **Post-session review agent** — a dedicated voice agent walks through each delivery with voice-controlled video playback (play, pause, slow-mo, seek)
+- **MediaPipe pose overlay** — real-time skeleton landmark extraction on delivery clips
+- **Two-agent lifecycle** — Agent 1 (live mate) coaches during the bowling session and dies when recording ends; Agent 2 (review agent) connects with a fresh system prompt containing all analysis data, walks through each delivery with voice-controlled video playback (play, pause, slow-mo, seek), and auto-disconnects after 10 minutes or when the user navigates home
 
 ## Architecture
 
@@ -145,13 +146,12 @@ ios/wellBowled/
 ## Known Limitations
 
 - Speed estimation is video-based (frame differencing), not radar — shown as pace brackets with error margins
-- MediaPipe pose overlay not yet rendering on device (linker issue in progress)
 - Requires both sets of stumps visible for speed tracking
 - DNA matching quality depends on Gemini's visual assessment accuracy
 
 ## What's Next
 
-- On-device pose overlay with real-time skeleton visualization
 - Session history and progress tracking across sessions
-- Multi-bowler support
+- Multi-bowler support (coach multiple players in one session)
+- Broader language and persona support
 - Wearable integration for biomechanical sensor data
