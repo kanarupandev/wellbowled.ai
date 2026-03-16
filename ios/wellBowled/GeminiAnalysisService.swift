@@ -487,7 +487,8 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
 
         let data = try await requestJSON(
             payload: payload,
-            candidateModels: [WBConfig.deliveryDetectionModel, WBConfig.deepAnalysisModel, WBConfig.analysisModel]
+            candidateModels: [WBConfig.deliveryDetectionModel, WBConfig.deepAnalysisModel, WBConfig.analysisModel],
+            timeoutSeconds: 60
         )
         let detections = try parseSegmentDeliveryDetections(data, segmentDuration: segmentDuration)
         let preview = detections.prefix(8).map {
@@ -763,7 +764,7 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
     /// Retryable HTTP status codes — try the next candidate model instead of failing.
     private static let retryableStatusCodes: Set<Int> = [400, 404, 429, 500, 502, 503]
 
-    private func requestJSON(payload: [String: Any], candidateModels: [String]) async throws -> Data {
+    private func requestJSON(payload: [String: Any], candidateModels: [String], timeoutSeconds: TimeInterval = 120) async throws -> Data {
         var lastError: Error = AnalysisError.parseError
         var triedAtLeastOne = false
 
@@ -778,7 +779,7 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
                 var request = URLRequest(url: url)
                 request.httpMethod = "POST"
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                request.timeoutInterval = 120
+                request.timeoutInterval = timeoutSeconds
                 request.httpBody = body
 
                 let (data, response) = try await URLSession.shared.data(for: request)

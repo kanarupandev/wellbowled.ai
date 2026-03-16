@@ -95,6 +95,10 @@ protocol VoiceMateDelegate: AnyObject {
     /// Model requested video playback control via tool call (review mode).
     @MainActor
     func voiceMate(didRequestPlaybackControl action: String, timestamp: Double?, rate: Float?) async
+
+    /// Model set the session duration via tool call (after asking the bowler how long they have).
+    @MainActor
+    func voiceMate(didSetSessionDuration minutes: Int) async
 }
 
 extension VoiceMateDelegate {

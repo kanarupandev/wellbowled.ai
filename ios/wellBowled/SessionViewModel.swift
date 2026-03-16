@@ -45,7 +45,8 @@ final class SessionViewModel: ObservableObject {
     @Published var session = Session()
     @Published var isAnalyzing: Bool = false
     @Published var analysisProgress: Double = 0
-    @Published var sessionRemainingSeconds: TimeInterval = WBConfig.liveSessionMaxDurationSeconds
+    @Published var sessionRemainingSeconds: TimeInterval = WBConfig.liveSessionDefaultDurationSeconds
+    private var sessionDurationSeconds: TimeInterval = WBConfig.liveSessionDefaultDurationSeconds
     @Published var currentChallengeTarget: String?
     @Published var isPreparingClips: Bool = false
     @Published var clipPreparationProgress: Double = 0
@@ -181,7 +182,8 @@ final class SessionViewModel: ObservableObject {
         didSendProactiveGreeting = false
         flowPhase = .starting
         sessionStartTime = nil
-        sessionRemainingSeconds = WBConfig.liveSessionMaxDurationSeconds
+        sessionDurationSeconds = WBConfig.liveSessionDefaultDurationSeconds
+        sessionRemainingSeconds = sessionDurationSeconds
         lastSessionRecordingURL = nil
         sessionVideoSaveStatus = .idle
         livePreviewImage = nil
@@ -571,7 +573,8 @@ final class SessionViewModel: ObservableObject {
 
         session.end()
         session.deliveries.removeAll()
-        sessionRemainingSeconds = WBConfig.liveSessionMaxDurationSeconds
+        sessionDurationSeconds = WBConfig.liveSessionDefaultDurationSeconds
+        sessionRemainingSeconds = sessionDurationSeconds
         isPreparingClips = false
         clipPreparationProgress = 0
         clipPreparationStatusMessage = ""
@@ -664,11 +667,12 @@ final class SessionViewModel: ObservableObject {
                 guard let self else { return }
 
                 let elapsed = Date().timeIntervalSince(startedAt)
-                let remaining = max(WBConfig.liveSessionMaxDurationSeconds - elapsed, 0)
+                let duration = self.sessionDurationSeconds
+                let remaining = max(duration - elapsed, 0)
                 self.sessionRemainingSeconds = remaining
 
                 if remaining <= 0 {
-                    let minutes = Int((WBConfig.liveSessionMaxDurationSeconds / 60).rounded())
+                    let minutes = Int((duration / 60).rounded())
                     self.errorMessage = "\(minutes)-minute live session complete."
                     await self.endSession()
                     return
@@ -1391,6 +1395,14 @@ final class SessionViewModel: ObservableObject {
             )
             deepAnalysisTasksByDelivery[deliveryID] = nil
             log.debug("Deep analysis ended with failure: delivery=\(index + 1)")
+
+            // Tell the live agent about the failure so it can inform the bowler
+            if liveService.isConnected {
+                await liveService.sendContext(
+                    "[ANALYSIS FAILED for delivery \(index + 1)] The deep analysis timed out or failed. " +
+                    "The bowler can tap 'Retry' on the delivery card. Let them know briefly — don't dwell on it."
+                )
+            }
             return
         }
 
@@ -1600,7 +1612,10 @@ final class SessionViewModel: ObservableObject {
         There are guide boxes on screen for stump alignment (top = bowler end, bottom = striker end). \
         If you can see stumps in the video, guide the bowler to line them up in the boxes — this enables speed tracking. \
         If no stumps visible, move on — speed isn't essential. \
-        Greet them naturally, ask what they want to work on.
+        Greet them naturally, ask what they want to work on and how much time they've got. \
+        Once they tell you, use set_session_duration to start the countdown. \
+        If they don't mention time, set it to 5 minutes by default and tell them: \
+        "I'll set us up for 5 minutes — just say if you want more time."
         """)
     }
 
@@ -2373,6 +2388,25 @@ extension SessionViewModel: VoiceMateDelegate {
         )
     }
 
+    func voiceMate(didSetSessionDuration minutes: Int) async {
+        let newDuration = TimeInterval(minutes * 60)
+        let elapsed = sessionStartTime.map { Date().timeIntervalSince($0) } ?? 0
+        self.sessionDurationSeconds = newDuration
+        let remaining = max(newDuration - elapsed, 0)
+        self.sessionRemainingSeconds = remaining
+
+        log.info("Session duration set to \(minutes) minutes by mate (remaining: \(Int(remaining))s)")
+
+        // Restart timer with new duration
+        startSessionTimer()
+
+        // Tell the mate the timer is set
+        let remainingMins = Int(remaining / 60)
+        if liveService.isConnected {
+            await liveService.sendContext("[TIMER SET] Session timer set to \(minutes) minutes. \(remainingMins) minutes remaining. The countdown is visible on screen.")
+        }
+    }
+
 }
 
 // MARK: - DeliveryDetectionDelegate
@@ -2571,6 +2605,9 @@ extension SessionViewModel {
                 }
             } catch {
                 log.error("Live segment detection failed: \(error.localizedDescription, privacy: .public)")
+                if liveService.isConnected {
+                    await liveService.sendContext("[DETECTION TIMEOUT] A detection segment timed out. Don't worry — continuing to scan for deliveries.")
+                }
             }
         }
     }

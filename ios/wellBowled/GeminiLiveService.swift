@@ -228,6 +228,21 @@ final class GeminiLiveService: NSObject, VoiceMateService {
         LiveTool(
             functionDeclarations: [
                 LiveFunctionDeclaration(
+                    name: "set_session_duration",
+                    description: "Set the session timer based on how long the bowler says they have. Call this after they tell you their available time. The countdown starts immediately.",
+                    parameters: LiveFunctionParameters(
+                        type: "OBJECT",
+                        properties: [
+                            "minutes": LiveFunctionProperty(
+                                type: "STRING",
+                                description: "Session duration in minutes (e.g. 5, 10, 15, 20, 30)",
+                                enum: nil
+                            )
+                        ],
+                        required: ["minutes"]
+                    )
+                ),
+                LiveFunctionDeclaration(
                     name: "end_session",
                     description: "End the bowling session when the player asks to stop or time is up. In review mode, this disconnects and wraps up.",
                     parameters: LiveFunctionParameters(
@@ -642,6 +657,17 @@ final class GeminiLiveService: NSObject, VoiceMateService {
     private func handleToolCall(_ toolCall: LiveToolCall) {
         for functionCall in toolCall.functionCalls {
             switch functionCall.name {
+            case "set_session_duration":
+                let minutes = functionCall.args["minutes"].flatMap { Int($0) } ?? 5
+                let clamped = max(1, min(60, minutes))
+                Task { [weak self] in
+                    guard let self else { return }
+                    await self.delegate?.voiceMate(didSetSessionDuration: clamped)
+                    self.sendToolResponse(
+                        for: functionCall,
+                        message: "Timer set to \(clamped) minutes"
+                    )
+                }
             case "end_session":
                 let reason = functionCall.args["reason"] ?? "Player requested"
                 Task { [weak self] in

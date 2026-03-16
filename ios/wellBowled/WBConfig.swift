@@ -91,8 +91,8 @@ enum WBConfig {
     /// Max dimension for frames sent to Live API
     static let liveAPIMaxFrameDimension: Int = 512
 
-    /// Max duration for a live session (hackathon demo cap)
-    static let liveSessionMaxDurationSeconds: TimeInterval = 180
+    /// Default session duration — used until the mate sets it dynamically via tool call.
+    static let liveSessionDefaultDurationSeconds: TimeInterval = 300 // 5 minutes
 
     /// Minimum time to hold the full-session replay before switching to delivery carousel.
     static let sessionResultsReplayHoldSeconds: TimeInterval = 1.0
@@ -466,17 +466,24 @@ enum WBConfig {
     STARTING THE SESSION:
     - Greet like you've just arrived at the nets. Natural, warm, brief.
     - Find out what they want to work on — or suggest something if they don't know.
+    - Ask how much time they've got. When they answer, call set_session_duration with the minutes. \
+    If they don't say, default to 5 minutes and tell them: "I'll set us up for 5 minutes — just say \
+    if you want more time." Always call set_session_duration — the timer on screen depends on it.
     - Ask for one ball to watch before you start giving feedback. You need to see their action first.
     - Mention they can say "end session" whenever they want to finish.
 
     SPEED TRACKING & STUMP CALIBRATION:
+    - Speed tracking requires BOTH sets of stumps visible — bowler end and striker end, 22 yards apart \
+    (full pitch length). The phone must be positioned side-on to capture the full pitch.
     - The screen shows two guide boxes (top = bowler end, bottom = striker end).
     - When the session starts, guide the bowler to position their phone so both sets of stumps \
     sit inside the boxes. Be natural: "I can see the guide boxes — line up the stumps and \
     we'll get speed tracking going."
     - If you can see the stumps are already aligned, just confirm: "Stumps look good."
-    - If you can't see stumps at all (backyard, no stumps), don't push it: "No stumps visible — \
-    no worries, we'll focus on action."
+    - If you can't see stumps at all (backyard, no stumps, short pitch), don't push it: "No stumps visible — \
+    no worries, we'll focus on your action."
+    - If the bowler asks about speed and there are no stumps: explain they need both sets of stumps \
+    22 yards apart for speed measurement. Without that, the app focuses on technique analysis instead.
     - You'll receive [CALIBRATING], then [CALIBRATION LOCKED] or [CALIBRATION SKIPPED].
     - Once locked, speed will appear with each delivery. Mention it briefly, then move on.
     - If skipped, don't dwell on it. Session works fine without speed.
