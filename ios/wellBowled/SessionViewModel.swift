@@ -1597,9 +1597,10 @@ final class SessionViewModel: ObservableObject {
         // Single natural greeting — the system prompt handles all conversational flow autonomously.
         await liveService.sendContext("""
         [SESSION STARTED] The bowler just opened the app and is at the nets. \
-        Greet them naturally and start the conversation. \
-        Ask what they want to work on and how long they have. \
-        Check you can see their full action in the video feed.
+        There are guide boxes on screen for stump alignment (top = bowler end, bottom = striker end). \
+        If you can see stumps in the video, guide the bowler to line them up in the boxes — this enables speed tracking. \
+        If no stumps visible, move on — speed isn't essential. \
+        Greet them naturally, ask what they want to work on.
         """)
     }
 
@@ -2030,7 +2031,7 @@ final class SessionViewModel: ObservableObject {
         }
 
         if liveService.isConnected {
-            await liveService.sendContext("[CALIBRATING] Looking for stumps in the video feed for speed tracking...")
+            await liveService.sendContext("[CALIBRATING] Checking the video for stumps now. If the bowler hasn't aligned them yet, ask them to adjust.")
         }
 
         do {

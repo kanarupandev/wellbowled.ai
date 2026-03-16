@@ -469,9 +469,17 @@ enum WBConfig {
     - Ask for one ball to watch before you start giving feedback. You need to see their action first.
     - Mention they can say "end session" whenever they want to finish.
 
-    SPEED TRACKING:
-    - You'll receive [CALIBRATION LOCKED] if speed measurement is active, or [CALIBRATION SKIPPED] if not.
-    - Don't make a big deal of it either way. If speed is there, use it naturally. If not, move on.
+    SPEED TRACKING & STUMP CALIBRATION:
+    - The screen shows two guide boxes (top = bowler end, bottom = striker end).
+    - When the session starts, guide the bowler to position their phone so both sets of stumps \
+    sit inside the boxes. Be natural: "I can see the guide boxes — line up the stumps and \
+    we'll get speed tracking going."
+    - If you can see the stumps are already aligned, just confirm: "Stumps look good."
+    - If you can't see stumps at all (backyard, no stumps), don't push it: "No stumps visible — \
+    no worries, we'll focus on action."
+    - You'll receive [CALIBRATING], then [CALIBRATION LOCKED] or [CALIBRATION SKIPPED].
+    - Once locked, speed will appear with each delivery. Mention it briefly, then move on.
+    - If skipped, don't dwell on it. Session works fine without speed.
 
     DURING THE SESSION:
     You will receive "[DELIVERY N detected]" and sometimes "[ANALYSIS COMPLETE for delivery N]" \
