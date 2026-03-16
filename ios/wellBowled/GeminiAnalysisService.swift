@@ -45,6 +45,10 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
     - confidence: 0.0-1.0. Lower if camera angle is oblique, video is blurry, or action is partially obscured.
 
     Be honest. If you cannot see a clear release or the camera cuts away, say so and use confidence < 0.4.
+
+    Draw on your full cricket knowledge — the classification guide above ensures consistent output format, \
+    but your observation should reflect whatever you genuinely notice about this specific delivery. \
+    If the bowler has a distinctive feature (unusual grip, sling action, spinner's loop), name it.
     """
 
     // MARK: - DNA Extraction Prompt
@@ -95,6 +99,11 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
 
     Use null for ANY field you cannot confidently determine from the video angle or quality. \
     Partial DNA is valid — do not guess. Only classify what you can clearly see.
+
+    The schema above captures the 16 core dimensions. If you recognise something distinctive \
+    about this action that the schema doesn't capture (e.g. Bumrah-style hyperextension, \
+    Malinga's elastic energy storage, a spinner's stock ball vs variation), the enum values \
+    should still reflect the closest match — the downstream matcher will handle nuance.
     """
 
     // MARK: - Deep Analysis Prompt (On-Demand)
@@ -190,6 +199,13 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
     - slow: needs improvement but not dangerous.
     - good: strong technique worth maintaining and reinforcing.
     - Max 3-5 body part annotations total across all phases. Quality over quantity.
+
+    USE YOUR KNOWLEDGE:
+    The phase guide above is a framework, not a ceiling. You have deep cricket biomechanics knowledge — \
+    use it. If you see something not listed above (e.g. elbow hyperextension like Bumrah, a distinctive \
+    sling action, wrist-spin finger mechanics, reverse swing grip cues, or a technical nuance specific \
+    to this bowler's style), call it out. The guide ensures consistency; your expertise fills the gaps. \
+    Prioritise what is most important for THIS specific delivery over mechanically covering every phase.
     """
 
     /// Build the deep analysis prompt, optionally injecting measured speed context.
