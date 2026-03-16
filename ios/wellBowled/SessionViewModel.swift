@@ -1731,7 +1731,7 @@ final class SessionViewModel: ObservableObject {
             try await liveService.connect()
             matePhase = .postSessionReview
             reviewDeliveryIndex = 0
-            log.info("Review agent connected. Deliveries: \(session.deliveryCount)")
+            log.info("Review agent connected. Deliveries: \(self.session.deliveryCount)")
 
             // Proactive kickoff — the agent's system prompt tells it to start immediately,
             // but send an explicit trigger to be sure
