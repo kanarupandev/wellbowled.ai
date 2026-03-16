@@ -499,13 +499,7 @@ final class GeminiLiveService: NSObject, VoiceMateService {
     // MARK: - Keep-Alive
 
     /// Sends periodic WebSocket pings to prevent server-side inactivity timeout (~30s).
-    /// Also sends a tiny silent audio chunk as a fallback — some WebSocket servers
-    /// don't treat pings as activity.
     private func keepAliveLoop() async {
-        // 160 bytes of silence = 10ms at 16kHz 16-bit mono PCM
-        let silentPCM = Data(count: 320)
-        let silentBase64 = silentPCM.base64EncodedString()
-
         while !Task.isCancelled {
             do {
                 try await Task.sleep(nanoseconds: 15_000_000_000) // every 15s
@@ -515,21 +509,14 @@ final class GeminiLiveService: NSObject, VoiceMateService {
 
             guard let ws = webSocketTask, isConnected else { break }
 
-            // WebSocket-level ping
-            ws.sendPing { [weak self] error in
+            ws.sendPing { error in
                 if let error {
                     log.warning("Keep-alive ping failed: \(error.localizedDescription)")
-                    self?.isConnected = false
+                    // Don't mutate isConnected here — sendPing callback fires on an
+                    // arbitrary URLSession thread. The receive loop or delegate will
+                    // handle the actual disconnect safely.
                 }
             }
-
-            // Application-level silent audio — ensures Gemini counts this as activity
-            let input = LiveRealtimeInput(
-                realtimeInput: LiveMediaInput(
-                    mediaChunks: [LiveMediaChunk(mimeType: "audio/pcm;rate=16000", data: silentBase64)]
-                )
-            )
-            sendJSON(input)
         }
         log.debug("Keep-alive loop ended")
     }

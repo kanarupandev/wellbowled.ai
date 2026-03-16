@@ -197,6 +197,7 @@ final class SessionViewModel: ObservableObject {
         liveAudioChunkCounter = 0
         liveMicChunkCounter = 0
         useCameraAudioFallback = false
+        reconnectAttempts = 0
         startSessionTimer()
 
         // 1. Configure audio session
@@ -395,6 +396,7 @@ final class SessionViewModel: ObservableObject {
         matePhase = .idle
         lastTranscript = ""
         isMateSpeaking = false
+        reconnectAttempts = 0
     }
 
     /// Navigate to a specific delivery in review mode and tell the mate.
