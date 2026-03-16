@@ -1252,6 +1252,32 @@ final class SessionViewModel: ObservableObject {
             await liveService.sendContext("[ANALYZING delivery \(index + 1)] Deep analysis in progress — will share results when ready.")
         }
 
+        // Speed estimation (if calibration available)
+        var speedContext: GeminiAnalysisService.SpeedContext?
+        if let calibration = session.calibration {
+            let speedService = SpeedEstimationService()
+            do {
+                let deliveryTs = session.deliveries[index].releaseTimestamp ?? WBConfig.clipPreRoll
+                let estimate = try await speedService.estimateSpeed(
+                    clipURL: clipURL,
+                    calibration: calibration,
+                    deliveryTimestamp: deliveryTs
+                )
+                session.deliveries[index].speedKph = estimate.kph
+                session.deliveries[index].speedConfidence = estimate.confidence
+                session.deliveries[index].speedMethod = estimate.method
+                speedContext = GeminiAnalysisService.SpeedContext(
+                    kph: estimate.kph,
+                    errorMarginKph: estimate.errorMarginKph ?? 5.0,
+                    method: estimate.method.rawValue,
+                    fps: calibration.recordingFPS
+                )
+                log.info("Speed estimated for D\(index + 1): \(String(format: "%.1f", estimate.kph)) kph (confidence: \(String(format: "%.2f", estimate.confidence)))")
+            } catch {
+                log.debug("Speed estimation failed for D\(index + 1): \(error.localizedDescription, privacy: .public)")
+            }
+        }
+
         var detailedResult: DeliveryDeepAnalysisResult?
         var dnaResult: BowlingDNA?
         var poseFrames: [FramePoseLandmarks] = []
@@ -1267,7 +1293,7 @@ final class SessionViewModel: ObservableObject {
         await withTaskGroup(of: DeepComponentResult.self) { group in
             group.addTask { [analysisService] in
                 do {
-                    let deep = try await analysisService.analyzeDeliveryDeep(clipURL: clipURL)
+                    let deep = try await analysisService.analyzeDeliveryDeep(clipURL: clipURL, speedContext: speedContext)
                     return .detailed(.success(deep))
                 } catch {
                     return .detailed(.failure(error))
@@ -1394,8 +1420,10 @@ final class SessionViewModel: ObservableObject {
         if liveService.isConnected {
             var feedbackParts: [String] = ["[ANALYSIS COMPLETE for delivery \(index + 1)]"]
             feedbackParts.append("Summary: \(detailedResult.summary)")
-            if !detailedResult.paceEstimate.isEmpty {
-                feedbackParts.append("Pace: \(detailedResult.paceEstimate)")
+            if let speedKph = session.deliveries[index].speedKph {
+                feedbackParts.append("Measured speed: \(String(format: "%.1f", speedKph)) kph (frame-differencing, calibrated)")
+            } else if !detailedResult.paceEstimate.isEmpty {
+                feedbackParts.append("Pace estimate: \(detailedResult.paceEstimate)")
             }
             let goodPhases = detailedResult.phases.filter { $0.isGood }.map(\.name)
             let needsWorkPhases = detailedResult.phases.filter { !$0.isGood }.map(\.name)

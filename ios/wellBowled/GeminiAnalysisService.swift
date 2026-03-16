@@ -69,7 +69,7 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
 
     // MARK: - Deep Analysis Prompt (On-Demand)
 
-    private static let deepAnalysisPrompt = """
+    private static let deepAnalysisPromptBase = """
     You are analyzing a single 5-second cricket bowling clip.
 
     Return STRICT JSON only:
@@ -113,6 +113,30 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
     - slow: attention area, needs improvement but not dangerous.
     - good: strong technique worth maintaining.
     """
+
+    /// Build the deep analysis prompt, optionally injecting measured speed context.
+    static func deepAnalysisPrompt(speedContext: SpeedContext? = nil) -> String {
+        var prompt = deepAnalysisPromptBase
+        if let ctx = speedContext {
+            prompt += """
+
+            SPEED MEASUREMENT:
+            Ball speed measured at \(String(format: "%.1f", ctx.kph)) kph (\(ctx.method), \(ctx.fps)fps recording).
+            Error margin: \(String(format: "%.1f", ctx.errorMarginKph)) kph.
+            Use this speed in your analysis. Reference it when discussing pace.
+            Do NOT override this with your own estimate — use the measured value.
+            """
+        }
+        return prompt
+    }
+
+    /// Context for injecting measured speed into the deep analysis prompt.
+    struct SpeedContext {
+        let kph: Double
+        let errorMarginKph: Double
+        let method: String
+        let fps: Int
+    }
 
     // MARK: - Chip Guidance Prompt
 
@@ -321,16 +345,17 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
         return analysis
     }
 
-    func analyzeDeliveryDeep(clipURL: URL) async throws -> DeliveryDeepAnalysisResult {
+    func analyzeDeliveryDeep(clipURL: URL, speedContext: SpeedContext? = nil) async throws -> DeliveryDeepAnalysisResult {
         let videoData = try Data(contentsOf: clipURL)
         let base64Video = videoData.base64EncodedString()
-        log.debug("Starting deep delivery analysis: clip=\(clipURL.lastPathComponent, privacy: .public)")
+        log.debug("Starting deep delivery analysis: clip=\(clipURL.lastPathComponent, privacy: .public), hasSpeed=\(speedContext != nil)")
 
+        let prompt = Self.deepAnalysisPrompt(speedContext: speedContext)
         let payload: [String: Any] = [
             "contents": [[
                 "parts": [
                     ["inlineData": ["mimeType": "video/mp4", "data": base64Video]],
-                    ["text": Self.deepAnalysisPrompt]
+                    ["text": prompt]
                 ]
             ]],
             "generationConfig": [

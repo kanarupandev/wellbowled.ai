@@ -100,6 +100,24 @@ final class CameraService: NSObject, CameraProviding, @unchecked Sendable {
     private var videoFrameCounter = 0
     private var audioSampleCounter = 0
 
+    /// When true, camera targets 120fps for speed estimation accuracy.
+    private var speedMode = false
+
+    /// Enable or disable high-FPS mode for speed calibration.
+    func setSpeedMode(_ enabled: Bool) {
+        stateLock.lock()
+        speedMode = enabled
+        stateLock.unlock()
+    }
+
+    private var effectiveTargetFPS: Int {
+        speedMode ? WBConfig.speedCalibrationFPS : WBConfig.cameraTargetFPS
+    }
+
+    private var effectiveMaxFPS: Int {
+        speedMode ? WBConfig.speedCalibrationFPS : WBConfig.cameraMaxFPS
+    }
+
     private struct CameraFormatChoice {
         let format: AVCaptureDevice.Format
         let fps: Double
@@ -440,8 +458,8 @@ final class CameraService: NSObject, CameraProviding, @unchecked Sendable {
     }
 
     private func configureCameraCaptureSettings(_ camera: AVCaptureDevice, position: AVCaptureDevice.Position) {
-        let targetFPS = Double(WBConfig.cameraTargetFPS)
-        let maxFPS = Double(WBConfig.cameraMaxFPS)
+        let targetFPS = Double(effectiveTargetFPS)
+        let maxFPS = Double(effectiveMaxFPS)
         let fallbackFPS = WBConfig.cameraFallbackFPS
 
         do {
