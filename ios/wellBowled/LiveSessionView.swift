@@ -555,6 +555,19 @@ private struct SessionDeliveryResultPage: View {
                                 .padding(.horizontal, 16)
                                 .padding(.top, geo.safeAreaInsets.top + 8)
 
+                                // Speed badge (top-left, below home button)
+                                if let speedKph = delivery.speedKph {
+                                    VStack {
+                                        HStack {
+                                            SpeedBadge(kph: speedKph, confidence: delivery.speedConfidence)
+                                            Spacer()
+                                        }
+                                        .padding(.leading, 16)
+                                        .padding(.top, geo.safeAreaInsets.top + 52)
+                                        Spacer()
+                                    }
+                                }
+
                                 // Right side: Deep Analysis button (vertically centered)
                                 HStack {
                                     Spacer()
@@ -1461,6 +1474,34 @@ private struct SessionFeedbackLine: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+}
+
+// MARK: - Speed Badge
+
+private struct SpeedBadge: View {
+    let kph: Double
+    let confidence: Double?
+
+    private var formattedSpeed: String {
+        String(format: "%.0f", kph)
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "gauge.with.needle.fill")
+                .font(.caption2)
+            Text("\(formattedSpeed) kph")
+                .font(.system(size: 14, weight: .bold, design: .rounded).monospacedDigit())
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            Capsule()
+                .fill(peacockBlue.opacity(0.85))
+                .shadow(color: peacockBlue.opacity(0.4), radius: 6, x: 0, y: 2)
+        )
     }
 }
 
