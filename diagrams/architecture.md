@@ -1,6 +1,6 @@
 # wellBowled.ai — System Architecture
 
-> Google Gemini API Developer Competition 2025
+> Google Gemini API Developer Competition 2026
 
 ## High-Level Architecture
 
@@ -297,9 +297,10 @@
 │   └── Frame Differencing (on-device speed estimation)    │
 │                                                           │
 │   CLOUD                                                   │
-│   ├── Google Cloud Run (backend API)                     │
-│   ├── Google Cloud Storage (clip storage)                │
 │   └── Gemini API (generativelanguage.googleapis.com)     │
+│       ├── Live API (WebSocket, bidirectional audio+video)│
+│       ├── generateContent REST (analysis, detection)     │
+│       └── API key via Google AI Studio                   │
 │                                                           │
 │   DATA                                                    │
 │   ├── 103 famous bowler DNA profiles                     │
