@@ -92,18 +92,18 @@ struct LiveSessionView: View {
 
             // Overlay
             VStack(spacing: 0) {
-                // Top bar: connection status + delivery count + timer
+                // Top bar: session status + delivery count + timer
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Live Session")
+                        Text("Session")
                             .font(.caption2.weight(.semibold))
                             .foregroundColor(peacockBlue)
 
                         HStack(spacing: 6) {
                             Circle()
-                                .fill(statusColor)
+                                .fill(isSessionActive ? peacockBlue : .gray)
                                 .frame(width: 10, height: 10)
-                            Text(statusText)
+                            Text(isSessionActive ? "Recording" : "Idle")
                                 .font(.caption2)
                                 .foregroundColor(.white)
                         }
