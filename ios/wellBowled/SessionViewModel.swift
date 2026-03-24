@@ -64,6 +64,11 @@ final class SessionViewModel: ObservableObject {
     // Stump calibration state (published for CalibrationOverlayView)
     @Published private(set) var calibrationState: StumpDetectionService.CalibrationState = .idle
 
+    // Speed monitoring state
+    @Published var showSpeedSetup: Bool = false
+    @Published var speedDistanceMetres: Double = 18.9
+    @Published private(set) var cliffState: CliffDetector.State = .monitoring
+
     // Agent playback commands (review agent controls video replay)
     struct PlaybackCommand: Equatable {
         let id = UUID()
@@ -98,6 +103,13 @@ final class SessionViewModel: ObservableObject {
     private let analysisService = GeminiAnalysisService()
     private let clipPoseExtractor = ClipPoseExtractor()
     private let speedEstimationService = SpeedEstimationService()
+    private let cliffDetector = CliffDetector(fps: Double(WBConfig.speedCalibrationFPS))
+    // nonisolated(unsafe) because these are accessed from the video callback thread.
+    // Thread safety: only written from one thread at a time (camera callback is serial).
+    nonisolated(unsafe) private var cliffFrameCounter: Int = 0
+    nonisolated(unsafe) private var cliffPrevGray: [UInt8]?
+    nonisolated(unsafe) private var cliffROI: CGRect?
+    private var cliffTimestamps: [Double] = []
 
     private var cancellables = Set<AnyCancellable>()
     private let ciContext = CIContext()  // Reuse — creating per frame is expensive
@@ -282,6 +294,7 @@ final class SessionViewModel: ObservableObject {
         cameraService.onAudioSample = nil
 
         tts.stop()
+        stopCliffDetection()
         stopLiveSegmentDetection()
 
         // Stop recording + camera (but keep audio alive for voice mate)
@@ -722,13 +735,21 @@ final class SessionViewModel: ObservableObject {
         let minFrameInterval = 1.0 / WBConfig.liveAPIFrameRate
         var lastEncodedFrameTime: CFAbsoluteTime = 0
 
-        // Video frames → Live API (Gemini Flash segment detection handles delivery detection)
+        // Video frames → Live API + cliff detection
         let ciCtx = self.ciContext  // capture to avoid accessing MainActor self from bg
         cameraService.onVideoFrame = { [weak self] sampleBuffer, timestamp in
             guard let self else { return }
 
             // Track recording start time for clip extraction offset
             self.recordingOffsetStore.markIfNeeded(timestamp)
+
+            // Cliff detection: process every 8th frame for stump ROI energy (~15μs per frame)
+            if let roi = self.cliffROI {
+                self.cliffFrameCounter += 1
+                if self.cliffFrameCounter % 8 == 0 {
+                    self.processCliffFrame(sampleBuffer, roi: roi)
+                }
+            }
 
             // Feed Live API at configured rate only; avoid expensive frame encoding on every camera frame.
             let now = CFAbsoluteTimeGetCurrent()
@@ -2097,6 +2118,7 @@ final class SessionViewModel: ObservableObject {
                     session.calibration = cal
                     calibrationState = .locked(cal)
                     cameraService.setSpeedMode(true)
+                    showSpeedSetup = true  // show setup overlay — user confirms distance, then monitoring starts
                     log.info("Stump alignment locked at attempt \(attempt)")
 
                     if liveService.isConnected {
@@ -2136,6 +2158,119 @@ final class SessionViewModel: ObservableObject {
         let renderer = UIGraphicsImageRenderer(size: size)
         return renderer.image { ctx in
             layer.render(in: ctx.cgContext)
+        }
+    }
+
+    // MARK: - Cliff Detection (Real-Time Speed)
+
+    /// Called when user taps "Start Monitoring" after confirming distance.
+    func confirmSpeedSetup() {
+        showSpeedSetup = false
+        if let cal = session.calibration {
+            startCliffDetection(calibration: cal)
+        }
+    }
+
+    /// Activate cliff detection after calibration locks.
+    private func startCliffDetection(calibration: StumpCalibration) {
+        let strikerROINorm = calibration.strikerROI
+        cliffROI = CGRect(
+            x: strikerROINorm.origin.x * CGFloat(calibration.frameWidth),
+            y: strikerROINorm.origin.y * CGFloat(calibration.frameHeight),
+            width: strikerROINorm.width * CGFloat(calibration.frameWidth),
+            height: strikerROINorm.height * CGFloat(calibration.frameHeight)
+        )
+        cliffDetector.reset()
+        cliffFrameCounter = 0
+        cliffPrevGray = nil
+
+        cliffDetector.onStateChange = { [weak self] newState in
+            Task { @MainActor [weak self] in
+                self?.handleCliffStateChange(newState)
+            }
+        }
+
+        tts.speak("Monitoring stumps")
+        log.info("Cliff detection started — monitoring striker ROI")
+    }
+
+    private func stopCliffDetection() {
+        cliffROI = nil
+        cliffPrevGray = nil
+        cliffDetector.onStateChange = nil
+        cliffDetector.reset()
+    }
+
+    /// Process a single frame for cliff detection. Called every 8th frame from the video callback.
+    /// Extracts grayscale ROI, computes energy, feeds to CliffDetector.
+    nonisolated private func processCliffFrame(_ sampleBuffer: CMSampleBuffer, roi: CGRect) {
+        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
+
+        // Get Y plane (grayscale) from the biplanar YCbCr buffer
+        guard let baseAddress = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 0) else { return }
+        let bytesPerRow = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0)
+        let frameHeight = CVPixelBufferGetHeightOfPlane(pixelBuffer, 0)
+        let frameWidth = CVPixelBufferGetWidthOfPlane(pixelBuffer, 0)
+
+        // Clamp ROI to frame bounds
+        let roiMinX = max(Int(roi.minX), 0)
+        let roiMaxX = min(Int(roi.maxX), frameWidth)
+        let roiMinY = max(Int(roi.minY), 0)
+        let roiMaxY = min(Int(roi.maxY), frameHeight)
+        let roiW = roiMaxX - roiMinX
+        let roiH = roiMaxY - roiMinY
+        guard roiW > 0, roiH > 0 else { return }
+
+        // Extract grayscale ROI crop
+        let src = baseAddress.assumingMemoryBound(to: UInt8.self)
+        var crop = [UInt8](repeating: 0, count: roiW * roiH)
+        for y in 0..<roiH {
+            let srcRow = src.advanced(by: (roiMinY + y) * bytesPerRow + roiMinX)
+            crop.replaceSubrange(y * roiW ..< (y + 1) * roiW,
+                                 with: UnsafeBufferPointer(start: srcRow, count: roiW))
+        }
+
+        // Compute energy: mean absolute difference from previous frame's ROI
+        let energy: Double
+        if let prev = cliffPrevGray, prev.count == crop.count {
+            var sum: Int = 0
+            for i in 0..<crop.count {
+                let d = Int(crop[i]) - Int(prev[i])
+                sum += d < 0 ? -d : d
+            }
+            energy = Double(sum) / Double(crop.count)
+        } else {
+            energy = 0
+        }
+        cliffPrevGray = crop
+
+        // Feed to cliff detector
+        let frameIdx = cliffFrameCounter
+        if let detection = cliffDetector.feedEnergy(energy, atFrame: frameIdx) {
+            Task { @MainActor in
+                self.handleCliffDetection(detection)
+            }
+        }
+    }
+
+    private func handleCliffDetection(_ detection: CliffDetection) {
+        log.info("CLIFF DETECTED at frame \(detection.meetFrame), energy=\(detection.meetEnergy), ratio=\(detection.cliffRatio)")
+        // Save timestamp for clip extraction later
+        let timestamp = Double(detection.meetFrame) / cliffDetector.fps
+        cliffTimestamps.append(timestamp)
+    }
+
+    private func handleCliffStateChange(_ newState: CliffDetector.State) {
+        cliffState = newState
+        switch newState {
+        case .stumpsHit:
+            tts.speak("Stumps!")
+        case .rearranging:
+            tts.speak("Rearrange stumps")
+        case .monitoring:
+            tts.speak("Ready")
         }
     }
 

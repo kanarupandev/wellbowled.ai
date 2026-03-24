@@ -24,12 +24,13 @@ protocol DeliveryDetectionDelegate: AnyObject {
 
 // MARK: - Speech Announcement
 
-/// Speaks delivery count, pace, and challenge targets aloud.
-/// The app announces deterministic info (count, pace) instantly via TTS.
+/// Speaks delivery count, pace, speed, and challenge targets aloud.
+/// The app announces deterministic info (count, pace, speed) instantly via TTS.
 /// Extensible: future implementations could use Live API voice directly.
 protocol SpeechAnnouncing: AnyObject {
     var isSpeaking: Bool { get }
     func announceDelivery(count: Int, pace: PaceBand)
+    func announceSpeed(_ kph: Double)
     func announceChallenge(target: String)
     func announceChallengeResult(_ text: String)
     func speak(_ text: String)

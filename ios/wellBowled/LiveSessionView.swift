@@ -36,7 +36,7 @@ struct LiveSessionView: View {
                     switch viewModel.calibrationState {
                     case .detecting: return .calibrating
                     case .locked(_): return .active
-                    case .idle, .failed(_): return .hidden
+                    case .idle, .failed(_): return .calibrating
                     }
                 }()
                 if overlayMode != .hidden {
@@ -51,6 +51,27 @@ struct LiveSessionView: View {
                     .transition(.opacity)
                     .animation(.easeInOut(duration: 0.5), value: viewModel.calibrationState)
                 }
+            }
+
+            // Speed setup overlay (after stumps detected, before monitoring)
+            if viewModel.showSpeedSetup {
+                SpeedSetupOverlay(
+                    distanceMetres: $viewModel.speedDistanceMetres,
+                    onStart: { viewModel.confirmSpeedSetup() }
+                )
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                .animation(.easeOut(duration: 0.3), value: viewModel.showSpeedSetup)
+                .zIndex(10)
+            }
+
+            // Cliff detector status indicator
+            if case .locked = viewModel.calibrationState, !viewModel.showSpeedSetup {
+                VStack {
+                    Spacer()
+                    cliffStatusPill
+                        .padding(.bottom, 100)
+                }
+                .allowsHitTesting(false)
             }
 
             // Delivery flash overlay (large centered count that fades)
@@ -369,6 +390,34 @@ struct LiveSessionView: View {
 
     private var isSessionActive: Bool {
         viewModel.session.isActive
+    }
+
+    private var cliffStatusPill: some View {
+        let text: String
+        let color: Color
+        switch viewModel.cliffState {
+        case .monitoring:
+            text = "Monitoring"
+            color = .green
+        case .stumpsHit:
+            text = "Stumps!"
+            color = .orange
+        case .rearranging:
+            text = "Rearrange stumps"
+            color = .orange
+        }
+        return HStack(spacing: 6) {
+            Circle().fill(color).frame(width: 8, height: 8)
+            Text(text)
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .foregroundColor(.white)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(
+            Capsule().fill(Color.black.opacity(0.7))
+                .overlay(Capsule().stroke(color.opacity(0.4), lineWidth: 0.5))
+        )
     }
 
     private var isChallengeSession: Bool {

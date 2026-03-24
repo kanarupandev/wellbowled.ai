@@ -24,6 +24,27 @@ final class TTSService: NSObject, SpeechAnnouncing, AVSpeechSynthesizerDelegate,
         speak(text)
     }
 
+    func announceSpeed(_ kph: Double) {
+        speak(Self.speedText(for: kph))
+    }
+
+    /// Format speed for speech: "one-oh-three" not "103 kilometers per hour".
+    static func speedText(for kph: Double) -> String {
+        let rounded = Int(round(kph))
+        if rounded >= 100 {
+            let hundreds = rounded / 100
+            let remainder = rounded % 100
+            let tens = remainder / 10
+            if tens == 0 {
+                return "\(hundreds) oh \(rounded % 10)"
+            } else {
+                return "\(hundreds) \(remainder)"
+            }
+        } else {
+            return "\(rounded)"
+        }
+    }
+
     func announceChallenge(target: String) {
         speak(target)
     }
