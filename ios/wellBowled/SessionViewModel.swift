@@ -215,27 +215,20 @@ final class SessionViewModel: ObservableObject {
         reconnectAttempts = 0
         startSessionTimer()
 
-        // 1. Configure audio session
-        do {
-            audioManager.stopPlaybackEngine()
-            try audioManager.configure()
-            try audioManager.startPlaybackEngine()
-            let liveService = self.liveService
-            useCameraAudioFallback = !audioManager.startLiveInputCapture { pcmData in
-                liveService.sendAudio(pcmData)
+        // 1. Configure audio session (only for live mate)
+        if WBConfig.enableLiveAPI {
+            do {
+                audioManager.stopPlaybackEngine()
+                try audioManager.configure()
+                try audioManager.startPlaybackEngine()
+                let liveService = self.liveService
+                useCameraAudioFallback = !audioManager.startLiveInputCapture { pcmData in
+                    liveService.sendAudio(pcmData)
+                }
+                log.debug("Audio configured for live mate")
+            } catch {
+                log.warning("Audio setup failed (continuing without live mate): \(error.localizedDescription)")
             }
-            if useCameraAudioFallback {
-                log.warning("Primary audio tap unavailable; using camera audio fallback")
-            } else {
-                log.debug("Primary live mic uplink using AudioSession tap")
-            }
-            log.debug("Audio configured")
-            let routeSummary = audioManager.currentRouteSummary()
-            debugLog += "Audio route: \(routeSummary)\n"
-            log.debug("Audio route after configure: \(routeSummary, privacy: .public)")
-        } catch {
-            rollbackSessionStartFailure(reason: "Audio setup failed: \(error.localizedDescription)")
-            return
         }
 
         // 2. Start camera
@@ -251,28 +244,30 @@ final class SessionViewModel: ObservableObject {
             log.debug("Recording start failed (session continues without clip extraction): \(error.localizedDescription, privacy: .public)")
         }
 
-        // 3b. Start live segment detection queues (Gemini Flash is the sole delivery detector)
-        startLiveSegmentDetection()
+        // 3b. Start live segment detection (only with live API)
+        if WBConfig.enableLiveAPI {
+            startLiveSegmentDetection()
+        }
 
         // 4. Wire camera outputs
         wireCameraOutputs()
         log.debug("Camera outputs wired")
 
-        // 6. Connect to Gemini Live API
-        do {
-            debugLog += "Connecting...\n"
-            debugLog += "Key: \(WBConfig.hasAPIKey ? "YES" : "NO")\n"
-            try await liveService.connect()
-            debugLog += "Connected!\n"
-            matePhase = .liveBowling
-            await maybeSendProactiveGreetingIfNeeded()
-        } catch {
-            debugLog += "FAIL: \(error.localizedDescription)\n"
-            errorMessage = "Connection failed: \(error.localizedDescription)"
-            // Session continues — detection + TTS still work without Live API
+        // 6. Connect to Gemini Live API (only if enabled)
+        if WBConfig.enableLiveAPI {
+            do {
+                debugLog += "Connecting...\n"
+                try await liveService.connect()
+                debugLog += "Connected!\n"
+                matePhase = .liveBowling
+                await maybeSendProactiveGreetingIfNeeded()
+            } catch {
+                debugLog += "FAIL: \(error.localizedDescription)\n"
+                errorMessage = "Connection failed: \(error.localizedDescription)"
+            }
         }
 
-        // 7. Stump calibration is mate-driven via show_alignment_boxes tool call
+        // 7. Session is now active — camera only, no live mate
     }
 
     func endSession() async {

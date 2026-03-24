@@ -166,8 +166,8 @@ struct LiveSessionView: View {
 
                 Spacer()
 
-                // Transcript overlay
-                if !viewModel.lastTranscript.isEmpty {
+                // Transcript overlay (only when live mate is enabled)
+                if WBConfig.enableLiveAPI, !viewModel.lastTranscript.isEmpty {
                     Text(viewModel.lastTranscript)
                         .font(.callout)
                         .foregroundColor(.white)
@@ -177,37 +177,6 @@ struct LiveSessionView: View {
                         .cornerRadius(12)
                         .padding(.horizontal, 20)
                         .transition(.opacity.combined(with: .move(edge: .bottom)))
-                }
-
-                // Speaking indicator — waveform style
-                if viewModel.isMateSpeaking {
-                    HStack(spacing: 2) {
-                        ForEach(0..<5, id: \.self) { i in
-                            Capsule()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [peacockBlue, .cyan],
-                                        startPoint: .bottom,
-                                        endPoint: .top
-                                    )
-                                )
-                                .frame(width: 3, height: speakingBarHeight(for: i))
-                                .animation(
-                                    .easeInOut(duration: [0.35, 0.45, 0.3, 0.5, 0.4][i])
-                                    .repeatForever(autoreverses: true)
-                                    .delay(Double(i) * 0.1),
-                                    value: viewModel.isMateSpeaking
-                                )
-                        }
-                        Text("Mate")
-                            .font(.caption2.bold())
-                            .foregroundColor(peacockBlue)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(.ultraThinMaterial.opacity(0.8))
-                    .cornerRadius(12)
-                    .transition(.scale.combined(with: .opacity))
                 }
 
                 // Error / reconnecting banner

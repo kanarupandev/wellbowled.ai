@@ -287,7 +287,7 @@ enum WBConfig {
     static let calibrationStabilityFrames: Int = 15
 
     /// Master toggle for stump-calibration speed estimation.
-    static let enableSpeedCalibration: Bool = true
+    static let enableSpeedCalibration: Bool = false
 
     // MARK: - Speed Estimation
 
