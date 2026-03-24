@@ -251,7 +251,7 @@ enum WBConfig {
     // MARK: - Feature Flags
 
     static let enableTTS = true
-    static let enableLiveAPI = true
+    static let enableLiveAPI = false
     static let enableChallengeMode = true
     static let enablePostSessionAnalysis = true
 
