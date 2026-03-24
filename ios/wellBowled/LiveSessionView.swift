@@ -125,16 +125,6 @@ struct LiveSessionView: View {
                         .background(Capsule().fill(peacockBlue.opacity(0.15)))
                     }
 
-                    // Session countdown
-                    if viewModel.session.isActive {
-                        HStack(spacing: 4) {
-                            Image(systemName: "timer")
-                                .font(.caption)
-                            Text(viewModel.sessionRemainingText)
-                                .font(.caption.bold().monospacedDigit())
-                        }
-                        .foregroundColor(timerColor)
-                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
