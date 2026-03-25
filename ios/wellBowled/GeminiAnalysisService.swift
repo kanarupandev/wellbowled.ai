@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import os
 
@@ -352,6 +353,15 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
 
     func analyzeDelivery(clipURL: URL) async throws -> DeliveryAnalysis {
         let videoData = try Data(contentsOf: clipURL)
+        if videoData.count > WBConfig.clipMaxSizeBytes {
+            log.warning("Clip too large for analysis: \(videoData.count) bytes > \(WBConfig.clipMaxSizeBytes)")
+            throw AnalysisError.clipTooLarge(videoData.count)
+        }
+        let duration = try await clipDuration(url: clipURL)
+        if duration > WBConfig.clipMaxDurationSeconds {
+            log.warning("Clip too long for analysis: \(duration)s > \(WBConfig.clipMaxDurationSeconds)s")
+            throw AnalysisError.clipTooLong(duration)
+        }
         let base64Video = videoData.base64EncodedString()
         log.debug("Starting standard delivery analysis: clip=\(clipURL.lastPathComponent, privacy: .public)")
 
@@ -391,6 +401,15 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
 
     func analyzeDeliveryDeep(clipURL: URL, speedContext: SpeedContext? = nil) async throws -> DeliveryDeepAnalysisResult {
         let videoData = try Data(contentsOf: clipURL)
+        if videoData.count > WBConfig.clipMaxSizeBytes {
+            log.warning("Clip too large for deep analysis: \(videoData.count) bytes > \(WBConfig.clipMaxSizeBytes)")
+            throw AnalysisError.clipTooLarge(videoData.count)
+        }
+        let duration = try await clipDuration(url: clipURL)
+        if duration > WBConfig.clipMaxDurationSeconds {
+            log.warning("Clip too long for deep analysis: \(duration)s > \(WBConfig.clipMaxDurationSeconds)s")
+            throw AnalysisError.clipTooLong(duration)
+        }
         let base64Video = videoData.base64EncodedString()
         log.debug("Starting deep delivery analysis: clip=\(clipURL.lastPathComponent, privacy: .public), hasSpeed=\(speedContext != nil)")
 
@@ -913,16 +932,29 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
             .sorted(by: { $0.start < $1.start })
         return ExpertAnalysis(phases: normalizedPhases)
     }
+
+    // MARK: - Clip Validation
+
+    /// Returns the duration of a video clip in seconds.
+    private func clipDuration(url: URL) async throws -> Double {
+        let asset = AVURLAsset(url: url)
+        let duration = try await asset.load(.duration)
+        return CMTimeGetSeconds(duration)
+    }
 }
 
 enum AnalysisError: LocalizedError {
     case apiError(Int)
     case parseError
+    case clipTooLarge(Int)
+    case clipTooLong(Double)
 
     var errorDescription: String? {
         switch self {
         case .apiError(let code): return "Gemini API error (HTTP \(code))"
         case .parseError: return "Failed to parse analysis response"
+        case .clipTooLarge(let bytes): return "Clip too large (\(bytes / 1024)KB, max \(WBConfig.clipMaxSizeBytes / 1024 / 1024)MB)"
+        case .clipTooLong(let secs): return "Clip too long (\(String(format: "%.1f", secs))s, max \(String(format: "%.0f", WBConfig.clipMaxDurationSeconds))s)"
         }
     }
 }

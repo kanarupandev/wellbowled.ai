@@ -326,6 +326,14 @@ enum WBConfig {
         "Short ball outside off"
     ]
 
+    // MARK: - Clip Analysis Limits
+
+    /// Maximum clip file size (bytes) allowed for Gemini analysis upload.
+    static let clipMaxSizeBytes: Int = 5 * 1024 * 1024  // 5 MB
+
+    /// Maximum clip duration (seconds) allowed for analysis.
+    static let clipMaxDurationSeconds: Double = 10.0
+
     // MARK: - Gemini Analysis
 
     /// Temperature for generateContent calls (Config E: low temp essential)
