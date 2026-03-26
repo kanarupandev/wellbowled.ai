@@ -147,6 +147,8 @@ Return STRICT JSON only:
 {{
   "bowler_roi": {{"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0}},
   "bowling_arm": "right|left",
+  "action_start": 0.0,
+  "action_end": 0.0,
   "phases": {{
     "back_foot_contact": 0.0,
     "front_foot_contact": 0.0,
@@ -157,6 +159,8 @@ Return STRICT JSON only:
 
 Rules:
 - bowler_roi is normalized (0-1), generous padding (15%).
+- action_start: timestamp when the bowler first becomes clearly visible / starts run-up.
+- action_end: timestamp after follow-through completes.
 - Focus ONLY on the person delivering the ball."""
 
     payload = {
@@ -493,8 +497,8 @@ def make_verdict_card(frame_bgr, peak_sep, insight_lines=None):
     font_title = load_font(36, bold=True)
     font_body = load_font(20)
     font_rating = load_font(36, bold=True)
-    font_ref = load_font(14)
-    font_note = load_font(16)
+    font_ref = load_font(16, bold=True)
+    font_note = load_font(18)
     font_brand = load_font(14)
 
     # Title
@@ -554,8 +558,9 @@ def make_verdict_card(frame_bgr, peak_sep, insight_lines=None):
         draw.text((cx - lw//2, y), line, font=font_body, fill=(220, 225, 235))
         y += 28
 
-    # Brand
-    draw.text((cx - draw.textlength("wellBowled.ai", font=font_brand)//2, OUT_H - 40), "wellBowled.ai", font=font_brand, fill=(100, 110, 120))
+    # Brand — bigger, visible
+    font_brand_v = load_font(20, bold=True)
+    draw.text((cx - draw.textlength("wellBowled.ai", font=font_brand_v)//2, OUT_H - 80), "wellBowled.ai", font=font_brand_v, fill=BRAND_TEAL)
 
     return cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
 
@@ -568,16 +573,21 @@ def make_end_card():
     draw = ImageDraw.Draw(pil)
     cx = OUT_W // 2
 
-    font_brand = load_font(72, bold=True)
+    font_brand = load_font(80, bold=True)
     font_tag = load_font(36)
+    font_url = load_font(24)
 
     brand = "wellBowled.ai"
     bw = draw.textlength(brand, font=font_brand)
-    draw.text((cx - bw//2, OUT_H//2 - 60), brand, font=font_brand, fill=BRAND_TEAL)
+    draw.text((cx - bw//2, OUT_H//2 - 80), brand, font=font_brand, fill=BRAND_TEAL)
 
     tag = "Cricket biomechanics, visualized"
     tw = draw.textlength(tag, font=font_tag)
-    draw.text((cx - tw//2, OUT_H//2 + 30), tag, font=font_tag, fill=WHITE)
+    draw.text((cx - tw//2, OUT_H//2 + 20), tag, font=font_tag, fill=WHITE)
+
+    url = "Subscribe for more analysis"
+    uw = draw.textlength(url, font=font_url)
+    draw.text((cx - uw//2, OUT_H//2 + 80), url, font=font_url, fill=LIGHT_GREY)
 
     return cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
 
@@ -602,8 +612,13 @@ def compose_video(frames, peak_frame, phases, output_path, fps):
     peak_idx = peak_frame["index"] if peak_frame else -1
     peak_sep = peak_frame["separation"] if peak_frame else 0
 
-    # 1. Cold open — all frames at 1x, raw
-    for f in frames:
+    # 1. Cold open — 1x speed, trimmed to action window if Flash provided it
+    # Generic: Flash tells us when the bowler is visible, we start there
+    action_start_t = phases.get("_action_start", 0)
+    cold_frames = [f for f in frames if f["time"] >= action_start_t]
+    if len(cold_frames) < 10:
+        cold_frames = frames  # fallback: use all
+    for f in cold_frames:
         rendered.append(fit_to_canvas(f["frame_bgr"]))
 
     # 2. Transition (0.3s black)
@@ -688,8 +703,11 @@ def main():
         if result:
             bowler_roi = result.get("bowler_roi")
             flash_phases = result.get("phases")
+            action_start = result.get("action_start", 0)
+            action_end = result.get("action_end")
             print(f"  ROI: {bowler_roi}")
             print(f"  Arm: {result.get('bowling_arm')}")
+            print(f"  Action window: {action_start}s - {action_end}s")
         else:
             print("  Skipped — using heuristics")
         print(f"  ({time.time()-t0:.1f}s)\n")
@@ -710,6 +728,9 @@ def main():
     frames = compute_xfactor(frames)
     peak = find_peak(frames)
     phases = flash_phases if flash_phases else detect_phases(frames)
+    # Pass action_start through phases dict for cold open trimming
+    if not args.skip_gemini and result and result.get("action_start"):
+        phases["_action_start"] = float(result["action_start"])
     if peak:
         print(f"  Peak: {peak['separation']:.1f}° at {peak['time']:.2f}s")
     print(f"  Phases: {json.dumps({k: round(v, 2) for k, v in phases.items()})}")
