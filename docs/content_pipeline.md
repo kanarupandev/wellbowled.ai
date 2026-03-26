@@ -83,9 +83,12 @@ Three standalone Python pipelines now exist in `content/`:
 
 | Pipeline | What It Does | Key Tech | Status |
 |----------|-------------|----------|--------|
-| **X-Factor** (`xfactor_pipeline/`) | Hip-shoulder separation angle overlay + peak freeze + verdict card | MediaPipe pose → angle math → OpenCV overlay → FFmpeg encode | Done — upload-ready |
-| **Kinogram** (`kinogram_pipeline/`) | 7-phase stroboscopic composite with color-coded skeletons | MediaPipe pose+segmentation → multi-figure composite → animated reveal | POC — 7 mandatory fixes in `IMPROVEMENTS.md` |
-| **Goniogram** (`goniogram_pipeline/`) | Elbow extension + front knee brace arcs with color-coded verdicts | MediaPipe pose → joint angle math → arc overlay → centroid tracking | Done — upload-ready |
+| **X-Factor** (`xfactor_pipeline/`) | Hip-shoulder separation angle overlay + peak freeze + verdict card | MediaPipe pose → angle math → OpenCV overlay → FFmpeg encode | v0.0.1 — needs background person exclusion, overlay polish, checklist pass |
+| **Kinogram** (`kinogram_pipeline/`) | 7-phase stroboscopic composite with color-coded skeletons | MediaPipe pose+segmentation → multi-figure composite → animated reveal | v0.0.1 POC — 7 mandatory fixes in `IMPROVEMENTS.md` |
+| **Goniogram** (`goniogram_pipeline/`) | Elbow extension + front knee brace arcs with color-coded verdicts | MediaPipe pose → joint angle math → arc overlay → centroid tracking | v0.0.1 — needs testing, checklist pass |
+| **Velocity Waterfall** (`waterfall_pipeline/`) | Stacked segment speed curves animated with slo-mo (kinetic chain whip) | MediaPipe pose → velocity compute → graph render → FFmpeg | v0.0.1 — code complete, untested |
+| **Phase Portrait** (`portrait_pipeline/`) | Angle-vs-angle signature loop — elite=tight, amateur=chaos | MediaPipe pose → angle compute → parametric plot → FFmpeg | v0.0.1 — code complete, untested |
+| **Spine Stress Gauge** (`spine_gauge_pipeline/`) | Lumbar flexion+rotation risk arc — pulsing red in danger zone | MediaPipe pose → stress compute → gauge render → FFmpeg | v0.0.1 — code complete, unverified |
 
 Each pipeline: input clip → 9:16 reel (1080×1920, H.264, 30fps) with FFmpeg-based QA review.
 
@@ -97,9 +100,7 @@ Each pipeline: input clip → 9:16 reel (1080×1920, H.264, 30fps) with FFmpeg-b
 | **Content ranker** | Score deliveries by analysis richness, pick top 2. Start with heuristic, graduate to Gemini ranking prompt | Small |
 | **Approval UI** | Minimal screen: 2 video previews, approve/reject buttons, optional caption field | Small |
 | **Caption generator** | Gemini prompt: given analysis JSON, write a 1-2 line Instagram caption | Small |
-| **Velocity Waterfall** | Stacked velocity-time curves (pelvis→trunk→arm→wrist) animated alongside slo-mo — shows kinetic chain whip. Source: Putnam 1993, Felton 2023 | Medium |
-| **Phase Portrait** | Angle-vs-angle parametric loop draws itself during delivery — elite=tight loop, amateur=chaos. Source: Hamill et al. 2014 | Small |
-| **Spine Stress Gauge** | Pulsing arc at lumbar spine showing lateral flexion + rotation composite risk score — red zone >40°. Source: Feros et al. 2024 | Medium |
+| **All 6 pipelines → v1.0.0** | Every pipeline needs: background person exclusion, delivery-window overlay gating, 75-point checklist pass, Gemini Flash bowler ROI, visual polish | Medium–Large |
 | **Additional video types** | Wrist trail/gradient, release point mapping, stride length, arm speed curve — see competitive gap analysis | Medium–Large |
 
 ## Automation Progression
