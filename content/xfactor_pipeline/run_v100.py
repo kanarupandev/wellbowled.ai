@@ -495,38 +495,38 @@ def make_freeze_card(frame_bgr, peak_sep):
     return cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
 
 
-def make_verdict_card(frame_bgr, peak_sep, insight_lines=None):
-    """Verdict card with rating and comparison scale."""
+def make_verdict_card(frame_bgr, peak_sep, landmarks=None, insight_lines=None):
+    """Verdict card — dark bg with faint skeleton silhouette, big centered content."""
     if not insight_lines:
         insight_lines = [
             "The gap between hips and shoulders generates pace.",
             "Bigger separation = more stored energy at release.",
-            "Work on leading with the hip, letting the shoulder lag.",
+            "Lead with the hip. Let the shoulder lag.",
         ]
 
-    bg = cv2.resize(frame_bgr, (OUT_W, OUT_H), interpolation=cv2.INTER_LANCZOS4)
-    bg = cv2.GaussianBlur(bg, (31, 31), 15)
-    dark = np.zeros_like(bg); dark[:] = DARK_BG
-    canvas = cv2.addWeighted(dark, 0.75, bg, 0.25, 0)
-
-    pil = Image.fromarray(cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB))
+    # Dark background with faint skeleton silhouette
+    pil = Image.new("RGB", (OUT_W, OUT_H), DARK_BG)
     draw = ImageDraw.Draw(pil)
+
+    # Draw faint skeleton from peak frame if we have landmarks
+    if landmarks:
+        h, w = frame_bgr.shape[:2]
+        scale = OUT_W / w
+        y_off = (OUT_H - int(h * scale)) // 2
+        for a, b in POSE_CONNECTIONS:
+            if landmarks[a][2] > 0.3 and landmarks[b][2] > 0.3:
+                x1 = int(landmarks[a][0] * w * scale)
+                y1 = int(landmarks[a][1] * h * scale) + y_off
+                x2 = int(landmarks[b][0] * w * scale)
+                y2 = int(landmarks[b][1] * h * scale) + y_off
+                draw.line((x1, y1, x2, y2), fill=(30, 35, 45), width=3)
+        for idx in PRIMARY_JOINTS:
+            if landmarks[idx][2] > 0.3:
+                x = int(landmarks[idx][0] * w * scale)
+                y = int(landmarks[idx][1] * h * scale) + y_off
+                draw.ellipse((x-4, y-4, x+4, y+4), fill=(35, 40, 50))
+
     cx = OUT_W // 2
-
-    font_title = load_font(36, bold=True)
-    font_body = load_font(20)
-    font_rating = load_font(36, bold=True)
-    font_ref = load_font(16, bold=True)
-    font_note = load_font(18)
-    font_brand = load_font(14)
-
-    # Title
-    t = "X-FACTOR VERDICT"
-    draw.text((cx - draw.textlength(t, font=font_title)//2, 100), t, font=font_title, fill=ACCENT_RED)
-
-    # Angle
-    a = f"{peak_sep:.0f}° peak separation"
-    draw.text((cx - draw.textlength(a, font=font_body)//2, 150), a, font=font_body, fill=WHITE)
 
     # Rating
     if peak_sep >= 45:
@@ -538,75 +538,94 @@ def make_verdict_card(frame_bgr, peak_sep, insight_lines=None):
     else:
         rating, color, note = "WORK ON IT", WORK_ORANGE, "Focus on hip pre-rotation drills"
 
-    draw.text((cx - draw.textlength(rating, font=font_rating)//2, 190), rating, font=font_rating, fill=color)
+    # Vertically centered layout
+    y = 280
 
-    # Comparison bar
-    bar_y, bar_x, bar_w = 250, 60, OUT_W - 120
-    draw.rounded_rectangle((bar_x, bar_y, bar_x+bar_w, bar_y+40), radius=8, fill=(30, 34, 44))
+    # Title
+    f_title = load_font(44, bold=True)
+    t = "X-FACTOR"
+    draw.text((cx - draw.textlength(t, font=f_title)//2, y), t, font=f_title, fill=WHITE)
+    y += 70
+
+    # Big angle — the hero element
+    f_angle = load_font(120, bold=True)
+    f_deg = load_font(48)
+    angle_txt = f"{peak_sep:.0f}"
+    aw = draw.textlength(angle_txt, font=f_angle)
+    dw = draw.textlength("°", font=f_deg)
+    draw.text((cx - (aw+dw)//2, y), angle_txt, font=f_angle, fill=ACCENT_RED)
+    draw.text((cx - (aw+dw)//2 + aw + 4, y + 24), "°", font=f_deg, fill=ACCENT_RED)
+    y += 150
+
+    # Rating word
+    f_rating = load_font(48, bold=True)
+    draw.text((cx - draw.textlength(rating, font=f_rating)//2, y), rating, font=f_rating, fill=color)
+    y += 80
+
+    # Comparison bar — thick
+    bar_x, bar_w, bar_h = 50, OUT_W - 100, 50
+    draw.rounded_rectangle((bar_x, y, bar_x+bar_w, y+bar_h), radius=10, fill=(25, 30, 40))
 
     def a2x(angle):
         return bar_x + int((min(55, max(0, angle)) / 55) * bar_w)
 
-    markers = [
-        ("Untrained", 12, (120, 120, 120)),
-        ("Amateur", 20, (160, 160, 160)),
-        ("Good", 30, WARN_YELLOW),
-        ("Elite", 42, SAFE_GREEN),
-        ("Peak", 50, (80, 255, 80)),
-    ]
-    for label, angle, clr in markers:
+    f_ref = load_font(18, bold=True)
+    for label, angle, clr in [("Untrained", 12, (90,90,90)), ("Amateur", 20, (140,140,140)), ("Good", 30, WARN_YELLOW), ("Elite", 42, SAFE_GREEN), ("Peak", 50, (80,255,80))]:
         x = a2x(angle)
-        draw.line((x, bar_y+2, x, bar_y+38), fill=clr, width=2)
-        lw = draw.textlength(label, font=font_ref)
-        draw.text((x - lw//2, bar_y+42), label, font=font_ref, fill=clr)
+        draw.line((x, y+4, x, y+bar_h-4), fill=clr, width=3)
+        lw = draw.textlength(label, font=f_ref)
+        draw.text((x - lw//2, y + bar_h + 8), label, font=f_ref, fill=clr)
 
-    # "You" marker — bold white
+    # "You" marker
     you_x = a2x(peak_sep)
-    draw.line((you_x, bar_y, you_x, bar_y+40), fill=WHITE, width=3)
-    font_you = load_font(14, bold=True)
-    yw = draw.textlength("You", font=font_you)
-    draw.text((you_x - yw//2, bar_y - 18), "You", font=font_you, fill=WHITE)
+    draw.line((you_x, y-6, you_x, y+bar_h+6), fill=WHITE, width=5)
+    f_you = load_font(22, bold=True)
+    yw = draw.textlength("You", font=f_you)
+    draw.text((you_x - yw//2, y - 32), "You", font=f_you, fill=WHITE)
+
+    y += bar_h + 50
 
     # Note
-    draw.text((cx - draw.textlength(note, font=font_note)//2, bar_y+62), note, font=font_note, fill=LIGHT_GREY)
+    f_note = load_font(24)
+    draw.text((cx - draw.textlength(note, font=f_note)//2, y), note, font=f_note, fill=LIGHT_GREY)
+    y += 50
 
     # Insight lines
-    y = bar_y + 90
+    f_body = load_font(22)
     for line in insight_lines[:3]:
-        lw = draw.textlength(line, font=font_body)
-        draw.text((cx - lw//2, y), line, font=font_body, fill=(220, 225, 235))
-        y += 28
+        lw = draw.textlength(line, font=f_body)
+        draw.text((cx - lw//2, y), line, font=f_body, fill=(190, 198, 210))
+        y += 34
 
-    # Brand — bigger, visible
-    font_brand_v = load_font(20, bold=True)
-    draw.text((cx - draw.textlength("wellBowled.ai", font=font_brand_v)//2, OUT_H - 80), "wellBowled.ai", font=font_brand_v, fill=BRAND_TEAL)
+    # Legend
+    y += 20
+    f_leg = load_font(18, bold=True)
+    draw.ellipse((cx-130, y, cx-116, y+14), fill=HIP_COLOR)
+    draw.text((cx-108, y-1), "Hips", font=f_leg, fill=LIGHT_GREY)
+    draw.ellipse((cx+30, y, cx+44, y+14), fill=SHOULDER_COLOR)
+    draw.text((cx+52, y-1), "Shoulders", font=f_leg, fill=LIGHT_GREY)
+
+    # Brand
+    f_brand = load_font(22, bold=True)
+    draw.text((cx - draw.textlength("wellBowled.ai", font=f_brand)//2, OUT_H - 80), "wellBowled.ai", font=f_brand, fill=BRAND_TEAL)
 
     return cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
 
 
 def make_end_card():
-    """End card — large readable brand text."""
-    canvas = np.zeros((OUT_H, OUT_W, 3), dtype=np.uint8)
-    canvas[:] = (13, 17, 23)  # #0D1117
-    pil = Image.fromarray(cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB))
+    """End card — brand only, clean."""
+    pil = Image.new("RGB", (OUT_W, OUT_H), (13, 17, 23))
     draw = ImageDraw.Draw(pil)
     cx = OUT_W // 2
 
-    font_brand = load_font(80, bold=True)
-    font_tag = load_font(36)
-    font_url = load_font(24)
+    f_brand = load_font(80, bold=True)
+    f_tag = load_font(32)
 
     brand = "wellBowled.ai"
-    bw = draw.textlength(brand, font=font_brand)
-    draw.text((cx - bw//2, OUT_H//2 - 80), brand, font=font_brand, fill=BRAND_TEAL)
+    draw.text((cx - draw.textlength(brand, font=f_brand)//2, OUT_H//2 - 50), brand, font=f_brand, fill=BRAND_TEAL)
 
     tag = "Cricket biomechanics, visualized"
-    tw = draw.textlength(tag, font=font_tag)
-    draw.text((cx - tw//2, OUT_H//2 + 20), tag, font=font_tag, fill=WHITE)
-
-    url = "Subscribe for more analysis"
-    uw = draw.textlength(url, font=font_url)
-    draw.text((cx - uw//2, OUT_H//2 + 80), url, font=font_url, fill=LIGHT_GREY)
+    draw.text((cx - draw.textlength(tag, font=f_tag)//2, OUT_H//2 + 50), tag, font=f_tag, fill=WHITE)
 
     return cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
 
@@ -677,7 +696,8 @@ def compose_video(frames, peak_frame, phases, output_path, fps):
 
     # 2. Verdict card (5s — the comparison scale, main takeaway)
     verdict_bgr = peak_frame["frame_bgr"] if peak_frame else frames[len(frames)//2]["frame_bgr"]
-    verdict = make_verdict_card(verdict_bgr, peak_sep)
+    peak_landmarks = peak_frame.get("landmarks") if peak_frame else None
+    verdict = make_verdict_card(verdict_bgr, peak_sep, landmarks=peak_landmarks)
     rendered.extend([verdict] * int(OUTPUT_FPS * 5))
     log.info("Verdict card: 5s")
 
