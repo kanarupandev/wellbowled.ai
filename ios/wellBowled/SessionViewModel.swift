@@ -55,6 +55,7 @@ final class SessionViewModel: ObservableObject {
     @Published private(set) var deepAnalysisArtifactsByDelivery: [UUID: DeliveryDeepAnalysisArtifacts] = [:]
     @Published private(set) var lastSessionRecordingURL: URL?
     @Published private(set) var sessionVideoSaveStatus: SessionVideoSaveStatus = .idle
+    @Published private(set) var compositedExportStatus: SessionVideoSaveStatus = .idle
     @Published private(set) var cameraFlipDisabled: Bool = false
 
     // Persistent voice mate state
@@ -1252,6 +1253,52 @@ final class SessionViewModel: ObservableObject {
             log.warning("Deep analysis artifacts not found for \(deliveryID.uuidString.prefix(8), privacy: .public). Available keys: \(self.deepAnalysisArtifactsByDelivery.keys.map { String($0.uuidString.prefix(8)) })")
         }
         return result
+    }
+
+    // MARK: - Composited Video Export
+
+    func exportComposited(for deliveryID: UUID) async {
+        guard compositedExportStatus != .saving else { return }
+        compositedExportStatus = .saving
+
+        guard let delivery = session.deliveries.first(where: { $0.id == deliveryID }),
+              let clipURL = delivery.videoURL else {
+            log.error("Export composited: no clip URL for delivery \(deliveryID.uuidString.prefix(8), privacy: .public)")
+            compositedExportStatus = .failed("No clip available")
+            return
+        }
+
+        let artifacts = deepAnalysisArtifactsByDelivery[deliveryID]
+        guard let poseFrames = artifacts?.poseFrames, !poseFrames.isEmpty else {
+            log.error("Export composited: no pose frames for delivery \(deliveryID.uuidString.prefix(8), privacy: .public)")
+            compositedExportStatus = .failed("Run deep analysis first")
+            return
+        }
+
+        let input = VideoCompositor.Input(
+            clipURL: clipURL,
+            poseFrames: poseFrames,
+            expertAnalysis: artifacts?.expertAnalysis,
+            phases: delivery.phases ?? [],
+            speedKph: delivery.speedKph,
+            dnaMatch: delivery.dnaMatches?.first
+        )
+
+        do {
+            let compositor = VideoCompositor()
+            let outputURL = try await compositor.composite(input)
+            log.info("Composited export complete: \(outputURL.lastPathComponent, privacy: .public)")
+
+            // Save to Photos
+            try await PHPhotoLibrary.shared().performChanges {
+                PHAssetCreationRequest.forAsset().addResource(with: .video, fileURL: outputURL, options: nil)
+            }
+            compositedExportStatus = .saved
+            log.info("Composited video saved to Photos")
+        } catch {
+            log.error("Composited export failed: \(error.localizedDescription, privacy: .public)")
+            compositedExportStatus = .failed(error.localizedDescription)
+        }
     }
 
     func runDeepAnalysisIfNeeded(for deliveryID: UUID) async {

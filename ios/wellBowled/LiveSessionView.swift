@@ -725,6 +725,9 @@ private struct SessionDeliveryResultPage: View {
                                             .background(Circle().fill(Color.black.opacity(0.45)))
                                     }
                                     Spacer()
+                                    if deepAnalysisReady {
+                                        compositedExportButton
+                                    }
                                     saveButton
                                 }
                                 .padding(.horizontal, 16)
@@ -866,6 +869,33 @@ private struct SessionDeliveryResultPage: View {
             .foregroundColor(.white)
             .padding(10)
             .background(Circle().fill(Color.black.opacity(0.45)))
+        }
+        .disabled(status == .saving || status == .saved)
+    }
+
+    @ViewBuilder
+    private var compositedExportButton: some View {
+        let status = viewModel.compositedExportStatus
+        Button {
+            liveViewLog.debug("Composited export tapped: deliveryID=\(deliveryID.uuidString.prefix(8), privacy: .public)")
+            Task { await viewModel.exportComposited(for: deliveryID) }
+        } label: {
+            Group {
+                switch status {
+                case .idle:
+                    Image(systemName: "film.stack")
+                case .saving:
+                    ProgressView().tint(.white).scaleEffect(0.7)
+                case .saved:
+                    Image(systemName: "checkmark.circle.fill")
+                case .failed:
+                    Image(systemName: "exclamationmark.triangle")
+                }
+            }
+            .font(.system(size: 18, weight: .semibold))
+            .foregroundColor(.white)
+            .padding(10)
+            .background(Circle().fill(Color(red: 0, green: 0.427, blue: 0.467).opacity(0.85)))
         }
         .disabled(status == .saving || status == .saved)
     }
