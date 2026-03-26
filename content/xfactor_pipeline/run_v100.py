@@ -144,30 +144,33 @@ def call_gemini_flash(video_path: str) -> dict | None:
     sheet_b64 = base64.b64encode(buf).decode("utf-8")
 
     frame_list = "\n".join(f"- F{i+1}: {ts:.2f}s" for i, (ts, _) in enumerate(frames))
-    prompt = f"""This contact sheet shows 6 frames from a cricket bowling clip.
+    prompt = f"""You are analyzing a cricket bowling clip for X-FACTOR measurement (hip-shoulder separation angle).
+
+This contact sheet shows 6 frames:
 {frame_list}
 
-Identify the PRIMARY BOWLER (person actively delivering the ball). Ignore everyone else.
+Task: Identify the PRIMARY BOWLER (person actively delivering the ball) and provide TIGHT timing for the delivery stride only.
 
-Return STRICT JSON only:
+Return STRICT JSON:
 {{
   "bowler_roi": {{"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0}},
   "bowling_arm": "right|left",
-  "action_start": 0.0,
-  "action_end": 0.0,
   "phases": {{
     "back_foot_contact": 0.0,
     "front_foot_contact": 0.0,
     "release": 0.0,
     "follow_through": 0.0
-  }}
+  }},
+  "delivery_roi": {{"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0}}
 }}
 
 Rules:
-- bowler_roi is normalized (0-1), generous padding (15%).
-- action_start: timestamp when the bowler first becomes clearly visible / starts run-up.
-- action_end: timestamp after follow-through completes.
-- Focus ONLY on the person delivering the ball."""
+- bowler_roi: bounding box containing the bowler across ALL frames (generous, 15% padding).
+- delivery_roi: TIGHT bounding box containing the bowler ONLY during the delivery stride (back_foot_contact to release). Exclude bystanders, fielders, batsmen. This should be as tight as possible around the bowler's torso area during the delivery.
+- Phases are timestamps in seconds. Be precise.
+- back_foot_contact: when the bowler's back foot lands at the crease.
+- release: when the ball leaves the hand.
+- Ignore ALL other people in the frame."""
 
     payload = {
         "contents": [{"parts": [
@@ -178,6 +181,8 @@ Rules:
     }
 
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+    # Use Pro for better spatial reasoning if available
+    # url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent?key={api_key}"
     req = urllib.request.Request(url, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
     try:
         log.info("Sending contact sheet to Gemini Flash...")
@@ -650,39 +655,28 @@ def compose_video(frames, peak_frame, phases, output_path, fps):
     log = logging.getLogger("compose")
 
     rendered = []
-
-    # Delivery window for overlay gating
-    ov_start = max(0, phases.get("back_foot_contact", 0) - 0.15)
-    ov_end = phases.get("follow_through", frames[-1]["time"]) + 0.2
     peak_idx = peak_frame["index"] if peak_frame else -1
     peak_sep = peak_frame["separation"] if peak_frame else 0
 
-    # Crop frames to bowling window (action_start → action_end from Flash)
-    action_start = phases.get("_action_start", 0)
-    action_end = phases.get("_action_end", frames[-1]["time"])
-    # Add small buffer before/after
-    clip_start = max(0, action_start - 0.3)
-    clip_end = action_end + 0.3 if action_end else frames[-1]["time"]
+    # Crop to ONLY the delivery stride: BFC → release + tiny buffer
+    # No run-up. No follow-through. Just the X-factor moment.
+    bfc = phases.get("back_foot_contact", 0)
+    release = phases.get("release", phases.get("follow_through", frames[-1]["time"]))
+    clip_start = bfc
+    clip_end = release + 0.2
     bowling_frames = [f for f in frames if clip_start <= f["time"] <= clip_end]
-    if len(bowling_frames) < 10:
-        bowling_frames = frames  # fallback
+    if len(bowling_frames) < 5:
+        bowling_frames = frames
         log.warning("Bowling window too narrow, using all frames")
 
-    log.info(f"Bowling window: {clip_start:.2f}s → {clip_end:.2f}s ({len(bowling_frames)} frames)")
-    log.info(f"Overlay window: {ov_start:.2f}s → {ov_end:.2f}s")
+    # Overlay on ALL frames in the clip (they're all delivery stride)
+    log.info(f"Clip: {clip_start:.2f}s → {clip_end:.2f}s ({len(bowling_frames)} frames)")
     log.info(f"Peak: {peak_sep:.1f}° at frame {peak_idx}")
 
-    # 1. Slo-mo with overlays — directly, no cold open
-    overlay_count = 0
+    # 1. Slo-mo with overlays on every frame (clip IS the delivery stride)
     for f in bowling_frames:
-        in_window = ov_start <= f["time"] <= ov_end
-        if in_window:
-            phase = current_phase(f["time"], phases)
-            annotated = render_overlay(f["frame_bgr"], f["landmarks"], f["separation"], phase)
-            overlay_count += 1
-        else:
-            annotated = f["frame_bgr"]
-
+        phase = current_phase(f["time"], phases)
+        annotated = render_overlay(f["frame_bgr"], f["landmarks"], f["separation"], phase)
         canvas = fit_to_canvas(annotated)
         rendered.extend([canvas] * SLOW_FACTOR)
 
@@ -690,9 +684,9 @@ def compose_video(frames, peak_frame, phases, output_path, fps):
         if f["index"] == peak_idx:
             freeze = make_freeze_card(f["frame_bgr"], peak_sep)
             rendered.extend([freeze] * int(OUTPUT_FPS * 2.5))
-            log.info(f"Freeze card inserted at source t={f['time']:.2f}s")
+            log.info(f"Freeze at t={f['time']:.2f}s, {peak_sep:.1f}°")
 
-    log.info(f"Rendered {len(bowling_frames)} frames, {overlay_count} with overlays")
+    log.info(f"Rendered {len(bowling_frames)} frames, all with overlays")
 
     # 2. Verdict card (5s — the comparison scale, main takeaway)
     verdict_bgr = peak_frame["frame_bgr"] if peak_frame else frames[len(frames)//2]["frame_bgr"]
@@ -735,6 +729,7 @@ def main():
     parser.add_argument("input", help="Input bowling clip (MP4)")
     parser.add_argument("--output", default=None, help="Output path (default: xfactor_output.mp4)")
     parser.add_argument("--skip-gemini", action="store_true", help="Skip Gemini Flash call")
+    parser.add_argument("--use-cache", default=None, help="Path to cached Flash JSON (skip API call)")
     args = parser.parse_args()
 
     input_path = Path(args.input).resolve()
@@ -747,15 +742,26 @@ def main():
     print(f"  Input:  {input_path}")
     print(f"  Output: {output_path}\n")
 
-    # Stage 1: Gemini Flash
+    # Stage 1: Gemini Flash (or cached response)
     bowler_roi = None
     flash_phases = None
-    if not args.skip_gemini:
+    result = None
+    if args.use_cache:
+        t0 = time.time()
+        print("[1/5] Loading cached Flash response...")
+        with open(args.use_cache) as f:
+            result = json.load(f)
+        bowler_roi = result.get("delivery_roi") or result.get("bowler_roi")
+        flash_phases = result.get("phases")
+        print(f"  ROI: {bowler_roi}")
+        print(f"  ({time.time()-t0:.2f}s)\n")
+    elif not args.skip_gemini:
         t0 = time.time()
         print("[1/5] Gemini Flash — identifying bowler...")
         result = call_gemini_flash(str(input_path))
         if result:
-            bowler_roi = result.get("bowler_roi")
+            # Prefer delivery_roi (tight) over bowler_roi (wide) for pose extraction
+            bowler_roi = result.get("delivery_roi") or result.get("bowler_roi")
             flash_phases = result.get("phases")
             action_start = result.get("action_start", 0)
             action_end = result.get("action_end")
