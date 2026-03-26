@@ -458,10 +458,14 @@ def fit_to_canvas(frame_bgr, watermark=True):
     if watermark:
         pil = Image.fromarray(cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB))
         draw = ImageDraw.Draw(pil)
-        font_wm = load_font(16, bold=True)
+        font_wm = load_font(22, bold=True)
         wm = "wellBowled.ai"
         ww = draw.textlength(wm, font=font_wm)
-        draw.text((OUT_W - ww - 20, OUT_H - 22), wm, font=font_wm, fill=(*BRAND_TEAL, 140))
+        wx, wy = OUT_W - ww - 24, OUT_H - 36
+        # Glow effect
+        for dx, dy in [(-1, -1), (-1, 1), (1, -1), (1, 1)]:
+            draw.text((wx + dx, wy + dy), wm, font=font_wm, fill=(0, 60, 65))
+        draw.text((wx, wy), wm, font=font_wm, fill=BRAND_TEAL)
         canvas = cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
 
     return canvas
@@ -636,45 +640,51 @@ def make_verdict_frames(bowling_frames, peak_sep, duration_s=5.0):
 
 
 def make_title_card():
-    """Opening title card — explains what X-factor is and what to watch for."""
+    """Opening title card — big, bright, zero wasted space."""
     pil = Image.new("RGB", (OUT_W, OUT_H), DARK_BG)
     draw = ImageDraw.Draw(pil)
     cx = OUT_W // 2
 
-    f_hook = load_font(48, bold=True)
-    f_sub = load_font(28)
-    f_explain = load_font(22)
+    y = OUT_H // 2 - 280
 
-    y = OUT_H // 2 - 180
+    # Hook — massive
+    f_where = load_font(44)
+    f_pace = load_font(96, bold=True)
+    f_from = load_font(44)
 
-    # Hook question
-    hook = "Where does"
-    draw.text((cx - draw.textlength(hook, font=f_sub) // 2, y), hook, font=f_sub, fill=LIGHT_GREY)
-    y += 40
-
-    pace = "PACE"
-    draw.text((cx - draw.textlength(pace, font=f_hook) // 2, y), pace, font=f_hook, fill=WHITE)
+    draw.text((cx - draw.textlength("Where does", font=f_where) // 2, y), "Where does", font=f_where, fill=WHITE)
     y += 60
+    draw.text((cx - draw.textlength("PACE", font=f_pace) // 2, y), "PACE", font=f_pace, fill=ACCENT_RED)
+    y += 110
+    draw.text((cx - draw.textlength("come from?", font=f_from) // 2, y), "come from?", font=f_from, fill=WHITE)
+    y += 90
 
-    come = "come from?"
-    draw.text((cx - draw.textlength(come, font=f_sub) // 2, y), come, font=f_sub, fill=LIGHT_GREY)
+    # Hip vs Shoulder — big colored labels
+    f_vs = load_font(32, bold=True)
+    f_label = load_font(28, bold=True)
+    draw.ellipse((cx - 160, y + 4, cx - 140, y + 24), fill=HIP_COLOR)
+    draw.text((cx - 132, y), "Hips", font=f_label, fill=HIP_COLOR)
+    draw.text((cx - 20, y), "vs", font=f_vs, fill=(100, 110, 120))
+    draw.ellipse((cx + 50, y + 4, cx + 70, y + 24), fill=SHOULDER_COLOR)
+    draw.text((cx + 78, y), "Shoulders", font=f_label, fill=SHOULDER_COLOR)
     y += 70
 
-    # Visual explanation
-    draw.ellipse((cx - 80, y, cx - 66, y + 14), fill=HIP_COLOR)
-    draw.text((cx - 58, y - 1), "Hips", font=load_font(20, bold=True), fill=HIP_COLOR)
-    draw.text((cx + 10, y - 1), "vs", font=load_font(20), fill=LIGHT_GREY)
-    draw.ellipse((cx + 40, y, cx + 54, y + 14), fill=SHOULDER_COLOR)
-    draw.text((cx + 62, y - 1), "Shoulders", font=load_font(20, bold=True), fill=SHOULDER_COLOR)
-    y += 50
+    # Tagline
+    f_tag = load_font(32)
+    tag = "The bigger the gap,"
+    draw.text((cx - draw.textlength(tag, font=f_tag) // 2, y), tag, font=f_tag, fill=(220, 228, 240))
+    y += 42
+    tag2 = "the faster the ball."
+    draw.text((cx - draw.textlength(tag2, font=f_tag) // 2, y), tag2, font=f_tag, fill=(220, 228, 240))
 
-    # One-liner
-    exp = "The bigger the gap, the faster the ball."
-    draw.text((cx - draw.textlength(exp, font=f_explain) // 2, y), exp, font=f_explain, fill=(200, 208, 220))
-
-    # Brand
-    f_brand = load_font(18, bold=True)
-    draw.text((cx - draw.textlength("wellBowled.ai", font=f_brand) // 2, OUT_H - 80), "wellBowled.ai", font=f_brand, fill=BRAND_TEAL)
+    # Brand — luminous, prominent
+    f_brand = load_font(36, bold=True)
+    brand = "wellBowled.ai"
+    bw = draw.textlength(brand, font=f_brand)
+    # Glow effect: draw text slightly larger in teal with blur, then sharp on top
+    for dx, dy in [(-1, -1), (-1, 1), (1, -1), (1, 1), (0, -2), (0, 2), (-2, 0), (2, 0)]:
+        draw.text((cx - bw // 2 + dx, OUT_H - 120 + dy), brand, font=f_brand, fill=(0, 80, 90))
+    draw.text((cx - bw // 2, OUT_H - 120), brand, font=f_brand, fill=BRAND_TEAL)
 
     return cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
 
@@ -724,11 +734,11 @@ def compose_video(frames, peak_frame, phases, output_path, fps):
     # No run-up. No follow-through. Just the X-factor moment.
     bfc = phases.get("back_foot_contact", 0)
     release = phases.get("release", phases.get("follow_through", frames[-1]["time"]))
-    # End at peak X-factor frame + tiny buffer — that's the money shot
-    # Don't trust Flash release timing, trust the actual data
+    # End at peak X-factor frame + buffer
+    # Ensure minimum 0.5s source footage (= 2s at 0.25x)
     peak_time = peak_frame["time"] if peak_frame else release
-    clip_start = bfc
-    clip_end = peak_time + 0.15  # just past peak, then freeze card takes over
+    clip_start = max(0, bfc - 0.1)  # tiny lead-in to see the stride begin
+    clip_end = max(peak_time + 0.2, clip_start + 0.5)  # at least 0.5s source
     bowling_frames = [f for f in frames if clip_start <= f["time"] <= clip_end]
     if len(bowling_frames) < 5:
         bowling_frames = frames
@@ -828,8 +838,8 @@ def main():
         print("[1/5] Gemini Flash — identifying bowler...")
         result = call_gemini_flash(str(input_path))
         if result:
-            # Prefer delivery_roi (tight) over bowler_roi (wide) for pose extraction
-            bowler_roi = result.get("delivery_roi") or result.get("bowler_roi")
+            # Use bowler_roi (wider) for pose extraction — delivery_roi was too tight
+            bowler_roi = result.get("bowler_roi")
             flash_phases = result.get("phases")
             action_start = result.get("action_start", 0)
             action_end = result.get("action_end")
