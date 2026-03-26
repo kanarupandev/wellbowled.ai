@@ -75,6 +75,23 @@ Primary documents:
 Read-only UX reference (flow only, no theme copy):
 - `/Users/kanarupan/workspace/obsolete-wellbowled-alpha/`
 
+## Content Pipelines (Video Analysis)
+
+Path:
+`/Users/kanarupan/workspace/wellbowled.ai/content/`
+
+Each pipeline takes a 3-10s bowling clip → upload-ready 9:16 Instagram Reel (1080×1920, H.264, 30fps).
+
+| Pipeline | Path | Status | Output |
+|----------|------|--------|--------|
+| **X-Factor** | `content/xfactor_pipeline/` | Done | Hip-shoulder separation overlay, peak freeze, verdict card |
+| **Kinogram** | `content/kinogram_pipeline/` | POC — needs 7 fixes (see `IMPROVEMENTS.md`) | 7-phase stroboscopic composite with color-coded skeletons |
+| **Goniogram** | `content/goniogram_pipeline/` | Done | Elbow extension + knee brace arcs, centroid-tracked bowler |
+
+Shared dependencies: MediaPipe PoseLandmarker (heavy model), OpenCV, Pillow, FFmpeg, google-generativeai.
+Shared venv: symlinked from `xfactor_pipeline/.venv`.
+Input sample: `resources/samples/3_sec_1_delivery_nets.mp4`.
+
 ## Archived Areas
 
 Paths:

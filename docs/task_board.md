@@ -12,8 +12,12 @@
 
 | ID | Task | Owner | Branch | Status |
 |----|------|-------|--------|--------|
+| T10 | Kinogram mandatory improvements (7 fixes) | — | codex/dev | Planned — see `content/kinogram_pipeline/IMPROVEMENTS.md` |
 
 ## Done
 
 | ID | Task | Reviewed By | Merged |
 |----|------|-------------|--------|
+| T7 | X-Factor pipeline — hip-shoulder separation reel | Claude | codex/dev | ✅ `1cbe661` |
+| T8 | Kinogram pipeline — stroboscopic composite (POC) | Claude | codex/dev | ✅ `439c11e` |
+| T9 | Goniogram pipeline — joint angle overlay reel | Claude | codex/dev | ✅ `cbc10b6` |

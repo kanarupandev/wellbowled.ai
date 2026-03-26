@@ -77,14 +77,27 @@ Raw footage (net session recording)
 | Batch segment planning | Working | DeliveryBatchPlanner.swift |
 | Expert analysis → color map | Working | ExpertAnalysisBuilder.swift |
 
-## What Needs Building
+## Server-Side Pipelines (Built)
+
+Three standalone Python pipelines now exist in `content/`:
+
+| Pipeline | What It Does | Key Tech | Status |
+|----------|-------------|----------|--------|
+| **X-Factor** (`xfactor_pipeline/`) | Hip-shoulder separation angle overlay + peak freeze + verdict card | MediaPipe pose → angle math → OpenCV overlay → FFmpeg encode | Done — upload-ready |
+| **Kinogram** (`kinogram_pipeline/`) | 7-phase stroboscopic composite with color-coded skeletons | MediaPipe pose+segmentation → multi-figure composite → animated reveal | POC — 7 mandatory fixes in `IMPROVEMENTS.md` |
+| **Goniogram** (`goniogram_pipeline/`) | Elbow extension + front knee brace arcs with color-coded verdicts | MediaPipe pose → joint angle math → arc overlay → centroid tracking | Done — upload-ready |
+
+Each pipeline: input clip → 9:16 reel (1080×1920, H.264, 30fps) with FFmpeg-based QA review.
+
+## What Still Needs Building
 
 | Component | Approach | Effort |
 |-----------|----------|--------|
-| **Video compositor** | AVVideoComposition + custom compositor to burn overlays into MP4 (or FFmpeg server-side) | Medium |
+| **Kinogram 7 fixes** | Bystander removal, horizontal separation, tint reduction, background brightness, phase accuracy, Playwright QA, animation pacing | Medium |
 | **Content ranker** | Score deliveries by analysis richness, pick top 2. Start with heuristic, graduate to Gemini ranking prompt | Small |
 | **Approval UI** | Minimal screen: 2 video previews, approve/reject buttons, optional caption field | Small |
 | **Caption generator** | Gemini prompt: given analysis JSON, write a 1-2 line Instagram caption | Small |
+| **Additional video types** | Wrist trail/gradient, release point mapping, stride length, arm speed curve — see competitive gap analysis | Medium–Large |
 
 ## Automation Progression
 
