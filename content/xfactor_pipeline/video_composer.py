@@ -181,16 +181,18 @@ def make_verdict_card(
     font_note = _load_font(16, bold=False)
 
     cx = OUT_W // 2
+    # Vertically center the content block (approx 500px tall) in the canvas
+    base_y = (OUT_H - 500) // 2
 
     # Title
     title = "X-FACTOR VERDICT"
     tw = draw.textlength(title, font=font_title)
-    draw.text((cx - tw // 2, 100), title, font=font_title, fill=ACCENT_RED)
+    draw.text((cx - tw // 2, base_y), title, font=font_title, fill=ACCENT_RED)
 
     # Angle line
     angle_text = f"{peak_separation:.0f}\u00b0 peak separation"
     atw = draw.textlength(angle_text, font=font_body)
-    draw.text((cx - atw // 2, 150), angle_text, font=font_body, fill=WHITE)
+    draw.text((cx - atw // 2, base_y + 50), angle_text, font=font_body, fill=WHITE)
 
     # Rating
     if peak_separation >= 45:
@@ -207,10 +209,10 @@ def make_verdict_card(
         rating_note = "Focus on hip pre-rotation drills"
 
     rtw = draw.textlength(rating, font=font_title)
-    draw.text((cx - rtw // 2, 190), rating, font=font_title, fill=rating_color)
+    draw.text((cx - rtw // 2, base_y + 90), rating, font=font_title, fill=rating_color)
 
     # --- Comparison scale bar ---
-    bar_y = 250
+    bar_y = base_y + 150
     bar_x = 60
     bar_w = OUT_W - 120
     bar_h = 40
@@ -341,9 +343,11 @@ def compose_video(
     overlay_end = phases.get("follow_through", frames[-1]["time"] if frames else 1.0) + 0.2
 
     # -----------------------------------------------------------------------
-    # 1. COLD OPEN -- all frames at 1x speed, raw footage
+    # 1. COLD OPEN -- all frames at 1x speed, raw footage (cap at ~2s)
     # -----------------------------------------------------------------------
-    for frame in frames:
+    max_cold_open_frames = int(OUTPUT_FPS * 2.0)  # 2s max
+    cold_open_count = min(len(frames), max_cold_open_frames)
+    for frame in frames[:cold_open_count]:
         canvas = _make_cold_open_frame(frame["frame_bgr"])
         rendered_frames.append(canvas)
 
@@ -450,7 +454,7 @@ def _reencode_for_youtube(input_path: str, output_path: str):
         "-map", "0:v:0", "-map", "1:a:0",
         "-c:v", "libx264",
         "-preset", "medium",
-        "-crf", "17",
+        "-crf", "15",
         "-pix_fmt", "yuv420p",
         "-movflags", "+faststart",
         "-shortest",
