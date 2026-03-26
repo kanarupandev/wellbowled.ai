@@ -1,134 +1,140 @@
-"""Stage 4: Compute hip-shoulder separation (X-Factor) per frame."""
+"""X-factor computation: hip-shoulder separation with smoothing and noise rejection.
+
+Features from the production linux pipeline:
+- Median smoothing (window 5)
+- Capping at 60 degrees
+- Side-on noise rejection (MIN_LINE_SPREAD 0.03)
+- Heuristic phase detection from separation curve
+"""
 from __future__ import annotations
 
-import json
 import math
-from pathlib import Path
 
-OUTPUT_DIR = Path(__file__).resolve().parent / "output"
-POSE_FILE = OUTPUT_DIR / "pose_data.json"
-PLAN_FILE = OUTPUT_DIR / "flash_plan.json"
-XFACTOR_FILE = OUTPUT_DIR / "xfactor_data.json"
+LEFT_SHOULDER = 11
+RIGHT_SHOULDER = 12
+LEFT_HIP = 23
+RIGHT_HIP = 24
 
-# Landmark indices
-L_HIP, R_HIP = 23, 24
-L_SHOULDER, R_SHOULDER = 11, 12
+# Visibility threshold for x-factor joints
+XFACTOR_VISIBILITY_THRESHOLD = 0.5
 
-# Reasonable X-Factor range for cricket bowling
-MAX_REASONABLE_SEPARATION = 80.0  # degrees
-MIN_VISIBILITY = 0.5  # landmark confidence threshold
+# Max plausible x-factor angle
+MAX_PLAUSIBLE_SEPARATION = 60.0
 
+# Minimum horizontal spread to accept a hip/shoulder line
+# Rejects side-on views where left/right collapse to same point
+MIN_LINE_SPREAD = 0.03  # 3% of frame dimension
 
-def compute_angle(p1: dict, p2: dict) -> float:
-    """Angle of line p1→p2 from horizontal, in degrees."""
-    return math.degrees(math.atan2(p2["y"] - p1["y"], p2["x"] - p1["x"]))
-
-
-def landmarks_visible(lm: list[dict], indices: list[int], threshold: float = MIN_VISIBILITY) -> bool:
-    """Check all specified landmarks meet visibility threshold."""
-    return all(lm[i]["visibility"] >= threshold for i in indices)
+# Temporal median smoothing window
+SMOOTH_WINDOW = 5
 
 
-def run() -> dict:
-    pose_data = json.loads(POSE_FILE.read_text())
+def _line_angle_deg(
+    p1: tuple[float, float, float],
+    p2: tuple[float, float, float],
+) -> float | None:
+    """Angle of line p1->p2 from horizontal, in degrees.
 
-    # Load phases for labelling
-    plan = {}
-    if PLAN_FILE.exists():
-        plan = json.loads(PLAN_FILE.read_text())
-    phases = plan.get("phases", {})
+    Returns None if landmarks aren't visible or line is too short (side-on noise).
+    """
+    if p1[2] < XFACTOR_VISIBILITY_THRESHOLD or p2[2] < XFACTOR_VISIBILITY_THRESHOLD:
+        return None
+    if abs(p2[0] - p1[0]) < MIN_LINE_SPREAD and abs(p2[1] - p1[1]) < MIN_LINE_SPREAD:
+        return None
+    return math.degrees(math.atan2(p2[1] - p1[1], p2[0] - p1[0]))
 
-    frames = []
-    peak_sep = 0.0
-    peak_idx = 0
 
-    for i, fd in enumerate(pose_data):
-        lm = fd.get("landmarks")
-        entry = {
-            "frame": fd["frame"],
-            "frame_index": i,
-            "time_s": round(i / 10.0, 2),  # 10fps extraction
-            "hip_angle": None,
-            "shoulder_angle": None,
-            "separation": None,
-            "phase": None,
-            "reliable": False,
+def _median(values: list[float]) -> float:
+    s = sorted(values)
+    n = len(s)
+    if n % 2 == 1:
+        return s[n // 2]
+    return (s[n // 2 - 1] + s[n // 2]) / 2
+
+
+def compute_xfactor(frames: list[dict]) -> list[dict]:
+    """Add x-factor data to each frame dict.
+
+    Adds:
+        hip_angle, shoulder_angle, separation_raw, separation (smoothed+capped)
+    """
+    # Pass 1: raw angles
+    for frame in frames:
+        pts = frame.get("landmarks")
+        if pts is None:
+            frame["hip_angle"] = None
+            frame["shoulder_angle"] = None
+            frame["separation_raw"] = None
+            frame["separation"] = None
+            continue
+
+        hip_angle = _line_angle_deg(pts[LEFT_HIP], pts[RIGHT_HIP])
+        shoulder_angle = _line_angle_deg(pts[LEFT_SHOULDER], pts[RIGHT_SHOULDER])
+
+        if hip_angle is not None and shoulder_angle is not None:
+            sep = abs(hip_angle - shoulder_angle)
+            if sep > 180:
+                sep = 360 - sep
+            sep = min(sep, MAX_PLAUSIBLE_SEPARATION)
+        else:
+            sep = None
+
+        frame["hip_angle"] = hip_angle
+        frame["shoulder_angle"] = shoulder_angle
+        frame["separation_raw"] = sep
+        frame["separation"] = sep
+
+    # Pass 2: temporal median smoothing
+    raw_values = [f["separation_raw"] for f in frames]
+    half_w = SMOOTH_WINDOW // 2
+    smoothed = []
+    for i in range(len(frames)):
+        window = []
+        for j in range(max(0, i - half_w), min(len(frames), i + half_w + 1)):
+            if raw_values[j] is not None:
+                window.append(raw_values[j])
+        if window:
+            smoothed.append(_median(window))
+        else:
+            smoothed.append(None)
+
+    for i, frame in enumerate(frames):
+        frame["separation"] = smoothed[i]
+
+    return frames
+
+
+def find_peak_separation(frames: list[dict]) -> dict | None:
+    """Frame with maximum smoothed hip-shoulder separation."""
+    valid = [f for f in frames if f.get("separation") is not None]
+    if not valid:
+        return None
+    return max(valid, key=lambda f: f["separation"])
+
+
+def detect_phases_heuristic(frames: list[dict]) -> dict:
+    """Heuristic phase detection from the separation curve.
+
+    Returns dict with phase timestamps:
+        back_foot_contact, front_foot_contact, release, follow_through
+    """
+    valid = [f for f in frames if f.get("separation") is not None]
+    total_time = frames[-1]["time"] if frames else 1.0
+
+    if not valid:
+        return {
+            "back_foot_contact": 0.0,
+            "front_foot_contact": total_time * 0.35,
+            "release": total_time * 0.5,
+            "follow_through": total_time * 0.7,
         }
 
-        if lm and landmarks_visible(lm, [L_HIP, R_HIP, L_SHOULDER, R_SHOULDER]):
-            lh, rh = lm[L_HIP], lm[R_HIP]
-            ls, rs = lm[L_SHOULDER], lm[R_SHOULDER]
+    peak = find_peak_separation(frames)
+    peak_time = peak["time"]
 
-            hip_angle = compute_angle(lh, rh)
-            shoulder_angle = compute_angle(ls, rs)
-
-            # Handle angle wrapping
-            raw_sep = abs(hip_angle - shoulder_angle)
-            if raw_sep > 180:
-                raw_sep = 360 - raw_sep
-
-            entry["hip_angle"] = round(hip_angle, 1)
-            entry["shoulder_angle"] = round(shoulder_angle, 1)
-            entry["separation"] = round(raw_sep, 1)
-            entry["reliable"] = raw_sep <= MAX_REASONABLE_SEPARATION
-
-            # Only consider reliable frames during delivery for peak
-            # X-Factor peaks between back_foot_contact and follow_through
-            if entry["reliable"] and raw_sep > peak_sep:
-                t_bfc = phases.get("back_foot_contact", 0.0)
-                t_ft = phases.get("follow_through", 999)
-                if t_bfc <= entry["time_s"] <= t_ft:
-                    peak_sep = raw_sep
-                    peak_idx = i
-
-        # Determine current phase
-        t = entry["time_s"]
-        if phases:
-            if t < phases.get("back_foot_contact", 999):
-                entry["phase"] = "RUN_UP"
-            elif t < phases.get("front_foot_contact", 999):
-                entry["phase"] = "BACK_FOOT_CONTACT"
-            elif t < phases.get("front_foot_contact", 999) + 0.3:
-                entry["phase"] = "FRONT_FOOT_CONTACT"
-            elif t < phases.get("release", 999):
-                entry["phase"] = "FRONT_FOOT_CONTACT"
-            elif t < phases.get("follow_through", 999):
-                entry["phase"] = "RELEASE"
-            else:
-                entry["phase"] = "FOLLOW_THROUGH"
-
-        frames.append(entry)
-
-    result = {
-        "frames": frames,
-        "peak_separation_frame": peak_idx,
-        "peak_separation_angle": round(peak_sep, 1),
-        "peak_frame_name": frames[peak_idx]["frame"] if frames else None,
-        "peak_time_s": frames[peak_idx]["time_s"] if frames else None,
-        "peak_phase": frames[peak_idx]["phase"] if frames else None,
-        "reliable_frames": sum(1 for f in frames if f["reliable"]),
-        "total_frames": len(frames),
+    return {
+        "back_foot_contact": max(0.0, peak_time - 0.4),
+        "front_foot_contact": max(0.0, peak_time - 0.1),
+        "release": peak_time,
+        "follow_through": min(total_time, peak_time + 0.3),
     }
-
-    print(f"  Peak X-Factor: {peak_sep:.1f}° at frame {peak_idx} ({result['peak_time_s']}s)")
-    print(f"  Phase at peak: {result['peak_phase']}")
-    print(f"  Reliable frames: {result['reliable_frames']}/{result['total_frames']}")
-
-    with open(XFACTOR_FILE, "w") as f:
-        json.dump(result, f, indent=2)
-
-    return result
-
-
-if __name__ == "__main__":
-    result = run()
-    for f in result["frames"]:
-        sep = f["separation"]
-        if sep is not None:
-            marker = ""
-            if f["frame_index"] == result["peak_separation_frame"]:
-                marker = " ◄ PEAK"
-            elif not f["reliable"]:
-                marker = " (noisy)"
-            bar = "█" * min(int(sep), 60)
-            print(f"  {f['time_s']:5.2f}s  {sep:5.1f}°  {bar}{marker}")

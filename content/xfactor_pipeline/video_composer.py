@@ -1,269 +1,460 @@
-"""Stage 6: Compose final 9:16 video with speed changes, freeze, and cards."""
+"""Video composer: assemble cold open, slo-mo, freeze, verdict, end card.
+
+All text via Pillow with Liberation Sans. FFmpeg re-encode for YouTube.
+"""
 from __future__ import annotations
 
-import json
-import os
 import subprocess
-import tempfile
 from pathlib import Path
 
 import cv2
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
-OUTPUT_DIR = Path(__file__).resolve().parent / "output"
-FRAMES_DIR = OUTPUT_DIR / "frames"
-ANNOTATED_DIR = OUTPUT_DIR / "annotated"
-XFACTOR_FILE = OUTPUT_DIR / "xfactor_data.json"
-METADATA_FILE = OUTPUT_DIR / "clip_metadata.json"
-INSIGHT_FILE = OUTPUT_DIR / "pro_insight.json"
-INPUT_CLIP = Path(__file__).resolve().parents[2] / "resources" / "samples" / "3_sec_1_delivery_nets.mp4"
-FINAL_VIDEO = OUTPUT_DIR / "final.mp4"
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+BG_DARK = (10, 14, 20)       # #0A0E14
+BG_BRAND = (13, 17, 23)      # #0D1117
+WHITE = (255, 255, 255)
+LIGHT_GREY = (180, 190, 200)  # #B4BEC8
+ACCENT_RED = (255, 80, 64)    # #FF5040
+BRAND_TEAL = (0, 109, 119)    # #006D77
+HIP_COLOR = (255, 105, 180)
+SHOULDER_COLOR = (0, 206, 209)
 
-# Target output dimensions (9:16 portrait for Instagram)
 OUT_W, OUT_H = 1080, 1920
-FPS = 30
-
-# Brand colors
-DARK_BG_RGB = (13, 17, 23)
-PEACOCK_RGB = (0, 109, 119)
-WHITE_RGB = (255, 255, 255)
-GOLD_RGB = (255, 215, 0)
+OUTPUT_FPS = 30.0
+SLOW_FACTOR = 4  # 0.25x
 
 
-def load_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    candidates = []
-    if bold:
-        candidates.extend([
-            "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
-            "/System/Library/Fonts/Supplemental/Helvetica.ttc",
-        ])
-    candidates.extend([
-        "/System/Library/Fonts/Supplemental/Arial.ttf",
-        "/System/Library/Fonts/Supplemental/Helvetica.ttc",
-    ])
+# ---------------------------------------------------------------------------
+# Font helper (Linux paths)
+# ---------------------------------------------------------------------------
+_font_cache: dict = {}
+
+
+def _load_font(size: int, bold: bool = False):
+    key = (size, bold)
+    if key in _font_cache:
+        return _font_cache[key]
+    candidates = [
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf" if bold
+        else "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold
+        else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    ]
     for c in candidates:
-        if os.path.exists(c):
+        if Path(c).exists():
             try:
-                return ImageFont.truetype(c, size=size)
+                font = ImageFont.truetype(c, size=size)
+                _font_cache[key] = font
+                return font
             except OSError:
-                continue
-    return ImageFont.load_default()
+                pass
+    font = ImageFont.load_default()
+    _font_cache[key] = font
+    return font
 
 
-def fit_frame_to_canvas(frame: np.ndarray, canvas_w: int = OUT_W, canvas_h: int = OUT_H) -> np.ndarray:
-    """Scale and letterbox/pillarbox a frame to fit the target canvas."""
-    h, w = frame.shape[:2]
-    scale = min(canvas_w / w, canvas_h / h)
-    new_w, new_h = int(w * scale), int(h * scale)
-    resized = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_LANCZOS4)
+def _wrap_text(draw: ImageDraw.ImageDraw, text: str, font, max_width: int) -> list[str]:
+    words = text.split()
+    if not words:
+        return []
+    lines = [words[0]]
+    for word in words[1:]:
+        trial = f"{lines[-1]} {word}"
+        if draw.textlength(trial, font=font) <= max_width:
+            lines[-1] = trial
+        else:
+            lines.append(word)
+    return lines
 
-    canvas = np.zeros((canvas_h, canvas_w, 3), dtype=np.uint8)
-    canvas[:] = (13, 17, 23)  # dark bg in BGR
-    x_off = (canvas_w - new_w) // 2
-    y_off = (canvas_h - new_h) // 2
-    canvas[y_off:y_off + new_h, x_off:x_off + new_w] = resized
+
+# ---------------------------------------------------------------------------
+# Canvas helpers
+# ---------------------------------------------------------------------------
+def _make_canvas() -> Image.Image:
+    return Image.new("RGB", (OUT_W, OUT_H), BG_DARK)
+
+
+def fit_frame_to_canvas(frame_bgr: np.ndarray) -> tuple[Image.Image, int]:
+    """Fit a BGR frame into 9:16 canvas. Returns (canvas, y_offset)."""
+    frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+    img = Image.fromarray(frame_rgb)
+    fw, fh = img.size
+
+    scale = OUT_W / fw
+    new_w = OUT_W
+    new_h = int(fh * scale)
+    img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+
+    canvas = _make_canvas()
+    y_offset = (OUT_H - new_h) // 2
+    canvas.paste(img, (0, y_offset))
+    return canvas, y_offset
+
+
+# ---------------------------------------------------------------------------
+# Card generators
+# ---------------------------------------------------------------------------
+def _make_cold_open_frame(frame_bgr: np.ndarray) -> Image.Image:
+    """Cold open: raw frame with 'WATCH THE HIPS' pill at bottom."""
+    canvas, y_off = fit_frame_to_canvas(frame_bgr)
+    draw = ImageDraw.Draw(canvas)
+    font = _load_font(24, bold=True)
+
+    label = "WATCH THE HIPS"
+    tw = draw.textlength(label, font=font)
+    pw = int(tw + 32)
+    ph = 40
+    px = OUT_W // 2 - pw // 2
+    py = OUT_H - 100
+    draw.rounded_rectangle(
+        (px, py, px + pw, py + ph), radius=14, fill=(10, 14, 20, 200),
+    )
+    draw.text((px + 16, py + 10), label, font=font, fill=WHITE)
     return canvas
 
 
-def make_text_card(text_lines: list[str], duration_s: float, font_size: int = 40,
-                   bg_color: tuple = DARK_BG_RGB, text_color: tuple = WHITE_RGB) -> list[np.ndarray]:
-    """Generate frames for a text card."""
-    pil_img = Image.new("RGB", (OUT_W, OUT_H), bg_color)
-    draw = ImageDraw.Draw(pil_img)
-    font = load_font(font_size, bold=True)
-    font_small = load_font(font_size - 8, bold=False)
+def make_freeze_card(
+    frame_bgr: np.ndarray,
+    peak_separation: float,
+) -> Image.Image:
+    """Freeze frame at peak: 65% dark overlay, PEAK X-FACTOR + big angle."""
+    canvas, _ = fit_frame_to_canvas(frame_bgr)
+    overlay = Image.new("RGB", (OUT_W, OUT_H), BG_DARK)
+    canvas = Image.blend(canvas, overlay, 0.65)
+    draw = ImageDraw.Draw(canvas)
 
-    total_height = 0
-    line_data = []
-    for i, line in enumerate(text_lines):
-        f = font if i == 0 else font_small
-        bbox = draw.textbbox((0, 0), line, font=f)
-        tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-        line_data.append((line, f, tw, th))
-        total_height += th + 16
+    font_huge = _load_font(72, bold=True)
+    font_label = _load_font(28, bold=True)
+    font_sub = _load_font(22, bold=False)
 
-    y = (OUT_H - total_height) // 2
-    for line, f, tw, th in line_data:
-        x = (OUT_W - tw) // 2
-        draw.text((x, y), line, fill=text_color, font=f)
-        y += th + 16
+    cx = OUT_W // 2
+    cy = OUT_H // 2 - 60
 
-    frame = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
-    return [frame] * int(duration_s * FPS)
+    # "PEAK X-FACTOR" label
+    peak_label = "PEAK X-FACTOR"
+    ptw = draw.textlength(peak_label, font=font_label)
+    draw.text((cx - ptw // 2, cy - 50), peak_label, font=font_label, fill=WHITE)
 
+    # Big angle number
+    angle_text = f"{peak_separation:.0f}\u00b0"
+    tw = draw.textlength(angle_text, font=font_huge)
+    draw.text((cx - tw // 2, cy), angle_text, font=font_huge, fill=ACCENT_RED)
 
-def make_end_card(duration_s: float = 1.5) -> list[np.ndarray]:
-    """wellBowled.ai end card."""
-    pil_img = Image.new("RGB", (OUT_W, OUT_H), DARK_BG_RGB)
-    draw = ImageDraw.Draw(pil_img)
+    # Sub text
+    sub = "hip-shoulder separation"
+    stw = draw.textlength(sub, font=font_sub)
+    draw.text((cx - stw // 2, cy + 80), sub, font=font_sub, fill=LIGHT_GREY)
 
-    font_brand = load_font(56, bold=True)
-    font_tag = load_font(28, bold=False)
+    # Legend at bottom
+    ly = OUT_H - 80
+    font_leg = _load_font(18, bold=False)
+    draw.ellipse((cx - 110, ly, cx - 96, ly + 14), fill=HIP_COLOR)
+    draw.text((cx - 88, ly - 1), "hips", font=font_leg, fill=(200, 200, 200))
+    draw.ellipse((cx + 20, ly, cx + 34, ly + 14), fill=SHOULDER_COLOR)
+    draw.text((cx + 42, ly - 1), "shoulders", font=font_leg, fill=(200, 200, 200))
 
-    # Brand name
-    text = "wellBowled.ai"
-    bbox = draw.textbbox((0, 0), text, font=font_brand)
-    tw = bbox[2] - bbox[0]
-    draw.text(((OUT_W - tw) // 2, OUT_H // 2 - 40), text, fill=PEACOCK_RGB, font=font_brand)
-
-    # Tagline
-    tag = "Cricket biomechanics, visualized"
-    bbox = draw.textbbox((0, 0), tag, font=font_tag)
-    tw = bbox[2] - bbox[0]
-    draw.text(((OUT_W - tw) // 2, OUT_H // 2 + 30), tag, fill=WHITE_RGB, font=font_tag)
-
-    frame = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
-    return [frame] * int(duration_s * FPS)
+    return canvas
 
 
-def make_legend_bar(frame: np.ndarray) -> np.ndarray:
-    """Add a color legend bar at the bottom of a frame."""
-    pil_img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-    draw = ImageDraw.Draw(pil_img)
-    font = load_font(20, bold=False)
+def make_verdict_card(
+    frame_bgr: np.ndarray,
+    peak_separation: float,
+    insight_lines: list[str],
+) -> Image.Image:
+    """Verdict card: blurred bg, rating, comparison scale bar, coaching insight."""
+    frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+    bg = Image.fromarray(frame_rgb).resize((OUT_W, OUT_H), Image.Resampling.LANCZOS)
+    bg = bg.filter(ImageFilter.GaussianBlur(radius=6))
+    overlay = Image.new("RGB", (OUT_W, OUT_H), BG_DARK)
+    canvas = Image.blend(bg, overlay, 0.75)
+    draw = ImageDraw.Draw(canvas)
 
-    bar_y = OUT_H - 50
-    # Pink = Hips
-    draw.rectangle([OUT_W // 2 - 200, bar_y, OUT_W // 2 - 170, bar_y + 20], fill=(255, 105, 180))
-    draw.text((OUT_W // 2 - 165, bar_y - 2), "Hips", fill=WHITE_RGB, font=font)
+    font_title = _load_font(36, bold=True)
+    font_body = _load_font(20, bold=False)
+    font_label = _load_font(16, bold=True)
+    font_brand = _load_font(14, bold=False)
+    font_ref = _load_font(14, bold=False)
+    font_note = _load_font(16, bold=False)
 
-    # Cyan = Shoulders
-    draw.rectangle([OUT_W // 2 + 40, bar_y, OUT_W // 2 + 70, bar_y + 20], fill=(0, 206, 209))
-    draw.text((OUT_W // 2 + 75, bar_y - 2), "Shoulders", fill=WHITE_RGB, font=font)
+    cx = OUT_W // 2
 
-    return cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
+    # Title
+    title = "X-FACTOR VERDICT"
+    tw = draw.textlength(title, font=font_title)
+    draw.text((cx - tw // 2, 100), title, font=font_title, fill=ACCENT_RED)
 
+    # Angle line
+    angle_text = f"{peak_separation:.0f}\u00b0 peak separation"
+    atw = draw.textlength(angle_text, font=font_body)
+    draw.text((cx - atw // 2, 150), angle_text, font=font_body, fill=WHITE)
 
-def run() -> Path:
-    xfactor = json.loads(XFACTOR_FILE.read_text())
-    peak_idx = xfactor["peak_separation_frame"]
-    peak_angle = xfactor["peak_separation_angle"]
+    # Rating
+    if peak_separation >= 45:
+        rating, rating_color = "ELITE", (100, 255, 100)
+        rating_note = "World-class rotational mechanics"
+    elif peak_separation >= 35:
+        rating, rating_color = "VERY GOOD", (130, 230, 130)
+        rating_note = "Strong rotational mechanics"
+    elif peak_separation >= 28:
+        rating, rating_color = "DEVELOPING", (255, 220, 80)
+        rating_note = "Room to lead more with the hip"
+    else:
+        rating, rating_color = "WORK ON IT", (255, 140, 60)
+        rating_note = "Focus on hip pre-rotation drills"
 
-    # Load insight text
-    insight_lines = []
-    if INSIGHT_FILE.exists():
-        insight = json.loads(INSIGHT_FILE.read_text())
-        insight_lines = [insight.get("hook", ""), insight.get("explanation", ""), insight.get("verdict", "")]
-        insight_lines = [l for l in insight_lines if l]
+    rtw = draw.textlength(rating, font=font_title)
+    draw.text((cx - rtw // 2, 190), rating, font=font_title, fill=rating_color)
 
-    if not insight_lines:
-        # Fallback based on angle
-        if peak_angle > 40:
-            insight_lines = ["Elite separation.", "This is where express pace comes from."]
-        elif peak_angle > 25:
-            insight_lines = ["Good separation.", "Room to unlock more pace with hip mobility work."]
-        else:
-            insight_lines = ["Limited separation.", "Hip mobility and delayed shoulder rotation", "are the keys to more speed."]
-
-    # Load raw frames (for full-speed intro)
-    raw_frames = sorted(FRAMES_DIR.glob("frame_*.jpg"))
-    annotated_frames = sorted(ANNOTATED_DIR.glob("frame_*.jpg"))
-
-    all_output_frames = []
-
-    # --- Segment 1: Full speed raw (first ~1.5s worth of raw frames) ---
-    # Raw frames are at 10fps, we need 30fps → triplicate each
-    intro_count = min(15, len(raw_frames))  # ~1.5s at 10fps
-    print(f"  Seg 1 (intro): {intro_count} raw frames → {intro_count * 3} output frames")
-    for i in range(intro_count):
-        img = cv2.imread(str(raw_frames[i]))
-        canvas = fit_frame_to_canvas(img)
-
-        # Add "Watch the hips and shoulders" text on first few frames
-        if i < 10:
-            pil = Image.fromarray(cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB))
-            draw = ImageDraw.Draw(pil)
-            font = load_font(32, bold=True)
-            text = "Watch the hips and shoulders."
-            bbox = draw.textbbox((0, 0), text, font=font)
-            tw = bbox[2] - bbox[0]
-            draw.rounded_rectangle(
-                [(OUT_W - tw) // 2 - 16, OUT_H - 140, (OUT_W + tw) // 2 + 16, OUT_H - 96],
-                radius=10, fill=(0, 0, 0, 200),
-            )
-            draw.text(((OUT_W - tw) // 2, OUT_H - 136), text, fill=WHITE_RGB, font=font)
-            canvas = cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
-
-        # Triplicate for 30fps from 10fps source
-        for _ in range(3):
-            all_output_frames.append(canvas)
-
-    # --- Segment 2: Slow-mo with overlays (0.25x = 12 copies per frame) ---
-    # Show from start to peak
-    slomo_frames = annotated_frames[:peak_idx + 1]
-    print(f"  Seg 2 (slo-mo to peak): {len(slomo_frames)} frames × 12 = {len(slomo_frames) * 12} output frames")
-    for frame_path in slomo_frames:
-        img = cv2.imread(str(frame_path))
-        canvas = fit_frame_to_canvas(img)
-        canvas = make_legend_bar(canvas)
-        for _ in range(12):  # 0.25x at 30fps from 10fps = 12 copies
-            all_output_frames.append(canvas)
-
-    # --- Segment 3: Freeze at peak (2s) ---
-    peak_frame = cv2.imread(str(annotated_frames[peak_idx]))
-    peak_canvas = fit_frame_to_canvas(peak_frame)
-    peak_canvas = make_legend_bar(peak_canvas)
-    freeze_count = int(2.0 * FPS)
-    print(f"  Seg 3 (freeze): {freeze_count} frames (2s)")
-    for _ in range(freeze_count):
-        all_output_frames.append(peak_canvas)
-
-    # --- Segment 4: Resume slo-mo from peak to end ---
-    resume_frames = annotated_frames[peak_idx + 1:]
-    resume_count = min(len(resume_frames), 15)  # Cap at ~1.5s of source
-    print(f"  Seg 4 (resume): {resume_count} frames × 12 = {resume_count * 12} output frames")
-    for frame_path in resume_frames[:resume_count]:
-        img = cv2.imread(str(frame_path))
-        canvas = fit_frame_to_canvas(img)
-        canvas = make_legend_bar(canvas)
-        for _ in range(12):
-            all_output_frames.append(canvas)
-
-    # --- Segment 5: Verdict card (2.5s) ---
-    verdict_frames = make_text_card(
-        [f"X-FACTOR: {peak_angle:.0f}°", ""] + insight_lines,
-        duration_s=2.5, font_size=48,
+    # --- Comparison scale bar ---
+    bar_y = 250
+    bar_x = 60
+    bar_w = OUT_W - 120
+    bar_h = 40
+    draw.rounded_rectangle(
+        (bar_x, bar_y, bar_x + bar_w, bar_y + bar_h),
+        radius=8, fill=(30, 34, 44),
     )
-    print(f"  Seg 5 (verdict): {len(verdict_frames)} frames")
-    all_output_frames.extend(verdict_frames)
 
-    # --- Segment 6: End card (1.5s) ---
-    end_frames = make_end_card(1.5)
-    print(f"  Seg 6 (end card): {len(end_frames)} frames")
-    all_output_frames.extend(end_frames)
+    def angle_to_x(a: float) -> int:
+        return bar_x + int((min(60, max(0, a)) / 60) * bar_w)
 
-    total_duration = len(all_output_frames) / FPS
-    print(f"  Total: {len(all_output_frames)} frames = {total_duration:.1f}s")
+    # Reference markers: Untrained 12, Amateur 20, Good 30, Elite 42, Peak 50+
+    markers = [
+        ("Untrained", 12, (150, 150, 150)),
+        ("Amateur", 20, (255, 140, 60)),
+        ("Good", 30, (255, 220, 80)),
+        ("Elite", 42, (100, 255, 100)),
+        ("Peak", 50, (255, 80, 64)),
+    ]
+    for label, angle, color in markers:
+        x = angle_to_x(angle)
+        draw.line((x, bar_y + 4, x, bar_y + bar_h - 4), fill=color, width=2)
+        lbl_text = f"{label} {angle}\u00b0"
+        lw = draw.textlength(lbl_text, font=font_ref)
+        draw.text((x - lw // 2, bar_y + bar_h + 4), lbl_text, font=font_ref, fill=color)
 
-    # Write frames to temp dir, then encode with FFmpeg
-    with tempfile.TemporaryDirectory() as tmpdir:
-        print("  Writing temp frames...")
-        for i, frame in enumerate(all_output_frames):
-            cv2.imwrite(f"{tmpdir}/f_{i:06d}.jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 95])
+    # "You" marker
+    you_x = angle_to_x(peak_separation)
+    draw.line((you_x, bar_y + 2, you_x, bar_y + bar_h - 2), fill=WHITE, width=3)
+    you_label = "You"
+    yw = draw.textlength(you_label, font=font_label)
+    draw.text((you_x - yw // 2, bar_y - 22), you_label, font=font_label, fill=WHITE)
 
-        print("  Encoding with FFmpeg...")
-        subprocess.run(
-            [
-                "ffmpeg", "-y",
-                "-framerate", str(FPS),
-                "-i", f"{tmpdir}/f_%06d.jpg",
-                "-c:v", "libx264",
-                "-preset", "medium",
-                "-crf", "20",
-                "-pix_fmt", "yuv420p",
-                "-movflags", "+faststart",
-                str(FINAL_VIDEO),
-            ],
-            capture_output=True, check=True,
-        )
+    # Rating note
+    nw = draw.textlength(rating_note, font=font_note)
+    draw.text((cx - nw // 2, bar_y + bar_h + 30), rating_note, font=font_note, fill=LIGHT_GREY)
 
-    size_mb = FINAL_VIDEO.stat().st_size / (1024 * 1024)
-    print(f"  Output: {FINAL_VIDEO}")
-    print(f"  Size: {size_mb:.1f} MB, Duration: {total_duration:.1f}s")
+    # Coaching insight lines
+    y = bar_y + bar_h + 60
+    for line in insight_lines[:3]:
+        wrapped = _wrap_text(draw, line, font_body, OUT_W - 80)
+        for wl in wrapped:
+            wlw = draw.textlength(wl, font=font_body)
+            draw.text((cx - wlw // 2, y), wl, font=font_body, fill=(220, 225, 235))
+            y += 28
 
-    return FINAL_VIDEO
+    # Brand
+    brand = "wellBowled.ai"
+    bw = draw.textlength(brand, font=font_brand)
+    draw.text((cx - bw // 2, OUT_H - 50), brand, font=font_brand, fill=(100, 110, 120))
+
+    return canvas
 
 
-if __name__ == "__main__":
-    run()
+def make_end_card() -> Image.Image:
+    """End card: wellBowled.ai at 72px, tagline at 36px, 1s."""
+    canvas = Image.new("RGB", (OUT_W, OUT_H), BG_BRAND)
+    draw = ImageDraw.Draw(canvas)
+
+    font_brand = _load_font(72, bold=True)
+    font_tag = _load_font(36, bold=False)
+
+    cx = OUT_W // 2
+
+    text = "wellBowled.ai"
+    tw = draw.textlength(text, font=font_brand)
+    draw.text((cx - tw // 2, OUT_H // 2 - 50), text, font=font_brand, fill=BRAND_TEAL)
+
+    tag = "Cricket biomechanics, visualized"
+    ttw = draw.textlength(tag, font=font_tag)
+    draw.text((cx - ttw // 2, OUT_H // 2 + 40), tag, font=font_tag, fill=WHITE)
+
+    return canvas
+
+
+# ---------------------------------------------------------------------------
+# Phase labelling
+# ---------------------------------------------------------------------------
+def _current_phase(time_s: float, phases: dict) -> str:
+    if time_s < phases.get("back_foot_contact", 0):
+        return "approach"
+    elif time_s < phases.get("front_foot_contact", 0):
+        return "back foot contact"
+    elif time_s < phases.get("release", 0):
+        return "front foot contact"
+    elif time_s < phases.get("follow_through", 999):
+        return "release"
+    else:
+        return "follow through"
+
+
+# ---------------------------------------------------------------------------
+# Main composition
+# ---------------------------------------------------------------------------
+def compose_video(
+    frames: list[dict],
+    peak_frame: dict | None,
+    phases: dict,
+    output_path: str,
+    fps: float,
+    insight_lines: list[str] | None = None,
+) -> str:
+    """Compose final YouTube-ready 9:16 video.
+
+    Structure:
+        1. Cold open: all frames at 1x (raw footage)
+        2. 0.3s black transition
+        3. Slo-mo: all frames at 0.25x with overlays during delivery window
+        4. Freeze at peak: 2.5s hold, 65% dark, PEAK X-FACTOR + big angle
+        5. Verdict card: 3s, blurred bg, rating + scale bar
+        6. End card: 1s
+    """
+    from xfactor_pipeline.overlay_renderer import render_frame_overlay, render_legend
+
+    if insight_lines is None:
+        insight_lines = [
+            "The gap between hips and shoulders generates pace.",
+            "Bigger separation = more stored energy at release.",
+            "Work on leading with the hip, letting the shoulder lag.",
+        ]
+
+    rendered_frames: list[Image.Image] = []
+    peak_sep = peak_frame["separation"] if peak_frame else 0
+    peak_idx = peak_frame["index"] if peak_frame else -1
+
+    # Delivery window for overlay gating
+    overlay_start = max(0, phases.get("back_foot_contact", 0) - 0.15)
+    overlay_end = phases.get("follow_through", frames[-1]["time"] if frames else 1.0) + 0.2
+
+    # -----------------------------------------------------------------------
+    # 1. COLD OPEN -- all frames at 1x speed, raw footage
+    # -----------------------------------------------------------------------
+    for frame in frames:
+        canvas = _make_cold_open_frame(frame["frame_bgr"])
+        rendered_frames.append(canvas)
+
+    # -----------------------------------------------------------------------
+    # 2. TRANSITION -- 0.3s black
+    # -----------------------------------------------------------------------
+    black = _make_canvas()
+    transition_count = int(OUTPUT_FPS * 0.3)
+    rendered_frames.extend([black] * transition_count)
+
+    # -----------------------------------------------------------------------
+    # 3. SLO-MO REPLAY -- 0.25x with overlays during delivery window
+    # -----------------------------------------------------------------------
+    for frame in frames:
+        sep = frame.get("separation")
+        phase = _current_phase(frame["time"], phases)
+        is_peak = (frame["index"] == peak_idx)
+        in_delivery_window = overlay_start <= frame["time"] <= overlay_end
+
+        if in_delivery_window:
+            # Scale landmarks to canvas coordinates for overlay
+            canvas, y_off = fit_frame_to_canvas(frame["frame_bgr"])
+            canvas_bgr = cv2.cvtColor(np.array(canvas), cv2.COLOR_RGB2BGR)
+
+            # Remap landmarks to canvas space
+            fw = frame["frame_bgr"].shape[1]
+            fh = frame["frame_bgr"].shape[0]
+            scale = OUT_W / fw
+            new_h = int(fh * scale)
+
+            if frame.get("landmarks"):
+                canvas_landmarks = []
+                for lx, ly, lv in frame["landmarks"]:
+                    cx_px = lx * fw * scale
+                    cy_px = ly * fh * scale + y_off
+                    canvas_landmarks.append((cx_px / OUT_W, cy_px / OUT_H, lv))
+            else:
+                canvas_landmarks = None
+
+            annotated = render_frame_overlay(
+                canvas_bgr, canvas_landmarks, sep, phase,
+                canvas_w=OUT_W, canvas_h=OUT_H, y_offset=y_off,
+            )
+            annotated = render_legend(annotated)
+            canvas = Image.fromarray(cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB))
+        else:
+            canvas, _ = fit_frame_to_canvas(frame["frame_bgr"])
+
+        # Each source frame -> SLOW_FACTOR output frames
+        rendered_frames.extend([canvas] * SLOW_FACTOR)
+
+        # ---------------------------------------------------------------
+        # 4. FREEZE AT PEAK -- 2.5s hold with dramatic card
+        # ---------------------------------------------------------------
+        if is_peak and peak_sep is not None:
+            freeze = make_freeze_card(frame["frame_bgr"], peak_sep)
+            rendered_frames.extend([freeze] * int(OUTPUT_FPS * 2.5))
+
+    # -----------------------------------------------------------------------
+    # 5. VERDICT CARD -- 3s
+    # -----------------------------------------------------------------------
+    verdict_bgr = (
+        peak_frame["frame_bgr"] if peak_frame
+        else frames[len(frames) // 2]["frame_bgr"]
+    )
+    verdict = make_verdict_card(verdict_bgr, peak_sep or 0, insight_lines)
+    rendered_frames.extend([verdict] * int(OUTPUT_FPS * 3))
+
+    # -----------------------------------------------------------------------
+    # 6. END CARD -- 1s
+    # -----------------------------------------------------------------------
+    end = make_end_card()
+    rendered_frames.extend([end] * int(OUTPUT_FPS * 1))
+
+    # -----------------------------------------------------------------------
+    # Encode to raw MP4, then re-encode with FFmpeg
+    # -----------------------------------------------------------------------
+    raw_path = output_path.replace(".mp4", "_raw.mp4")
+    writer = cv2.VideoWriter(
+        raw_path,
+        cv2.VideoWriter_fourcc(*"mp4v"),
+        OUTPUT_FPS,
+        (OUT_W, OUT_H),
+    )
+    for img in rendered_frames:
+        bgr = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+        writer.write(bgr)
+    writer.release()
+
+    _reencode_for_youtube(raw_path, output_path)
+    Path(raw_path).unlink(missing_ok=True)
+
+    total_duration = len(rendered_frames) / OUTPUT_FPS
+    print(f"       [compose] {len(rendered_frames)} frames, {total_duration:.1f}s")
+    return output_path
+
+
+def _reencode_for_youtube(input_path: str, output_path: str):
+    """Re-encode: H.264, CRF 17, yuv420p, faststart, silent AAC."""
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", input_path,
+        "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
+        "-map", "0:v:0", "-map", "1:a:0",
+        "-c:v", "libx264",
+        "-preset", "medium",
+        "-crf", "17",
+        "-pix_fmt", "yuv420p",
+        "-movflags", "+faststart",
+        "-shortest",
+        "-c:a", "aac", "-b:a", "128k",
+        output_path,
+    ]
+    subprocess.run(cmd, check=True, capture_output=True)

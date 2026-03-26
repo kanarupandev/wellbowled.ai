@@ -1,117 +1,187 @@
-"""Stage 3: MediaPipe pose extraction — 33 landmarks per frame."""
+"""Pose extraction with bowler isolation via IoU-based tracking.
+
+Runs MediaPipe PoseLandmarker on every frame, optionally cropped to a
+Gemini-Flash-provided ROI. Multi-pose detection + scoring ensures we lock
+onto the bowler and reject background people.
+"""
 from __future__ import annotations
 
-import json
-import sys
-import urllib.request
 from pathlib import Path
 
 import cv2
 import mediapipe as mp
 import numpy as np
 
-OUTPUT_DIR = Path(__file__).resolve().parent / "output"
-FRAMES_DIR = OUTPUT_DIR / "frames"
-PLAN_FILE = OUTPUT_DIR / "flash_plan.json"
-POSE_FILE = OUTPUT_DIR / "pose_data.json"
-MODEL_PATH = Path(__file__).resolve().parent / "pose_landmarker_heavy.task"
-MODEL_URL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/latest/pose_landmarker_heavy.task"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+MODEL_PATH = REPO_ROOT / "resources" / "pose_landmarker_heavy.task"
+
+# Upper-body + lower-body joints we track
+PRIMARY_JOINTS = [11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28]
+
+LEFT_SHOULDER = 11
+RIGHT_SHOULDER = 12
+LEFT_HIP = 23
+RIGHT_HIP = 24
 
 
-def ensure_model():
+# ---------------------------------------------------------------------------
+# Bowler tracking helpers
+# ---------------------------------------------------------------------------
+def _bbox_from_pts(pts: list[tuple[float, float, float]]) -> dict | None:
+    """Bounding box + center from visible primary joints."""
+    xs = [pts[i][0] for i in PRIMARY_JOINTS if pts[i][2] > 0.3]
+    ys = [pts[i][1] for i in PRIMARY_JOINTS if pts[i][2] > 0.3]
+    if len(xs) < 6:
+        return None
+    x1, x2 = min(xs), max(xs)
+    y1, y2 = min(ys), max(ys)
+    return {
+        "x1": x1, "y1": y1, "x2": x2, "y2": y2,
+        "cx": (x1 + x2) / 2, "cy": (y1 + y2) / 2,
+        "area": (x2 - x1) * (y2 - y1),
+    }
+
+
+def _iou(a: dict, b: dict) -> float:
+    ix1 = max(a["x1"], b["x1"])
+    iy1 = max(a["y1"], b["y1"])
+    ix2 = min(a["x2"], b["x2"])
+    iy2 = min(a["y2"], b["y2"])
+    inter = max(0, ix2 - ix1) * max(0, iy2 - iy1)
+    union = a["area"] + b["area"] - inter
+    return inter / max(1e-6, union)
+
+
+def _score_candidate(
+    pts: list[tuple[float, float, float]],
+    prev_bbox: dict | None,
+    bowler_size: float | None,
+) -> float:
+    """Score a pose candidate. Lock to the bowler, reject background people."""
+    bbox = _bbox_from_pts(pts)
+    if bbox is None:
+        return -1.0
+
+    vis = sum(pts[i][2] for i in PRIMARY_JOINTS) / len(PRIMARY_JOINTS)
+
+    if prev_bbox is None:
+        # First detection: prefer largest person (bowler closest to camera)
+        return bbox["area"] * 5.0 + vis * 1.0
+
+    dist = ((bbox["cx"] - prev_bbox["cx"]) ** 2 +
+            (bbox["cy"] - prev_bbox["cy"]) ** 2) ** 0.5
+    iou = _iou(bbox, prev_bbox)
+
+    # Reject if center jumped > 50% of frame
+    if dist > 0.50:
+        return -1.0
+
+    # Reject if candidate is much smaller than established bowler
+    if bowler_size is not None and bbox["area"] < bowler_size * 0.3:
+        return -1.0
+
+    return iou * 12.0 + max(0, 3.0 - dist * 6.0) + vis * 0.5 + bbox["area"] * 1.0
+
+
+# ---------------------------------------------------------------------------
+# Main extraction
+# ---------------------------------------------------------------------------
+def extract_poses(video_path: str, bowler_roi: dict | None = None) -> dict:
+    """Extract per-frame pose landmarks from the primary bowler.
+
+    Args:
+        video_path: path to video file.
+        bowler_roi: optional dict with x, y, w, h (normalized 0-1) from Flash.
+
+    Returns dict with:
+        frames: list of per-frame dicts (index, time, landmarks, frame_bgr)
+        fps: float
+        width, height: int
+    """
     if not MODEL_PATH.exists():
-        print(f"  Downloading pose model...")
-        urllib.request.urlretrieve(MODEL_URL, MODEL_PATH)
-        print(f"  Model saved: {MODEL_PATH.name}")
+        raise FileNotFoundError(
+            f"Pose model not found at {MODEL_PATH}. "
+            "Download pose_landmarker_heavy.task to resources/."
+        )
 
+    cap = cv2.VideoCapture(video_path)
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-def run() -> list[dict]:
-    ensure_model()
-
-    # Load flash plan for ROI
-    plan = {}
-    if PLAN_FILE.exists():
-        plan = json.loads(PLAN_FILE.read_text())
-
-    roi = plan.get("bowler_roi", {"x1": 0.0, "y1": 0.0, "x2": 1.0, "y2": 1.0})
-
-    frames = sorted(FRAMES_DIR.glob("frame_*.jpg"))
-    if not frames:
-        raise FileNotFoundError(f"No frames found in {FRAMES_DIR}")
-
-    # Set up PoseLandmarker with tasks API
-    BaseOptions = mp.tasks.BaseOptions
     PoseLandmarker = mp.tasks.vision.PoseLandmarker
     PoseLandmarkerOptions = mp.tasks.vision.PoseLandmarkerOptions
+    BaseOptions = mp.tasks.BaseOptions
 
     options = PoseLandmarkerOptions(
         base_options=BaseOptions(model_asset_path=str(MODEL_PATH)),
-        num_poses=1,
-        min_pose_detection_confidence=0.5,
-        min_tracking_confidence=0.5,
+        running_mode=mp.tasks.vision.RunningMode.IMAGE,
+        num_poses=4,                       # detect multiple, pick best
+        min_pose_detection_confidence=0.4,
+        min_tracking_confidence=0.4,
     )
 
-    all_landmarks = []
-    detected_count = 0
+    frames: list[dict] = []
+    prev_bbox: dict | None = None
+    bowler_size: float | None = None
 
     with PoseLandmarker.create_from_options(options) as landmarker:
-        for frame_path in frames:
-            img = cv2.imread(str(frame_path))
-            h, w = img.shape[:2]
+        idx = 0
+        while True:
+            ok, frame_bgr = cap.read()
+            if not ok:
+                break
+            time_s = idx / fps
 
-            # Crop to ROI
-            x1 = int(roi["x1"] * w)
-            y1 = int(roi["y1"] * h)
-            x2 = int(roi["x2"] * w)
-            y2 = int(roi["y2"] * h)
-            cropped = img[y1:y2, x1:x2]
+            # Crop to bowler ROI if available
+            if bowler_roi:
+                rx = max(0, int(bowler_roi["x"] * width))
+                ry = max(0, int(bowler_roi["y"] * height))
+                rw = min(width - rx, int(bowler_roi["w"] * width))
+                rh = min(height - ry, int(bowler_roi["h"] * height))
+                crop_bgr = frame_bgr[ry:ry + rh, rx:rx + rw]
+                rgb = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2RGB)
+            else:
+                rx, ry, rw, rh = 0, 0, width, height
+                rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
 
-            # Convert to RGB for MediaPipe
-            rgb = cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB)
-            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+            result = landmarker.detect(
+                mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb),
+            )
 
-            result = landmarker.detect(mp_image)
+            chosen_pts = None
+            if result.pose_landmarks:
+                best_score = -1.0
+                for pose in result.pose_landmarks:
+                    pts = []
+                    for p in pose:
+                        # Remap crop-space (0-1) to full-frame space
+                        fx = (rx + p.x * rw) / width
+                        fy = (ry + p.y * rh) / height
+                        pts.append((fx, fy, p.visibility))
+                    s = _score_candidate(pts, prev_bbox, bowler_size)
+                    if s > best_score:
+                        best_score = s
+                        chosen_pts = pts
 
-            frame_data = {
-                "frame": frame_path.name,
-                "landmarks": None,
-                "roi": {"x1": roi["x1"], "y1": roi["y1"], "x2": roi["x2"], "y2": roi["y2"]},
-            }
+            if chosen_pts is not None:
+                bbox = _bbox_from_pts(chosen_pts)
+                if bbox is not None:
+                    prev_bbox = bbox
+                    if bowler_size is None:
+                        bowler_size = bbox["area"]
+                    else:
+                        bowler_size = bowler_size * 0.85 + bbox["area"] * 0.15
 
-            if result.pose_landmarks and len(result.pose_landmarks) > 0:
-                detected_count += 1
-                ch, cw = cropped.shape[:2]
-                lms = []
-                for lm in result.pose_landmarks[0]:
-                    # Convert back to full-frame coordinates
-                    abs_x = (lm.x * cw + x1) / w
-                    abs_y = (lm.y * ch + y1) / h
-                    lms.append({
-                        "x": round(abs_x, 5),
-                        "y": round(abs_y, 5),
-                        "z": round(lm.z, 5),
-                        "visibility": round(lm.visibility, 3),
-                    })
-                frame_data["landmarks"] = lms
+            frames.append({
+                "index": idx,
+                "time": round(time_s, 4),
+                "landmarks": chosen_pts,
+                "frame_bgr": frame_bgr,
+            })
+            idx += 1
 
-            all_landmarks.append(frame_data)
-
-    print(f"  Pose detected in {detected_count}/{len(frames)} frames")
-
-    with open(POSE_FILE, "w") as f:
-        json.dump(all_landmarks, f, indent=2)
-
-    return all_landmarks
-
-
-if __name__ == "__main__":
-    result = run()
-    detected = sum(1 for f in result if f["landmarks"] is not None)
-    print(f"Detected: {detected}/{len(result)} frames")
-    if result and result[0]["landmarks"]:
-        lm = result[0]["landmarks"]
-        print(f"Landmarks per frame: {len(lm)}")
-        print(f"  L-hip(23): x={lm[23]['x']:.3f} y={lm[23]['y']:.3f}")
-        print(f"  R-hip(24): x={lm[24]['x']:.3f} y={lm[24]['y']:.3f}")
-        print(f"  L-shldr(11): x={lm[11]['x']:.3f} y={lm[11]['y']:.3f}")
-        print(f"  R-shldr(12): x={lm[12]['x']:.3f} y={lm[12]['y']:.3f}")
+    cap.release()
+    print(f"       [pose] {idx} frames, "
+          f"{sum(1 for f in frames if f['landmarks'] is not None)} with detections")
+    return {"frames": frames, "fps": fps, "width": width, "height": height}

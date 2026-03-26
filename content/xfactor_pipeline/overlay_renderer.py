@@ -1,218 +1,253 @@
-"""Stage 5: Render hip/shoulder line overlays on each frame."""
+"""Overlay renderer: hip/shoulder lines, skeleton, angle pill, phase label, legend.
+
+ALL text rendered via Pillow with Liberation Sans fonts. NO cv2.putText.
+Gate: all 4 x-factor joints (both hips, both shoulders) must be visible (>0.5)
+to draw ANY overlay on a frame.
+"""
 from __future__ import annotations
 
-import json
 import math
-import os
 from pathlib import Path
 
 import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-OUTPUT_DIR = Path(__file__).resolve().parent / "output"
-FRAMES_DIR = OUTPUT_DIR / "frames"
-POSE_FILE = OUTPUT_DIR / "pose_data.json"
-XFACTOR_FILE = OUTPUT_DIR / "xfactor_data.json"
-ANNOTATED_DIR = OUTPUT_DIR / "annotated"
+# ---------------------------------------------------------------------------
+# Colours
+# ---------------------------------------------------------------------------
+HIP_COLOR_BGR = (180, 105, 255)        # #FF69B4 in BGR
+SHOULDER_COLOR_BGR = (209, 206, 0)     # #00CED1 in BGR
+HIP_COLOR_RGB = (255, 105, 180)
+SHOULDER_COLOR_RGB = (0, 206, 209)
+WHITE = (255, 255, 255)
+BG_DARK = (10, 14, 20)                 # #0A0E14
 
-# Colors (BGR for OpenCV)
-PINK_BGR = (180, 105, 255)   # #FF69B4
-CYAN_BGR = (209, 206, 0)     # #00CED1
-WHITE_BGR = (255, 255, 255)
-DARK_BG = (23, 17, 13)       # #0D1117
-SKELETON_COLOR = (255, 255, 255)
-
-# Colors (RGB for Pillow)
-PINK_RGB = (255, 105, 180)
-CYAN_RGB = (0, 206, 209)
-WHITE_RGB = (255, 255, 255)
-GOLD_RGB = (255, 215, 0)
-
+# Skeleton connections (upper body + legs, no face/hands)
 POSE_CONNECTIONS = [
     (11, 12), (11, 13), (13, 15), (12, 14), (14, 16),
-    (11, 23), (12, 24), (23, 24), (23, 25), (25, 27),
-    (24, 26), (26, 28),
+    (11, 23), (12, 24), (23, 24), (23, 25), (25, 27), (24, 26), (26, 28),
 ]
+PRIMARY_JOINTS = [11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28]
 
-L_HIP, R_HIP = 23, 24
-L_SHOULDER, R_SHOULDER = 11, 12
+LEFT_SHOULDER = 11
+RIGHT_SHOULDER = 12
+LEFT_HIP = 23
+RIGHT_HIP = 24
+
+XFACTOR_JOINTS = [LEFT_SHOULDER, RIGHT_SHOULDER, LEFT_HIP, RIGHT_HIP]
 
 
-def load_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    candidates = []
-    if bold:
-        candidates.extend([
-            "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
-            "/System/Library/Fonts/Supplemental/Helvetica.ttc",
-        ])
-    candidates.extend([
-        "/System/Library/Fonts/Supplemental/Arial.ttf",
-        "/System/Library/Fonts/Supplemental/Helvetica.ttc",
-    ])
+# ---------------------------------------------------------------------------
+# Font helper (Linux paths)
+# ---------------------------------------------------------------------------
+_font_cache: dict[tuple[int, bool], ImageFont.FreeTypeFont | ImageFont.ImageFont] = {}
+
+
+def _load_font(size: int, bold: bool = False):
+    key = (size, bold)
+    if key in _font_cache:
+        return _font_cache[key]
+    candidates = [
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf" if bold
+        else "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold
+        else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    ]
     for c in candidates:
-        if os.path.exists(c):
+        if Path(c).exists():
             try:
-                return ImageFont.truetype(c, size=size)
+                font = ImageFont.truetype(c, size=size)
+                _font_cache[key] = font
+                return font
             except OSError:
-                continue
-    return ImageFont.load_default()
+                pass
+    font = ImageFont.load_default()
+    _font_cache[key] = font
+    return font
 
 
-def extend_line(p1: tuple[int, int], p2: tuple[int, int], extend_frac: float = 0.3) -> tuple[tuple[int, int], tuple[int, int]]:
-    """Extend a line segment by extend_frac beyond each endpoint."""
+# ---------------------------------------------------------------------------
+# Geometry helpers
+# ---------------------------------------------------------------------------
+def _extend_line(
+    p1: tuple[int, int], p2: tuple[int, int], extend: float = 0.25,
+) -> tuple[tuple[int, int], tuple[int, int]]:
     dx = p2[0] - p1[0]
     dy = p2[1] - p1[1]
-    new_p1 = (int(p1[0] - dx * extend_frac), int(p1[1] - dy * extend_frac))
-    new_p2 = (int(p2[0] + dx * extend_frac), int(p2[1] + dy * extend_frac))
-    return new_p1, new_p2
+    return (
+        (int(p1[0] - dx * extend), int(p1[1] - dy * extend)),
+        (int(p2[0] + dx * extend), int(p2[1] + dy * extend)),
+    )
 
 
-def draw_skeleton(img: np.ndarray, landmarks: list[dict], alpha: float = 0.35):
-    """Draw faded skeleton connections."""
-    h, w = img.shape[:2]
-    overlay = img.copy()
-    for i1, i2 in POSE_CONNECTIONS:
-        lm1, lm2 = landmarks[i1], landmarks[i2]
-        if lm1["visibility"] < 0.3 or lm2["visibility"] < 0.3:
-            continue
-        pt1 = (int(lm1["x"] * w), int(lm1["y"] * h))
-        pt2 = (int(lm2["x"] * w), int(lm2["y"] * h))
-        cv2.line(overlay, pt1, pt2, SKELETON_COLOR, 2, cv2.LINE_AA)
-    cv2.addWeighted(overlay, alpha, img, 1 - alpha, 0, img)
+def _separation_color(separation: float) -> tuple[int, int, int]:
+    """Color transitions: <15 grey, 15-30 yellow, 30-45 green, 45+ bright green."""
+    if separation < 15:
+        return (200, 200, 200)
+    elif separation < 30:
+        t = (separation - 15) / 15
+        return (
+            int(200 + t * 55),     # toward yellow
+            int(200 + t * 20),
+            int(200 * (1 - t) + 80 * t),
+        )
+    elif separation < 45:
+        t = (separation - 30) / 15
+        return (
+            int(255 * (1 - t) + 100 * t),
+            int(220 * (1 - t) + 255 * t),
+            int(80 * (1 - t) + 100 * t),
+        )
+    else:
+        return (100, 255, 100)
 
 
-def draw_joint_dot(img: np.ndarray, landmark: dict, color: tuple, radius: int = 6):
-    h, w = img.shape[:2]
-    pt = (int(landmark["x"] * w), int(landmark["y"] * h))
-    cv2.circle(img, pt, radius, color, -1, cv2.LINE_AA)
-    cv2.circle(img, pt, radius, WHITE_BGR, 1, cv2.LINE_AA)
+# ---------------------------------------------------------------------------
+# Rendering
+# ---------------------------------------------------------------------------
+def render_frame_overlay(
+    frame_bgr: np.ndarray,
+    landmarks: list[tuple[float, float, float]] | None,
+    separation: float | None,
+    phase_label: str,
+    canvas_w: int = 1080,
+    canvas_h: int = 1920,
+    y_offset: int = 0,
+) -> np.ndarray:
+    """Render X-factor overlay on a 9:16 canvas frame (BGR).
 
+    y_offset: vertical offset from letterboxing, so overlays track the bowler.
+    """
+    h, w = frame_bgr.shape[:2]
+    out = frame_bgr.copy()
 
-def draw_hip_shoulder_lines(img: np.ndarray, landmarks: list[dict]):
-    """Draw extended hip line (pink) and shoulder line (cyan)."""
-    h, w = img.shape[:2]
+    if landmarks is None:
+        return out
 
-    lh = (int(landmarks[L_HIP]["x"] * w), int(landmarks[L_HIP]["y"] * h))
-    rh = (int(landmarks[R_HIP]["x"] * w), int(landmarks[R_HIP]["y"] * h))
-    ls = (int(landmarks[L_SHOULDER]["x"] * w), int(landmarks[L_SHOULDER]["y"] * h))
-    rs = (int(landmarks[R_SHOULDER]["x"] * w), int(landmarks[R_SHOULDER]["y"] * h))
+    def px(idx: int) -> tuple[int, int] | None:
+        p = landmarks[idx]
+        if p[2] < 0.3:
+            return None
+        return (int(p[0] * w), int(p[1] * h))
 
-    # Extended lines
-    h1, h2 = extend_line(lh, rh, 0.3)
-    s1, s2 = extend_line(ls, rs, 0.3)
+    # Gate: ALL 4 x-factor joints must be clearly visible
+    if not all(landmarks[j][2] > 0.5 for j in XFACTOR_JOINTS):
+        return out
 
-    cv2.line(img, h1, h2, PINK_BGR, 4, cv2.LINE_AA)
-    cv2.line(img, s1, s2, CYAN_BGR, 4, cv2.LINE_AA)
+    # --- Skeleton (35% opacity, behind everything) ---
+    overlay_skel = out.copy()
+    for a, b in POSE_CONNECTIONS:
+        pa, pb = px(a), px(b)
+        if pa and pb:
+            cv2.line(overlay_skel, pa, pb, (180, 180, 180), 1, cv2.LINE_AA)
+    for jidx in PRIMARY_JOINTS:
+        p = px(jidx)
+        if p:
+            cv2.circle(overlay_skel, p, 2, (200, 200, 200), -1, cv2.LINE_AA)
+    cv2.addWeighted(overlay_skel, 0.35, out, 0.65, 0, out)
 
-    # Joint dots
-    for pt in [lh, rh]:
-        cv2.circle(img, pt, 6, PINK_BGR, -1, cv2.LINE_AA)
-    for pt in [ls, rs]:
-        cv2.circle(img, pt, 6, CYAN_BGR, -1, cv2.LINE_AA)
+    # --- Hip line (pink, 4px, 25% extension, white-bordered dots) ---
+    lh, rh = px(LEFT_HIP), px(RIGHT_HIP)
+    if lh and rh:
+        ext_a, ext_b = _extend_line(lh, rh, 0.25)
+        cv2.line(out, ext_a, ext_b, HIP_COLOR_BGR, 4, cv2.LINE_AA)
+        for pt in (lh, rh):
+            cv2.circle(out, pt, 7, (255, 255, 255), 2, cv2.LINE_AA)
+            cv2.circle(out, pt, 5, HIP_COLOR_BGR, -1, cv2.LINE_AA)
 
+    # --- Shoulder line (cyan, 4px, 25% extension, white-bordered dots) ---
+    ls, rs = px(LEFT_SHOULDER), px(RIGHT_SHOULDER)
+    if ls and rs:
+        ext_a, ext_b = _extend_line(ls, rs, 0.25)
+        cv2.line(out, ext_a, ext_b, SHOULDER_COLOR_BGR, 4, cv2.LINE_AA)
+        for pt in (ls, rs):
+            cv2.circle(out, pt, 7, (255, 255, 255), 2, cv2.LINE_AA)
+            cv2.circle(out, pt, 5, SHOULDER_COLOR_BGR, -1, cv2.LINE_AA)
 
-def render_frame_with_pillow(img: np.ndarray, separation: float, phase: str | None,
-                              is_peak: bool, reliable: bool) -> np.ndarray:
-    """Add text overlays using Pillow for better typography."""
-    pil_img = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+    # --- Angle pill near torso (Pillow for anti-aliased text) ---
+    if separation is not None and lh and rh and ls and rs:
+        pil_img = Image.fromarray(cv2.cvtColor(out, cv2.COLOR_BGR2RGB))
+        draw = ImageDraw.Draw(pil_img)
+        font_angle = _load_font(32, bold=True)
+        font_deg = _load_font(18, bold=False)
+
+        mid_x = (lh[0] + rh[0] + ls[0] + rs[0]) // 4
+        mid_y = (lh[1] + rh[1] + ls[1] + rs[1]) // 4
+        color = _separation_color(separation)
+        angle_text = f"{separation:.0f}"
+
+        text_w = draw.textlength(angle_text, font=font_angle)
+        deg_w = draw.textlength("\u00b0", font=font_deg)
+        pill_w = int(text_w + deg_w + 24)
+        pill_h = 44
+        pill_x = mid_x - pill_w // 2
+        pill_y = mid_y - pill_h // 2
+
+        # Clamp to safe area
+        pill_x = max(16, min(w - pill_w - 16, pill_x))
+        pill_y = max(16, min(h - pill_h - 16, pill_y))
+
+        draw.rounded_rectangle(
+            (pill_x, pill_y, pill_x + pill_w, pill_y + pill_h),
+            radius=14, fill=(10, 14, 20, 210),
+        )
+        draw.text((pill_x + 10, pill_y + 6), angle_text, font=font_angle, fill=color)
+        draw.text(
+            (pill_x + 10 + int(text_w) + 2, pill_y + 14),
+            "\u00b0", font=font_deg, fill=color,
+        )
+        out = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
+
+    # --- Phase label pill (top center) ---
+    pil_img = Image.fromarray(cv2.cvtColor(out, cv2.COLOR_BGR2RGB))
     draw = ImageDraw.Draw(pil_img)
-    w, h = pil_img.size
+    font_phase = _load_font(20, bold=True)
+    label = phase_label.upper()
+    tw = draw.textlength(label, font=font_phase)
+    pill_w = int(tw + 28)
+    pill_h = 36
+    pill_x = w // 2 - pill_w // 2
+    pill_y = max(16, int(h * 0.02))
+    draw.rounded_rectangle(
+        (pill_x, pill_y, pill_x + pill_w, pill_y + pill_h),
+        radius=12, fill=(10, 14, 20, 200),
+    )
+    draw.text((pill_x + 14, pill_y + 8), label, font=font_phase, fill=WHITE)
+    out = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
 
-    font_angle = load_font(32, bold=True)
-    font_phase = load_font(18, bold=False)
-    font_peak = load_font(28, bold=True)
+    return out
 
-    # Phase label pill at top center
-    if phase:
-        label = phase.replace("_", " ")
-        bbox = draw.textbbox((0, 0), label, font=font_phase)
-        tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-        pill_x = (w - tw) // 2 - 14
-        pill_y = 20
-        draw.rounded_rectangle(
-            [pill_x, pill_y, pill_x + tw + 28, pill_y + th + 12],
-            radius=14, fill=(0, 0, 0, 200),
-        )
-        draw.text((pill_x + 14, pill_y + 6), label, fill=WHITE_RGB, font=font_phase)
 
-    # Separation angle — bottom area, clear of action
-    if separation is not None and reliable:
-        angle_text = f"{separation:.0f}°"
-        bbox = draw.textbbox((0, 0), angle_text, font=font_angle)
-        tw = bbox[2] - bbox[0]
-        ax = (w - tw) // 2
-        ay = h - 80
+def render_legend(frame_bgr: np.ndarray) -> np.ndarray:
+    """Colour legend bar at the bottom (safe zone)."""
+    h, w = frame_bgr.shape[:2]
+    pil_img = Image.fromarray(cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB))
+    draw = ImageDraw.Draw(pil_img)
+    font = _load_font(16, bold=True)
 
-        # Semi-transparent background pill
-        draw.rounded_rectangle(
-            [ax - 12, ay - 6, ax + tw + 12, ay + 40],
-            radius=10, fill=(0, 0, 0, 180),
-        )
-        draw.text((ax, ay), angle_text, fill=WHITE_RGB, font=font_angle)
+    bar_y = h - 50
+    cx = w // 2
 
-    # Peak X-Factor badge
-    if is_peak and separation is not None:
-        peak_text = f"PEAK X-FACTOR: {separation:.0f}°"
-        bbox = draw.textbbox((0, 0), peak_text, font=font_peak)
-        tw = bbox[2] - bbox[0]
-        px = (w - tw) // 2 - 16
-        py = h // 2 - 60
+    # Background pill spanning both legend items
+    total_w = 260
+    draw.rounded_rectangle(
+        (cx - total_w // 2, bar_y - 4, cx + total_w // 2, bar_y + 26),
+        radius=10, fill=(10, 14, 20, 180),
+    )
 
-        # Glow effect: draw slightly larger text in gold behind
-        for dx in range(-2, 3):
-            for dy in range(-2, 3):
-                draw.text((px + 16 + dx, py + 10 + dy), peak_text, fill=(255, 215, 0), font=font_peak)
+    # Hip legend
+    draw.ellipse(
+        (cx - total_w // 2 + 12, bar_y + 2, cx - total_w // 2 + 26, bar_y + 16),
+        fill=HIP_COLOR_RGB,
+    )
+    draw.text((cx - total_w // 2 + 32, bar_y), "HIPS", font=font, fill=WHITE)
 
-        draw.rounded_rectangle(
-            [px, py, px + tw + 32, py + 48],
-            radius=12, fill=(0, 0, 0, 220), outline=GOLD_RGB, width=2,
-        )
-        draw.text((px + 16, py + 10), peak_text, fill=GOLD_RGB, font=font_peak)
+    # Shoulder legend
+    draw.ellipse(
+        (cx + 20, bar_y + 2, cx + 34, bar_y + 16),
+        fill=SHOULDER_COLOR_RGB,
+    )
+    draw.text((cx + 40, bar_y), "SHOULDERS", font=font, fill=WHITE)
 
     return cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
-
-
-def run() -> int:
-    ANNOTATED_DIR.mkdir(parents=True, exist_ok=True)
-
-    pose_data = json.loads(POSE_FILE.read_text())
-    xfactor_data = json.loads(XFACTOR_FILE.read_text())
-
-    peak_idx = xfactor_data["peak_separation_frame"]
-    xframes = {f["frame"]: f for f in xfactor_data["frames"]}
-
-    rendered = 0
-    for fd in pose_data:
-        frame_path = FRAMES_DIR / fd["frame"]
-        if not frame_path.exists():
-            continue
-
-        img = cv2.imread(str(frame_path))
-        lm = fd.get("landmarks")
-        xf = xframes.get(fd["frame"], {})
-        sep = xf.get("separation")
-        phase = xf.get("phase")
-        reliable = xf.get("reliable", False)
-        is_peak = xf.get("frame_index") == peak_idx
-
-        if lm:
-            # Draw skeleton first (faded)
-            draw_skeleton(img, lm, alpha=0.35)
-            # Draw hip and shoulder lines
-            draw_hip_shoulder_lines(img, lm)
-
-        # Add text overlays with Pillow
-        img = render_frame_with_pillow(img, sep, phase, is_peak, reliable)
-
-        out_path = ANNOTATED_DIR / fd["frame"]
-        cv2.imwrite(str(out_path), img)
-        rendered += 1
-
-    print(f"  Rendered {rendered} annotated frames")
-    return rendered
-
-
-if __name__ == "__main__":
-    count = run()
-    print(f"Done: {count} frames in {ANNOTATED_DIR}")
