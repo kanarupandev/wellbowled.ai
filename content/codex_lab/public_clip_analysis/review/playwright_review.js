@@ -10,8 +10,9 @@ async function main() {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1400 } });
   await page.goto('http://127.0.0.1:8765/viewer.html', { waitUntil: 'networkidle' });
   const primarySelector = '#video';
-  const figureSelector = 'section:nth-of-type(1) .variant-shot img';
-  const poseSelector = 'section:nth-of-type(2) .variant-shot img';
+  const figureSelector = 'img[alt="Bowler figure only verification frame"]';
+  const poseSelector = 'img[alt="Pose only verification frame"]';
+  const braceSelector = 'img[alt="Brace focus verification frame"]';
 
   const state = await page.evaluate(async () => {
     const video = document.querySelector('#video');
@@ -88,6 +89,9 @@ async function main() {
   });
   await page.locator(poseSelector).screenshot({
     path: `${outputDir}/viewer_pose_panel.png`,
+  });
+  await page.locator(braceSelector).screenshot({
+    path: `${outputDir}/viewer_brace_panel.png`,
   });
 
   await page.screenshot({

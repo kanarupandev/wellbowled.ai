@@ -372,7 +372,7 @@ def render_variants(config_path: str):
             if chosen is not None:
                 bbox = chosen["bbox"]
                 prev_bbox = bbox
-                crop_box = expand_bbox(bbox, padding=pad)
+                crop_box = expand_bbox(bbox, padding=min(pad, 0.045))
                 crop_x, crop_y, crop_w, crop_h = to_px(crop_box, width, height)
                 subject_box_px = to_px(bbox, width, height)
                 mask = run_grabcut(

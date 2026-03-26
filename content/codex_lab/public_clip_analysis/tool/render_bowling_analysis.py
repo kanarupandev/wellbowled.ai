@@ -526,8 +526,10 @@ def overlay_freeze_frame(base_img: Image.Image, freeze_points, trail, release_no
     accent = tuple(style["accent"])
     accent_secondary = tuple(style["accent_secondary"])
 
-    draw_skeleton(draw, freeze_points, (width, height), accent, accent_secondary)
-    draw_trail(draw, trail, (width, height), accent_secondary)
+    if freeze_points is not None:
+        draw_skeleton(draw, freeze_points, (width, height), accent, accent_secondary)
+    if trail:
+        draw_trail(draw, trail, (width, height), accent_secondary)
 
     rounded_panel(draw, (20, 20, width - 20, 210), fill=(*bg, 194), outline=(*accent, 110), width=2, radius=28)
     rounded_panel(draw, (20, height - 270, width - 20, height - 24), fill=(*bg, 216), radius=32)
@@ -628,6 +630,26 @@ def encode_video(frames: list[Image.Image], output_path: str, fps: float):
     writer.release()
 
 
+def load_auxiliary_frames(video_path: Path) -> list[np.ndarray]:
+    if not video_path.exists():
+        return []
+    cap = cv2.VideoCapture(str(video_path))
+    frames = []
+    while True:
+        ok, frame = cap.read()
+        if not ok:
+            break
+        frames.append(frame)
+    cap.release()
+    return frames
+
+
+def pick_auxiliary_base(aux_frames: list[np.ndarray], frame_index: int, fallback_frame: np.ndarray) -> Image.Image:
+    if aux_frames and 0 <= frame_index < len(aux_frames):
+        return bgr_to_rgba(aux_frames[frame_index])
+    return bgr_to_rgba(fallback_frame)
+
+
 def render_project(config_path: str, use_gemini: bool = True):
     with open(config_path) as f:
         config = json.load(f)
@@ -654,6 +676,8 @@ def render_project(config_path: str, use_gemini: bool = True):
         config.get("pose_crop"),
         config.get("flash_analysis"),
     )
+    figure_variant_frames = load_auxiliary_frames(output_dir / "bowler_figure_only.mp4")
+    pose_variant_frames = load_auxiliary_frames(output_dir / "bowler_pose_only.mp4")
     hints = config["phase_hints"]
     load_frame = nearest_frame(frames, hints["load"])
     release_frame = nearest_frame(frames, hints["release"])
@@ -686,7 +710,7 @@ def render_project(config_path: str, use_gemini: bool = True):
     intro_base = crop_pil_image(bgr_to_rgba(release_frame["frame"]), intro_crop).filter(ImageFilter.GaussianBlur(radius=2))
     intro = overlay_live_frame(intro_base, title, editorial["subtitle"], editorial["series"], config["style"])
     release_preview = overlay_sequence_frame(
-        bgr_to_rgba(release_frame["frame"]),
+        pick_auxiliary_base(figure_variant_frames, release_frame["frame_index"], release_frame["frame"]),
         release_frame,
         frames,
         title,
@@ -697,7 +721,7 @@ def render_project(config_path: str, use_gemini: bool = True):
         hints,
     )
     load_preview = overlay_sequence_frame(
-        bgr_to_rgba(load_frame["frame"]),
+        pick_auxiliary_base(figure_variant_frames, load_frame["frame_index"], load_frame["frame"]),
         load_frame,
         frames,
         title,
@@ -716,8 +740,9 @@ def render_project(config_path: str, use_gemini: bool = True):
             break
         phase = "load" if frame["time"] < release_time - 0.12 else ("release" if frame["time"] <= release_time + 0.10 else "finish")
         note = "Build into release." if phase == "load" else (release_note if phase == "release" else finish_note)
+        base_img = pick_auxiliary_base(figure_variant_frames, frame["frame_index"], frame["frame"])
         img = overlay_sequence_frame(
-            bgr_to_rgba(frame["frame"]),
+            base_img,
             frame,
             frames,
             title,
@@ -729,10 +754,13 @@ def render_project(config_path: str, use_gemini: bool = True):
         )
         rendered.append(img)
         if not freeze_inserted and frame["frame_index"] >= freeze_frame["frame_index"]:
-            if freeze_frame["points"] is not None:
-                hero = overlay_freeze_frame(bgr_to_rgba(freeze_frame["frame"]), freeze_frame["points"], trail, release_note, insight, editorial, config["style"])
+            freeze_base = pick_auxiliary_base(pose_variant_frames, freeze_frame["frame_index"], freeze_frame["frame"])
+            if pose_variant_frames:
+                hero = overlay_freeze_frame(freeze_base, None, [], release_note, insight, editorial, config["style"])
+            elif freeze_frame["points"] is not None:
+                hero = overlay_freeze_frame(freeze_base, freeze_frame["points"], trail, release_note, insight, editorial, config["style"])
             else:
-                hero = overlay_live_frame(bgr_to_rgba(freeze_frame["frame"]), title, release_note, editorial["freeze_label"], config["style"])
+                hero = overlay_live_frame(freeze_base, title, release_note, editorial["freeze_label"], config["style"])
             hero_path = output_dir / "hero_release_frame.jpg"
             hero.convert("RGB").save(hero_path, quality=95)
             rendered.extend([hero] * max(1, int(round(freeze_hold / max(1, slow_factor)))))

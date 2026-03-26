@@ -167,11 +167,12 @@ def build_pose_support_mask(mask_shape: tuple[int, int], pose_points, frame_shap
             continue
         cv2.line(support, pa, pb, 255, 16)
 
-    if len(support_points) >= 3:
-        hull = cv2.convexHull(np.array(support_points, dtype=np.int32))
-        cv2.fillConvexPoly(support, hull, 255)
+    torso_ids = [11, 12, 24, 23]
+    torso_points = [local_point(idx) for idx in torso_ids]
+    if all(pt is not None for pt in torso_points):
+        cv2.fillConvexPoly(support, np.array(torso_points, dtype=np.int32), 255)
 
-    support = cv2.dilate(support, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (31, 31)), iterations=1)
+    support = cv2.dilate(support, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (23, 23)), iterations=1)
     return support
 
 
@@ -324,7 +325,7 @@ def extract_phase_assets(config_path: str, phase: str):
     if pose_box is not None:
         subject_box = pose_box["bbox"]
         pose_points = pose_box["points"]
-    crop_box = expand_bbox(subject_box, padding=float(flash_analysis.get("subject_strategy", {}).get("frame_crop_padding", 0.1)))
+    crop_box = expand_bbox(subject_box, padding=min(float(flash_analysis.get("subject_strategy", {}).get("frame_crop_padding", 0.1)), 0.045))
     crop, crop_rect_px = crop_from_box(frame, crop_box)
     h, w = frame.shape[:2]
     subject_box_px = to_px(subject_box, w, h)

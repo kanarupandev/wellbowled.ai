@@ -85,7 +85,7 @@
     .variants {
       margin-top: 24px;
       display: grid;
-      grid-template-columns: repeat(2, minmax(280px, 1fr));
+      grid-template-columns: repeat(3, minmax(240px, 1fr));
       gap: 24px;
     }
     .variant-header {
@@ -209,7 +209,7 @@
           Purpose: verify full-video subject isolation without background people.
         </div>
         <figure class="variant-shot">
-          <img src="playwright_checks/figure_only.png" alt="Bowler figure only verification frame">
+          <img src="playwright_checks/figure_release_v4.png" alt="Bowler figure only verification frame">
           <figcaption>RELEASE CHECK</figcaption>
         </figure>
       </section>
@@ -227,7 +227,25 @@
           Purpose: inspect just the tracked bowling motion without visual clutter.
         </div>
         <figure class="variant-shot">
-          <img src="playwright_checks/pose_only.png" alt="Pose only verification frame">
+          <img src="playwright_checks/pose_release_final.png" alt="Pose only verification frame">
+          <figcaption>RELEASE CHECK</figcaption>
+        </figure>
+      </section>
+      <section class="panel">
+        <div class="variant-header">
+          <h2>Brace Focus</h2>
+          <span>Knee + Ankles</span>
+        </div>
+        <video controls preload="auto" playsinline data-default-rate="0.25">
+          <source src="bowler_figure_brace_qt.m4v" type="video/mp4">
+          <source src="bowler_figure_brace.mp4" type="video/mp4">
+        </video>
+        <div class="meta">
+          File: <code>bowler_figure_brace_qt.m4v</code><br>
+          Purpose: inspect the front-foot brace window without background clutter.
+        </div>
+        <figure class="variant-shot">
+          <img src="playwright_checks/brace_release_final.png" alt="Brace focus verification frame">
           <figcaption>RELEASE CHECK</figcaption>
         </figure>
       </section>
