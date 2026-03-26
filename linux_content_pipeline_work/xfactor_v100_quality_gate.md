@@ -95,7 +95,7 @@ Source: `docs/video_quality_checklist.md` (75 points). Grade S (100%) required f
 - [ ] I2. Non-cricketer understands the visual (two lines diverging = power)
 - [ ] I3. Serious bowler learns something applicable
 - [ ] I4. Verdict text is actionable — "work on hip mobility" not "needs improvement"
-- [ ] I5. Comparison scale: Untrained (12°) → You (28°) → Steyn (40°) → Lee (47°)
+- [ ] I5. Comparison scale shows full range: Untrained → Amateur → Good → Elite (with reference bowler names if applicable, but NOT hardcoded to any specific bowler)
 - [ ] I6. Video answers one question: "Where does pace come from?"
 
 ## J. BRAND & POLISH (6 checks)
@@ -115,4 +115,32 @@ Source: `docs/video_quality_checklist.md` (75 points). Grade S (100%) required f
 - [ ] K4. First frame is compelling at thumbnail size
 - [ ] K5. Caption drafted with hashtags
 
-## TOTAL: 80 checks. ALL must pass for v1.0.0.
+## L. GENERALITY — MUST NOT OVERFIT (8 checks)
+
+- [ ] L1. Pipeline produces correct output on ANY bowling clip (nets, match, indoor, outdoor)
+- [ ] L2. Works with any camera angle (side-on, front-on, behind stumps, elevated)
+- [ ] L3. Handles multiple people in frame — ONLY the bowler gets annotated
+- [ ] L4. Handles clips from 2s to 10s duration without crashing or producing garbage
+- [ ] L5. No hardcoded timestamps, crop regions, or bowler positions
+- [ ] L6. Graceful fallback when Gemini API is unavailable (heuristics still produce usable output)
+- [ ] L7. Graceful handling when MediaPipe can't detect the bowler (no overlays rather than wrong overlays)
+- [ ] L8. Angle computation produces plausible values (15-60° range for real bowling) — no 130° or 0° noise
+
+## M. SELF-REVIEW GATE (5 checks)
+
+- [ ] M1. I (Claude) extracted and viewed frames at 0s, 25%, 50%, 75%, 100% of video
+- [ ] M2. I verified end card text is readable at the image resolution I can see
+- [ ] M3. I verified no background person has overlay annotations in ANY sampled frame
+- [ ] M4. I verified the angle number is plausible for the bowling action shown
+- [ ] M5. I ran ffprobe and confirmed resolution, codec, bitrate, duration all pass section A
+
+## TOTAL: 93 checks. ALL must pass for v1.0.0.
+
+## Scoring
+
+| Grade | Pass Rate | Action |
+|-------|-----------|--------|
+| **S** | 93/93 (100%) | Ship it. Upload to YouTube. |
+| **A** | 84-92 (90%+) | Fix failures before upload. |
+| **B** | 74-83 (80%+) | Major rework needed. |
+| **C** | <74 (<80%) | Not upload-ready. Back to v0.0.x. |
