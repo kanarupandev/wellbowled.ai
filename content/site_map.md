@@ -36,6 +36,7 @@
 | [plan.md](plan.md) | Tool stack (DaVinci, CapCut, Runway), clip formula, filming best practices, workflow, naming convention |
 | [pipeline.md](pipeline.md) | End-to-end 5-node pipeline: Source → Script → Visuals → Audio → Assembly. V1 daily workflow (33 min/clip). Node upgrade priority. |
 | [xfactor_production_plan.md](xfactor_production_plan.md) | X-Factor video execution plan: 8-stage pipeline, 2 Gemini calls, FFmpeg + MediaPipe + OpenCV + NumPy. <60s compute, ~$0.01/clip. |
+| [video_quality_checklist.md](video_quality_checklist.md) | 75-point quality checklist: resolution, hook, overlay design, typography, animation, color, composition, pacing, insight, brand, platform compliance. Grade S/A/B/C. |
 
 ## Lab & Experiments
 
