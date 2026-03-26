@@ -640,51 +640,60 @@ def make_verdict_frames(bowling_frames, peak_sep, duration_s=5.0):
 
 
 def make_title_card():
-    """Opening title card — big, bright, zero wasted space."""
+    """Opening title card — fills the screen, nothing wasted."""
     pil = Image.new("RGB", (OUT_W, OUT_H), DARK_BG)
     draw = ImageDraw.Draw(pil)
     cx = OUT_W // 2
 
-    y = OUT_H // 2 - 280
-
-    # Hook — massive
-    f_where = load_font(44)
-    f_pace = load_font(96, bold=True)
-    f_from = load_font(44)
+    # Spread content across full height with breathing room
+    # Top section: hook question
+    y = 320
+    f_where = load_font(52)
+    f_pace = load_font(140, bold=True)
+    f_from = load_font(52)
 
     draw.text((cx - draw.textlength("Where does", font=f_where) // 2, y), "Where does", font=f_where, fill=WHITE)
-    y += 60
-    draw.text((cx - draw.textlength("PACE", font=f_pace) // 2, y), "PACE", font=f_pace, fill=ACCENT_RED)
-    y += 110
-    draw.text((cx - draw.textlength("come from?", font=f_from) // 2, y), "come from?", font=f_from, fill=WHITE)
-    y += 90
-
-    # Hip vs Shoulder — big colored labels
-    f_vs = load_font(32, bold=True)
-    f_label = load_font(28, bold=True)
-    draw.ellipse((cx - 160, y + 4, cx - 140, y + 24), fill=HIP_COLOR)
-    draw.text((cx - 132, y), "Hips", font=f_label, fill=HIP_COLOR)
-    draw.text((cx - 20, y), "vs", font=f_vs, fill=(100, 110, 120))
-    draw.ellipse((cx + 50, y + 4, cx + 70, y + 24), fill=SHOULDER_COLOR)
-    draw.text((cx + 78, y), "Shoulders", font=f_label, fill=SHOULDER_COLOR)
     y += 70
+    draw.text((cx - draw.textlength("PACE", font=f_pace) // 2, y), "PACE", font=f_pace, fill=ACCENT_RED)
+    y += 160
+    draw.text((cx - draw.textlength("come from?", font=f_from) // 2, y), "come from?", font=f_from, fill=WHITE)
 
-    # Tagline
-    f_tag = load_font(32)
+    # Middle section: hip vs shoulder
+    y = OUT_H // 2 + 80
+    f_label = load_font(36, bold=True)
+    f_vs = load_font(28)
+
+    # Hip line visual
+    draw.line((cx - 200, y + 18, cx - 80, y + 18), fill=HIP_COLOR, width=4)
+    draw.ellipse((cx - 210, y + 8, cx - 190, y + 28), fill=HIP_COLOR)
+    draw.text((cx - 75, y), "Hips", font=f_label, fill=HIP_COLOR)
+
+    y += 60
+    draw.text((cx - draw.textlength("vs", font=f_vs) // 2, y + 4), "vs", font=f_vs, fill=(80, 90, 100))
+
+    y += 50
+    # Shoulder line visual
+    draw.line((cx - 200, y + 18, cx - 80, y + 18), fill=SHOULDER_COLOR, width=4)
+    draw.ellipse((cx - 210, y + 8, cx - 190, y + 28), fill=SHOULDER_COLOR)
+    draw.text((cx - 75, y), "Shoulders", font=f_label, fill=SHOULDER_COLOR)
+
+    # Bottom section: tagline
+    y = OUT_H - 360
+    f_tag = load_font(36, bold=True)
     tag = "The bigger the gap,"
-    draw.text((cx - draw.textlength(tag, font=f_tag) // 2, y), tag, font=f_tag, fill=(220, 228, 240))
-    y += 42
+    draw.text((cx - draw.textlength(tag, font=f_tag) // 2, y), tag, font=f_tag, fill=WHITE)
+    y += 48
     tag2 = "the faster the ball."
-    draw.text((cx - draw.textlength(tag2, font=f_tag) // 2, y), tag2, font=f_tag, fill=(220, 228, 240))
+    draw.text((cx - draw.textlength(tag2, font=f_tag) // 2, y), tag2, font=f_tag, fill=WHITE)
 
-    # Brand — luminous, prominent
-    f_brand = load_font(36, bold=True)
+    # Brand — luminous glow
+    y = OUT_H - 140
+    f_brand = load_font(40, bold=True)
     brand = "wellBowled.ai"
     bw = draw.textlength(brand, font=f_brand)
-    # Glow effect: draw text slightly larger in teal with blur, then sharp on top
-    for dx, dy in [(-1, -1), (-1, 1), (1, -1), (1, 1), (0, -2), (0, 2), (-2, 0), (2, 0)]:
-        draw.text((cx - bw // 2 + dx, OUT_H - 120 + dy), brand, font=f_brand, fill=(0, 80, 90))
-    draw.text((cx - bw // 2, OUT_H - 120), brand, font=f_brand, fill=BRAND_TEAL)
+    for dx, dy in [(-2, -2), (-2, 2), (2, -2), (2, 2), (0, -3), (0, 3), (-3, 0), (3, 0)]:
+        draw.text((cx - bw // 2 + dx, y + dy), brand, font=f_brand, fill=(0, 70, 80))
+    draw.text((cx - bw // 2, y), brand, font=f_brand, fill=BRAND_TEAL)
 
     return cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
 
