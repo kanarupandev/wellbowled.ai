@@ -21,10 +21,15 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+import logging
+
 import cv2
 import mediapipe as mp
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
+
+logging.basicConfig(level=logging.INFO, format="  [%(name)s] %(message)s")
+log = logging.getLogger("xfactor")
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -105,6 +110,7 @@ def call_gemini_flash(video_path: str) -> dict | None:
     """One Flash call: identify bowler ROI + phase timing. Returns dict or None."""
     api_key = load_api_key()
     if not api_key:
+        log.warning("No GEMINI_API_KEY found — skipping Flash call")
         return None
 
     # Build contact sheet (6 frames)
@@ -174,12 +180,15 @@ Rules:
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
     req = urllib.request.Request(url, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
     try:
+        log.info("Sending contact sheet to Gemini Flash...")
         with urllib.request.urlopen(req, timeout=60) as resp:
             data = json.loads(resp.read().decode())
         text = data["candidates"][0]["content"]["parts"][0]["text"]
-        return json.loads(text)
+        result = json.loads(text)
+        log.info(f"Flash response: {json.dumps(result, indent=2)[:500]}")
+        return result
     except Exception as e:
-        print(f"  [flash] Failed: {e}")
+        log.error(f"Flash call failed: {e}")
         return None
 
 
@@ -430,8 +439,8 @@ def render_overlay(frame_bgr, landmarks, separation, phase_label):
     return cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
 
 
-def fit_to_canvas(frame_bgr):
-    """Fit frame to 1080x1920 canvas, letterboxed."""
+def fit_to_canvas(frame_bgr, watermark=True):
+    """Fit frame to 1080x1920 canvas, letterboxed, with brand watermark."""
     h, w = frame_bgr.shape[:2]
     scale = OUT_W / w
     nw, nh = OUT_W, int(h * scale)
@@ -440,6 +449,16 @@ def fit_to_canvas(frame_bgr):
     canvas[:] = DARK_BG
     y = (OUT_H - nh) // 2
     canvas[y:y+nh, 0:nw] = resized
+
+    if watermark:
+        pil = Image.fromarray(cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB))
+        draw = ImageDraw.Draw(pil)
+        font_wm = load_font(16, bold=True)
+        wm = "wellBowled.ai"
+        ww = draw.textlength(wm, font=font_wm)
+        draw.text((OUT_W - ww - 20, OUT_H - 22), wm, font=font_wm, fill=(*BRAND_TEAL, 140))
+        canvas = cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
+
     return canvas
 
 
@@ -603,7 +622,14 @@ def current_phase(t, phases):
 
 
 def compose_video(frames, peak_frame, phases, output_path, fps):
-    """Compose the full video: cold open → slo-mo → freeze → verdict → end."""
+    """Compose the video: annotated slo-mo → freeze → verdict → end.
+
+    No cold open prefix. Start directly with the bowling action analysis.
+    Only frames within the bowling window (action_start → action_end) are included.
+    """
+    import logging
+    log = logging.getLogger("compose")
+
     rendered = []
 
     # Delivery window for overlay gating
@@ -612,26 +638,29 @@ def compose_video(frames, peak_frame, phases, output_path, fps):
     peak_idx = peak_frame["index"] if peak_frame else -1
     peak_sep = peak_frame["separation"] if peak_frame else 0
 
-    # 1. Cold open — 1x speed, trimmed to action window if Flash provided it
-    # Generic: Flash tells us when the bowler is visible, we start there
-    action_start_t = phases.get("_action_start", 0)
-    cold_frames = [f for f in frames if f["time"] >= action_start_t]
-    if len(cold_frames) < 10:
-        cold_frames = frames  # fallback: use all
-    for f in cold_frames:
-        rendered.append(fit_to_canvas(f["frame_bgr"]))
+    # Crop frames to bowling window (action_start → action_end from Flash)
+    action_start = phases.get("_action_start", 0)
+    action_end = phases.get("_action_end", frames[-1]["time"])
+    # Add small buffer before/after
+    clip_start = max(0, action_start - 0.3)
+    clip_end = action_end + 0.3 if action_end else frames[-1]["time"]
+    bowling_frames = [f for f in frames if clip_start <= f["time"] <= clip_end]
+    if len(bowling_frames) < 10:
+        bowling_frames = frames  # fallback
+        log.warning("Bowling window too narrow, using all frames")
 
-    # 2. Transition (0.3s black)
-    black = np.zeros((OUT_H, OUT_W, 3), dtype=np.uint8)
-    black[:] = DARK_BG
-    rendered.extend([black] * int(OUTPUT_FPS * 0.3))
+    log.info(f"Bowling window: {clip_start:.2f}s → {clip_end:.2f}s ({len(bowling_frames)} frames)")
+    log.info(f"Overlay window: {ov_start:.2f}s → {ov_end:.2f}s")
+    log.info(f"Peak: {peak_sep:.1f}° at frame {peak_idx}")
 
-    # 3. Slo-mo with overlays
-    for f in frames:
+    # 1. Slo-mo with overlays — directly, no cold open
+    overlay_count = 0
+    for f in bowling_frames:
         in_window = ov_start <= f["time"] <= ov_end
         if in_window:
             phase = current_phase(f["time"], phases)
             annotated = render_overlay(f["frame_bgr"], f["landmarks"], f["separation"], phase)
+            overlay_count += 1
         else:
             annotated = f["frame_bgr"]
 
@@ -642,15 +671,20 @@ def compose_video(frames, peak_frame, phases, output_path, fps):
         if f["index"] == peak_idx:
             freeze = make_freeze_card(f["frame_bgr"], peak_sep)
             rendered.extend([freeze] * int(OUTPUT_FPS * 2.5))
+            log.info(f"Freeze card inserted at source t={f['time']:.2f}s")
 
-    # 4. Verdict card (3s)
+    log.info(f"Rendered {len(bowling_frames)} frames, {overlay_count} with overlays")
+
+    # 2. Verdict card (5s — the comparison scale, main takeaway)
     verdict_bgr = peak_frame["frame_bgr"] if peak_frame else frames[len(frames)//2]["frame_bgr"]
     verdict = make_verdict_card(verdict_bgr, peak_sep)
-    rendered.extend([verdict] * int(OUTPUT_FPS * 3))
+    rendered.extend([verdict] * int(OUTPUT_FPS * 5))
+    log.info("Verdict card: 5s")
 
-    # 5. End card (5s)
+    # 3. End card (1.5s)
     end = make_end_card()
-    rendered.extend([end] * int(OUTPUT_FPS * 5))
+    rendered.extend([end] * int(OUTPUT_FPS * 1.5))
+    log.info("End card: 1.5s")
 
     # Write raw MP4
     raw_path = output_path.replace(".mp4", "_raw.mp4")
@@ -729,8 +763,11 @@ def main():
     peak = find_peak(frames)
     phases = flash_phases if flash_phases else detect_phases(frames)
     # Pass action_start through phases dict for cold open trimming
-    if not args.skip_gemini and result and result.get("action_start"):
-        phases["_action_start"] = float(result["action_start"])
+    if not args.skip_gemini and result:
+        if result.get("action_start"):
+            phases["_action_start"] = float(result["action_start"])
+        if result.get("action_end"):
+            phases["_action_end"] = float(result["action_end"])
     if peak:
         print(f"  Peak: {peak['separation']:.1f}° at {peak['time']:.2f}s")
     print(f"  Phases: {json.dumps({k: round(v, 2) for k, v in phases.items()})}")
