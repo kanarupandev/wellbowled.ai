@@ -13,6 +13,9 @@
 | ID | Task | Owner | Branch | Status |
 |----|------|-------|--------|--------|
 | T10 | Kinogram mandatory improvements (7 fixes) | — | codex/dev | Planned — see `content/kinogram_pipeline/IMPROVEMENTS.md` |
+| T11 | Velocity Waterfall pipeline — kinetic chain speed curves | — | — | Planned |
+| T12 | Phase Portrait pipeline — angle-angle signature loops | — | — | Planned |
+| T13 | Spine Stress Gauge pipeline — lumbar flexion+rotation risk | — | — | Planned |
 
 ## Done
 

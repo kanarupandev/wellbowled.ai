@@ -97,6 +97,9 @@ Each pipeline: input clip → 9:16 reel (1080×1920, H.264, 30fps) with FFmpeg-b
 | **Content ranker** | Score deliveries by analysis richness, pick top 2. Start with heuristic, graduate to Gemini ranking prompt | Small |
 | **Approval UI** | Minimal screen: 2 video previews, approve/reject buttons, optional caption field | Small |
 | **Caption generator** | Gemini prompt: given analysis JSON, write a 1-2 line Instagram caption | Small |
+| **Velocity Waterfall** | Stacked velocity-time curves (pelvis→trunk→arm→wrist) animated alongside slo-mo — shows kinetic chain whip. Source: Putnam 1993, Felton 2023 | Medium |
+| **Phase Portrait** | Angle-vs-angle parametric loop draws itself during delivery — elite=tight loop, amateur=chaos. Source: Hamill et al. 2014 | Small |
+| **Spine Stress Gauge** | Pulsing arc at lumbar spine showing lateral flexion + rotation composite risk score — red zone >40°. Source: Feros et al. 2024 | Medium |
 | **Additional video types** | Wrist trail/gradient, release point mapping, stride length, arm speed curve — see competitive gap analysis | Medium–Large |
 
 ## Automation Progression
