@@ -39,7 +39,7 @@ ENV_PATH = REPO_ROOT / "linux_content_pipeline_work" / ".env"
 
 OUT_W, OUT_H = 1080, 1920
 OUTPUT_FPS = 30.0
-SLOW_FACTOR = 2  # 0.5x — crisp, not dragging
+SLOW_FACTOR = 4  # 0.25x — slow enough to see the separation build
 
 # Colors
 HIP_COLOR = (255, 105, 180)       # #FF69B4 hot pink
@@ -635,6 +635,50 @@ def make_verdict_frames(bowling_frames, peak_sep, duration_s=5.0):
     return result
 
 
+def make_title_card():
+    """Opening title card — explains what X-factor is and what to watch for."""
+    pil = Image.new("RGB", (OUT_W, OUT_H), DARK_BG)
+    draw = ImageDraw.Draw(pil)
+    cx = OUT_W // 2
+
+    f_hook = load_font(48, bold=True)
+    f_sub = load_font(28)
+    f_explain = load_font(22)
+
+    y = OUT_H // 2 - 180
+
+    # Hook question
+    hook = "Where does"
+    draw.text((cx - draw.textlength(hook, font=f_sub) // 2, y), hook, font=f_sub, fill=LIGHT_GREY)
+    y += 40
+
+    pace = "PACE"
+    draw.text((cx - draw.textlength(pace, font=f_hook) // 2, y), pace, font=f_hook, fill=WHITE)
+    y += 60
+
+    come = "come from?"
+    draw.text((cx - draw.textlength(come, font=f_sub) // 2, y), come, font=f_sub, fill=LIGHT_GREY)
+    y += 70
+
+    # Visual explanation
+    draw.ellipse((cx - 80, y, cx - 66, y + 14), fill=HIP_COLOR)
+    draw.text((cx - 58, y - 1), "Hips", font=load_font(20, bold=True), fill=HIP_COLOR)
+    draw.text((cx + 10, y - 1), "vs", font=load_font(20), fill=LIGHT_GREY)
+    draw.ellipse((cx + 40, y, cx + 54, y + 14), fill=SHOULDER_COLOR)
+    draw.text((cx + 62, y - 1), "Shoulders", font=load_font(20, bold=True), fill=SHOULDER_COLOR)
+    y += 50
+
+    # One-liner
+    exp = "The bigger the gap, the faster the ball."
+    draw.text((cx - draw.textlength(exp, font=f_explain) // 2, y), exp, font=f_explain, fill=(200, 208, 220))
+
+    # Brand
+    f_brand = load_font(18, bold=True)
+    draw.text((cx - draw.textlength("wellBowled.ai", font=f_brand) // 2, OUT_H - 80), "wellBowled.ai", font=f_brand, fill=BRAND_TEAL)
+
+    return cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
+
+
 def make_end_card():
     """End card — brand only, clean."""
     pil = Image.new("RGB", (OUT_W, OUT_H), (13, 17, 23))
@@ -680,8 +724,11 @@ def compose_video(frames, peak_frame, phases, output_path, fps):
     # No run-up. No follow-through. Just the X-factor moment.
     bfc = phases.get("back_foot_contact", 0)
     release = phases.get("release", phases.get("follow_through", frames[-1]["time"]))
+    # End at peak X-factor frame + tiny buffer — that's the money shot
+    # Don't trust Flash release timing, trust the actual data
+    peak_time = peak_frame["time"] if peak_frame else release
     clip_start = bfc
-    clip_end = release + 0.2
+    clip_end = peak_time + 0.15  # just past peak, then freeze card takes over
     bowling_frames = [f for f in frames if clip_start <= f["time"] <= clip_end]
     if len(bowling_frames) < 5:
         bowling_frames = frames
@@ -690,6 +737,11 @@ def compose_video(frames, peak_frame, phases, output_path, fps):
     # Overlay on ALL frames in the clip (they're all delivery stride)
     log.info(f"Clip: {clip_start:.2f}s → {clip_end:.2f}s ({len(bowling_frames)} frames)")
     log.info(f"Peak: {peak_sep:.1f}° at frame {peak_idx}")
+
+    # 0. Title card (3s) — explains what to watch for
+    title = make_title_card()
+    rendered.extend([title] * int(OUTPUT_FPS * 3))
+    log.info("Title card: 3s")
 
     # 1. Slo-mo with overlays on every frame (clip IS the delivery stride)
     for f in bowling_frames:
