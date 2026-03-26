@@ -648,9 +648,9 @@ def compose_video(frames, peak_frame, phases, output_path, fps):
     verdict = make_verdict_card(verdict_bgr, peak_sep)
     rendered.extend([verdict] * int(OUTPUT_FPS * 3))
 
-    # 5. End card (1s)
+    # 5. End card (5s)
     end = make_end_card()
-    rendered.extend([end] * int(OUTPUT_FPS * 1))
+    rendered.extend([end] * int(OUTPUT_FPS * 5))
 
     # Write raw MP4
     raw_path = output_path.replace(".mp4", "_raw.mp4")
