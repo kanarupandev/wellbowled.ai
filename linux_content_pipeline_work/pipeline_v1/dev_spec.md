@@ -1,6 +1,6 @@
 # Pipeline Dev Spec v1
 
-Single implementation contract for the Mac execution pipeline. This file is normative. Research and concept docs are non-normative.
+Single implementation contract for the Mac execution pipeline. This file is normative. All other pipeline docs are non-normative.
 
 ## 1. Scope
 
@@ -12,7 +12,33 @@ Single implementation contract for the Mac execution pipeline. This file is norm
 - Stage 1 model is fixed to `gemini-3-pro-preview`.
 - Pipeline design must be independently optimizable by stage and jointly optimizable end to end.
 - Phase and segment definitions must be pluggable.
-- Multi-technique execution is first-class and must be represented explicitly in manifests and artifacts.
+- Multi-technique execution is first-class and branch-explicit.
+
+## 1.1 Version Policy
+
+- `stage_version` in every manifest MUST use semantic versioning `MAJOR.MINOR.PATCH`.
+- Increment `PATCH` for wording-only or non-behavioral spec clarifications.
+- Increment `MINOR` for backward-compatible contract additions.
+- Increment `MAJOR` for breaking schema, path, validation, or execution-order changes.
+- `technique_version`, `segment_definition_version`, and `render_template_version` MUST also use semantic versioning.
+- A run is valid only if every referenced version exists in the local registry at execution time.
+
+## 1.2 Implementation Environment
+
+The first-pass implementation MUST pin these versions exactly:
+
+```text
+python==3.11.x
+numpy==1.26.4
+opencv-python==4.10.0.84
+pillow==10.4.0
+mediapipe==0.10.14
+torch==2.5.1
+torchvision==0.20.1
+ffmpeg==7.x CLI runtime
+```
+
+If a dependency is changed, the owning stage version MUST be bumped.
 
 ## 2. System Model
 
@@ -33,27 +59,15 @@ OverallScore(R) =
   - wf * FailurePenalty
 ```
 
-Where:
-
-- `OutputQuality`: final visual and analytic usefulness of encoded outputs.
-- `Robustness`: ability to survive weak clips, tool errors, and degraded paths.
-- `ContractCompliance`: consistency of manifests, timebase, coordinates, and branch artifacts.
-- `InsightUsefulness`: usefulness of verdicts and coaching copy.
-- `BranchCompleteness`: fraction of resolved technique branches successfully delivered.
-- `RuntimePenalty`: normalized cost of latency against budget.
-- `FailurePenalty`: severe penalty for terminal or silent failures.
-
 ### 2.2 Stage-local objectives
-
-Each stage MUST publish metrics that let it be optimized independently without breaking downstream contracts.
 
 - Stage 0: maximize decode reliability and metadata correctness.
 - Stage 1: maximize bowler identification accuracy, timestamp plausibility, and recommendation usefulness.
 - Stage 1.5: maximize suitability resolution while minimizing unnecessary expensive work.
 - Stage 2: maximize subject isolation continuity and identity stability.
-- Stage 3: maximize analysis-safe detail recovery with zero semantic time drift.
+- Stage 3: maximize analysis-safe detail recovery with zero semantic drift.
 - Stage 4: maximize stable landmark coverage for the bowler only.
-- Stage 5: maximize physical plausibility and repeatability of computed metrics under a pluggable segment model.
+- Stage 5: maximize physical plausibility and repeatability under a pluggable segment model.
 - Stage 5.5: maximize cross-stage inconsistency detection.
 - Stage 6: maximize validation quality and coaching specificity.
 - Stage 7: maximize render clarity and branch fidelity.
@@ -75,8 +89,6 @@ assert shared_stages_do_not_embed_branch_specific_constants
 ## 3. Execution Contract
 
 ### 3.1 Directory layout
-
-Each run MUST create a run root:
 
 ```text
 <run_root>/
@@ -118,13 +130,13 @@ Each run MUST create a run root:
 
 ## 4. Shared Manifest Schema
 
-Every stage MUST emit `<stage_dir>/manifest.json`. The following schema is mandatory.
+Every stage MUST emit `<stage_dir>/manifest.json`.
 
 ```json
 {
   "run_id": "string",
   "stage_name": "string",
-  "stage_version": "string",
+  "stage_version": "semver",
   "status": "success | degraded | failed | skipped",
   "source_path": "string",
   "source_hash": "sha256:string",
@@ -146,15 +158,18 @@ Every stage MUST emit `<stage_dir>/manifest.json`. The following schema is manda
   "inputs": [
     {
       "logical_name": "string",
+      "artifact_role": "string",
+      "schema_id": "string",
+      "content_type": "string",
       "path": "string",
       "required": true,
-      "branch_id": null
+      "branch_id": null,
+      "plan_ref": null
     }
   ],
-  "artifact_paths": {
-    "primary": {},
-    "secondary": {}
-  },
+  "shared_artifacts": {},
+  "branch_artifacts": {},
+  "error_artifacts": {},
   "stage_payload_schema_id": "string",
   "confidence": {
     "overall": 0.0,
@@ -184,6 +199,14 @@ Every stage MUST emit `<stage_dir>/manifest.json`. The following schema is manda
     {
       "branch_id": "string",
       "technique_id": "string",
+      "plan_ref": "string",
+      "segment_definition_id": "string",
+      "segment_definition_version": "semver",
+      "render_template_id": "string",
+      "render_template_version": "semver",
+      "branch_dir": "string",
+      "branch_manifest_path": "string",
+      "branch_report_path": "string",
       "status": "success | degraded | failed | skipped"
     }
   ],
@@ -209,36 +232,22 @@ assert manifest["source_video"]["width"] == run_manifest["source_video"]["width"
 assert manifest["source_video"]["height"] == run_manifest["source_video"]["height"]
 ```
 
-### 4.2 Artifact path rules
+### 4.2 Branch invariants
 
-- `artifact_paths.primary` and `artifact_paths.secondary` MUST use explicit keys, not positional arrays.
-- Shared-stage artifacts use branch-independent keys.
-- Branch outputs MUST be keyed by `branch_id`.
+For branch-aware stages `stage5` through `stage8`:
 
-Example:
-
-```json
-{
-  "artifact_paths": {
-    "primary": {
-      "scene_report": "stage1/scene_report.json",
-      "plan": "stage1_5/plan.json"
-    },
-    "secondary": {
-      "branches": {
-        "branch_speed_gradient": {
-          "render_report": "stage7/branch_speed_gradient/render_report.json",
-          "encoded_video": "stage8/branch_speed_gradient/upload_ready.mp4"
-        }
-      }
-    }
-  }
-}
+```python
+router_branch_ids = [b["branch_id"] for b in stage1_5_plan["branch_plans"]]
+stage_branch_ids = [b["branch_id"] for b in manifest["branches"]]
+assert stage_branch_ids == router_branch_ids
+assert all(b["plan_ref"] == f"stage1_5:branch:{b['branch_id']}" for b in manifest["branches"])
+assert all(b["branch_dir"] for b in manifest["branches"])
+assert all(b["branch_manifest_path"] for b in manifest["branches"])
 ```
 
-## 5. Run Manifest
+A branch-aware stage MUST preserve the exact Stage 1.5 branch set even when a branch is `failed`, `skipped`, or `degraded`.
 
-`run_manifest.json` MUST contain:
+## 5. Run Manifest
 
 ```json
 {
@@ -261,29 +270,53 @@ Example:
 }
 ```
 
+## 5.1 Registry Bootstrap Rules
+
+The registry files are required runtime inputs, not optional examples.
+
+`registry/technique_plugins.json` MUST contain at least one valid technique plugin object and MUST be an array of plugin objects.
+
+`registry/segment_definitions.json` MUST contain at least one valid segment definition object and MUST be an array of segment definition objects.
+
+Registry loader rules:
+
+```python
+assert technique_plugins_json_exists
+assert segment_definitions_json_exists
+assert isinstance(technique_plugins, list) and len(technique_plugins) >= 1
+assert isinstance(segment_definitions, list) and len(segment_definitions) >= 1
+assert unique((p["technique_id"], p["technique_version"]) for p in technique_plugins)
+assert unique((d["segment_definition_id"], d["version"]) for d in segment_definitions)
+assert every_plugin_references_existing_segment_definition
+```
+
+Missing registry files, malformed registry JSON, duplicate ids+versions, or unresolved references MUST fail the run at Stage 1.5.
+
+Minimum bootstrap content:
+
+- `technique_plugins.json` MUST include at least `speed_gradient`.
+- `segment_definitions.json` MUST include at least `delivery_phases_v1@1.0.0`.
+
 ## 6. Pluggable Technique and Segment System
 
-Technique logic MUST be decoupled from shared pipeline stages.
-
 ### 6.1 Technique plugin contract
-
-Each technique plugin MUST declare:
 
 ```json
 {
   "technique_id": "speed_gradient",
+  "technique_version": "1.0.0",
   "required_shared_stages": ["stage0", "stage1", "stage1_5", "stage2", "stage4", "stage5", "stage7", "stage8"],
   "optional_stages": ["stage3", "stage6", "stage7_5"],
   "supported_camera_angles": ["side-on", "behind", "elevated", "front-on", "mixed"],
   "min_pose_quality": 0.80,
   "segment_definition_id": "delivery_phases_v1",
-  "render_template_id": "speed_gradient_v1"
+  "segment_definition_version": "1.0.0",
+  "render_template_id": "speed_gradient_v1",
+  "render_template_version": "1.0.0"
 }
 ```
 
 ### 6.2 Segment definition contract
-
-Phase and segment definitions MUST be pluggable and versioned.
 
 ```json
 {
@@ -334,29 +367,37 @@ Phase and segment definitions MUST be pluggable and versioned.
 }
 ```
 
-### 6.3 Branch plan contract
+### 6.3 Canonical branch plan contract
 
-The router MUST resolve branch-specific execution plans.
+Stage 1.5 is the single source of truth for branch resolution.
 
 ```json
 {
   "branch_id": "branch_speed_gradient",
   "technique_id": "speed_gradient",
+  "technique_version": "1.0.0",
   "segment_definition_id": "delivery_phases_v1",
+  "segment_definition_version": "1.0.0",
   "render_template_id": "speed_gradient_v1",
+  "render_template_version": "1.0.0",
+  "required_stages": ["stage5", "stage7", "stage8"],
+  "optional_stages": ["stage6", "stage7_5"],
   "suitability": "supported | degraded | unsupported",
-  "requires_stage6": true,
-  "requires_rife": false,
+  "degraded": false,
+  "terminal_failed": false,
+  "branch_output_root": "branches/branch_speed_gradient",
+  "required_inputs": {
+    "analysis": "stage5/branches/branch_speed_gradient/analysis.json",
+    "render_report": "stage7/branches/branch_speed_gradient/render_report.json"
+  },
+  "expected_outputs": {
+    "render_frames": "stage7/branches/branch_speed_gradient/rendered_frames",
+    "encoded_video": "stage8/branches/branch_speed_gradient/upload_ready.mp4"
+  },
+  "plan_ref": "stage1_5:branch:branch_speed_gradient",
   "warnings": []
 }
 ```
-
-### 6.4 Plugin constraints
-
-- Shared stages MUST not contain technique-specific constants except via plugin input.
-- Stage 5 MUST accept a segment definition object rather than hard-coded segment names.
-- Stage 7 MUST accept a render template id rather than hard-coded layout logic.
-- Each branch MUST be independently executable after Stage 1.5.
 
 ## 7. Stage Definitions
 
@@ -403,11 +444,6 @@ assert fps >= 15.0
 assert min(width, height) >= 240
 assert frame_count >= 45
 ```
-
-### Fallback
-
-- None.
-- Failure is terminal.
 
 ## Stage 1: Scene Understanding
 
@@ -485,9 +521,8 @@ assert clip_quality >= 5
 
 - `run_manifest.json`
 - `stage1/scene_report.json`
-- `stage0/clip_metadata.json`
-- technique plugin registry
-- segment definition registry
+- `registry/technique_plugins.json`
+- `registry/segment_definitions.json`
 
 ### Outputs
 
@@ -509,19 +544,7 @@ assert clip_quality >= 5
     "height": 1920,
     "fps": 30
   },
-  "branch_plans": [
-    {
-      "branch_id": "branch_speed_gradient",
-      "technique_id": "speed_gradient",
-      "segment_definition_id": "delivery_phases_v1",
-      "render_template_id": "speed_gradient_v1",
-      "suitability": "supported",
-      "requires_stage6": true,
-      "requires_rife": false,
-      "warnings": []
-    }
-  ],
-  "warnings": []
+  "branch_plans": []
 }
 ```
 
@@ -537,14 +560,8 @@ assert len(branch_plans) >= 1
 assert analysis_fps == source_fps
 assert render_target["fps"] == 30
 assert len({b["branch_id"] for b in branch_plans}) == len(branch_plans)
-assert all(b["segment_definition_id"] is not None for b in branch_plans)
-assert all(b["render_template_id"] is not None for b in branch_plans)
+assert all(b["plan_ref"] == f"stage1_5:branch:{b['branch_id']}" for b in branch_plans)
 ```
-
-### Fallback
-
-- If user request conflicts with Gemini recommendation, proceed with warning.
-- If all techniques are unsupported, fail terminally with explicit reason.
 
 ## Stage 2: Bowler Isolation
 
@@ -562,6 +579,7 @@ assert all(b["render_template_id"] is not None for b in branch_plans)
 
 - `stage2/manifest.json`
 - `stage2/stage2_metrics.json`
+- `stage2/centroid_track.json`
 - `stage2/masks/frame_000000.png ...`
 - `stage2/isolation_preview.mp4`
 
@@ -571,6 +589,9 @@ assert all(b["render_template_id"] is not None for b in branch_plans)
 {
   "frames_masked": 0,
   "frames_empty": 0,
+  "mask_count": 0,
+  "mask_width": 0,
+  "mask_height": 0,
   "avg_mask_area_px": 0.0,
   "min_mask_area_px": 0.0,
   "max_mask_area_px": 0.0,
@@ -583,23 +604,44 @@ assert all(b["render_template_id"] is not None for b in branch_plans)
     "x": 0.0,
     "y": 0.0
   },
-  "isolation_mode": "sam2_masks | passthrough_full_frame"
+  "isolation_mode": "sam2_masks | passthrough_full_frame",
+  "synthetic_mask_fill_value": 255,
+  "single_person_gate_passed": false
 }
 ```
 
-### Processing rules
+### Mask contract
 
-- Use the first valid Stage 1 center point as primary prompt.
-- Generate exactly one binary mask PNG per source frame.
-- If `isolation_mode == passthrough_full_frame`, generate synthetic all-white masks with the same dimensions as the source frames. This preserves downstream contracts.
-- Mask file names MUST map 1:1 to source frame indices.
-- `isolation_preview.mp4` is required.
+- One PNG mask per source frame.
+- Same width and height as source.
+- Pixel values MUST be only `0` or `255`.
+- Downstream stages MUST treat all Stage 2 masks identically.
+- No alternate no-mask mode exists downstream.
+- If `isolation_mode == passthrough_full_frame`, every pixel in every mask MUST be `255`.
+
+### `centroid_track.json`
+
+```json
+{
+  "coordinate_system": "normalized_xy",
+  "frames": [
+    {
+      "frame_index": 0,
+      "x": 0.0,
+      "y": 0.0
+    }
+  ]
+}
+```
 
 ### Validation
 
 ```python
-assert mask_file_count == source_frame_count
+assert mask_count == source_frame_count
+assert mask_width == source_width
+assert mask_height == source_height
 assert isolation_mode in {"sam2_masks", "passthrough_full_frame"}
+assert valid_mask_values_only in {0, 255}
 if isolation_mode == "sam2_masks":
     assert frames_masked / source_frame_count >= 0.90
     assert min_mask_area_px > 500
@@ -607,7 +649,8 @@ if isolation_mode == "sam2_masks":
     assert max_centroid_drift_ratio < 0.15
     assert max_adjacent_mask_area_change_ratio < 0.50
 else:
-    assert people_count == 1
+    assert single_person_gate_passed is True
+    assert synthetic_mask_fill_value == 255
     assert all_masks_are_full_frame_white is True
 ```
 
@@ -636,18 +679,6 @@ else:
 - `stage3/stage3_metrics.json`
 - `stage3/enhanced_frames/` or passthrough reference
 
-### `stage3_metrics.json`
-
-```json
-{
-  "upscaled": false,
-  "upscale_factor": 1,
-  "output_width": 0,
-  "output_height": 0,
-  "analysis_source": "source_masked_frames | enhanced_frames"
-}
-```
-
 ### Validation
 
 ```python
@@ -673,6 +704,17 @@ assert analysis_source in {"source_masked_frames", "enhanced_frames"}
 - `stage2/masks/`
 - optional `stage3/enhanced_frames/`
 - `stage1/scene_report.json`
+
+### Mask application rule
+
+For each source frame and corresponding Stage 2 mask:
+
+```python
+assert mask_pixel in {0, 255}
+masked_rgb = source_rgb if mask_pixel == 255 else (0, 0, 0)
+```
+
+No alpha compositing, threshold estimation, or alternate blend mode is allowed.
 
 ### Outputs
 
@@ -704,12 +746,6 @@ assert analysis_source in {"source_masked_frames", "enhanced_frames"}
   }
 }
 ```
-
-### Processing rules
-
-- Apply Stage 2 mask before pose extraction.
-- If Stage 3 is active, it may be used only if frame count remains identical and source-time mapping is unchanged.
-- Emit one frame entry per source frame.
 
 ### Validation
 
@@ -753,10 +789,14 @@ assert pose_quality["determinism_verified"] is True
 {
   "canonical_timebase": "source_seconds",
   "branch_id": "string",
+  "plan_ref": "string",
   "segment_definition_id": "string",
+  "segment_definition_version": "semver",
   "delivery_window": {
     "start_s": 0.0,
-    "end_s": 0.0
+    "end_s": 0.0,
+    "start_idx": 0,
+    "end_idx": 0
   },
   "resolved_segments": [
     {
@@ -772,6 +812,7 @@ assert pose_quality["determinism_verified"] is True
     "16": 0.0
   },
   "peak_order_correct": true,
+  "peak_order_rule": "stable_sort_by_peak_time_then_expected_order_index",
   "total_chain_amplification": 0.0,
   "weakest_link": "string",
   "camera_angle": "string",
@@ -815,31 +856,40 @@ def source_frame_index(time_s, fps):
 
 For each branch independently:
 
-1. Load the branch's `segment_definition_id` from `plan.json`.
-2. Resolve `delivery_window.start_s = scene_report.timestamps_s[start_key]`.
-3. Resolve `delivery_window.end_s = scene_report.timestamps_s[end_key]`.
-4. Compute `delivery_window_start_idx = source_frame_index(delivery_window.start_s, source_fps)`.
-5. Compute `delivery_window_end_idx = source_frame_index(delivery_window.end_s, source_fps)`.
-6. Define `delivery_window_indices = range(delivery_window_start_idx + 1, delivery_window_end_idx + 1)` because velocity uses frame `t-1 -> t`.
-7. Resolve each segment's joint list using `joint_source` and `bowling_arm`.
-8. Compute per-joint velocities on consecutive source frames only.
-9. Apply a 3-frame median filter to each per-joint velocity series.
-10. Compute per-segment time series using `aggregate_segment_velocity(..., delivery_window_indices, ...)`.
-11. Compute each segment peak as the maximum value in its segment time series inside the delivery window.
-12. Compute each transition ratio from the ordered transition list in the segment definition.
-13. Compute `peak_order_correct` by comparing the chronological order of observed segment peak times with `expected_peak_order`.
-14. Persist the filtered per-joint wrist velocity peaks for joints 15 and 16 in the branch analysis payload so Stage 5.5 can consume them without recomputing hidden state.
+1. Load branch plan from `stage1_5/plan.json` by `branch_id`.
+2. Load the exact segment definition by id and version.
+3. Resolve `delivery_window.start_s = scene_report.timestamps_s[start_key]`.
+4. Resolve `delivery_window.end_s = scene_report.timestamps_s[end_key]`.
+5. Compute `delivery_window.start_idx = source_frame_index(start_s, source_fps)`.
+6. Compute `delivery_window.end_idx = source_frame_index(end_s, source_fps)`.
+7. Define `delivery_window_indices = range(start_idx + 1, end_idx + 1)`.
+8. Resolve each segment's joint list using `joint_source` and `bowling_arm`.
+9. Compute per-joint velocities on consecutive source frames only.
+10. Apply a 3-frame median filter to each per-joint velocity series.
+11. Compute per-segment time series using `aggregate_segment_velocity`.
+12. Compute each segment peak as the maximum value in the delivery window.
+13. If multiple frames share the same max value, choose the earliest frame.
+14. If any expected segment has no valid series, mark branch `failed`.
+15. Compute each transition ratio from the ordered transition list.
+16. Compute `peak_order_correct` by stable-sorting observed segment peaks by `(peak_time_s, expected_order_index)` and comparing to `expected_peak_order`.
+17. Persist supporting wrist peaks for joints `15` and `16`.
 
 ### Validation
 
 ```python
+expected_segments = [s["segment_id"] for s in segment_definition["segments"]]
+expected_transitions = [f"{a}->{b}" for a, b in segment_definition["transitions"]]
 assert delivery_window["start_s"] < delivery_window["end_s"]
+assert [s["segment_id"] for s in resolved_segments] == expected_segments
 assert all(seg["joint_indices"] for seg in resolved_segments)
+assert set(segment_peaks.keys()) == set(expected_segments)
+assert set(transition_ratios.keys()) == set(expected_transitions)
 assert all(v["velocity_tl_s"] > 0 for v in segment_peaks.values())
 assert all(delivery_window["start_s"] <= v["peak_time_s"] <= delivery_window["end_s"] for v in segment_peaks.values())
 assert all(0.5 <= r <= 5.0 for r in transition_ratios.values())
 assert len(confidence_notes) >= 1
 assert segment_definition_id == branch_plan["segment_definition_id"]
+assert segment_definition_version == branch_plan["segment_definition_version"]
 ```
 
 ### Fallback
@@ -857,6 +907,7 @@ assert segment_definition_id == branch_plan["segment_definition_id"]
 
 - `stage1/scene_report.json`
 - `stage2/stage2_metrics.json`
+- `stage2/centroid_track.json`
 - `stage4/poses.json`
 - `stage5/branches/<branch_id>/analysis.json`
 
@@ -872,9 +923,14 @@ assert segment_definition_id == branch_plan["segment_definition_id"]
   "passed": true,
   "checks": [
     {
+      "check_id": "string",
       "name": "string",
       "result": "pass | warn | fail",
-      "detail": "string"
+      "measured_value": 0.0,
+      "threshold": 0.0,
+      "comparison": "<= | >= | ==",
+      "detail": "string",
+      "rerun_required": false
     }
   ]
 }
@@ -882,49 +938,33 @@ assert segment_definition_id == branch_plan["segment_definition_id"]
 
 ### Required checks
 
-Exact definitions:
-
 ```python
-# Helper definitions
 release_frame = floor(scene_report.timestamps_s["release"] * source_fps + 1e-6)
-release_posture_tolerance = 0.10  # normalized frame height
-
-# 1. Bowling arm consistency
+release_posture_tolerance = 0.10
 left_wrist_peak = analysis.supporting_joint_peaks["15"]
 right_wrist_peak = analysis.supporting_joint_peaks["16"]
 if scene_report.bowling_arm == "right":
     assert right_wrist_peak >= left_wrist_peak
 else:
     assert left_wrist_peak >= right_wrist_peak
-
-# 2. Centroid continuity against Stage 1 track
-# Stage 2 must persist centroid track in normalized coordinates for each source frame index.
-# Interpolate Stage 1 bowler points linearly over source frame indices.
 assert max_distance_between(stage2_centroid_track, linearly_interpolated_stage1_track) < 0.30
-
-# 3. Release posture plausibility
-# Bowling wrist should not be meaningfully below the bowling-side hip at release.
-# right arm => wrist 16, hip 24; left arm => wrist 15, hip 23.
 bowling_wrist_idx = 16 if scene_report.bowling_arm == "right" else 15
 bowling_hip_idx = 24 if scene_report.bowling_arm == "right" else 23
 bowling_wrist_y_at_release = poses.frames[release_frame].landmarks[bowling_wrist_idx][1]
 bowling_hip_y_at_release = poses.frames[release_frame].landmarks[bowling_hip_idx][1]
 assert bowling_wrist_y_at_release <= bowling_hip_y_at_release + release_posture_tolerance
-
-# 4. Body size continuity
 torso_length_mean = poses.pose_quality["torso_length_mean"]
 torso_length_stddev = poses.pose_quality["torso_length_stddev"]
 assert torso_length_stddev / torso_length_mean < 0.20
-
-# 5. Delivery window sanity
 analysis_wrist_peak_time_s = analysis.segment_peaks["wrist"]["peak_time_s"]
 assert abs(analysis_wrist_peak_time_s - scene_report.timestamps_s["release"]) <= 0.20
 ```
 
-### Fallback
+### Failure policy
 
 - Any failed check marks the branch degraded.
-- Failed centroid continuity or release posture SHOULD trigger rerun from Stage 2.
+- Failed centroid continuity or failed release posture MUST trigger rerun from Stage 2.
+- Other failed checks continue degraded with `rerun_required=false`.
 
 ## Stage 6: Insight and Validation
 
@@ -945,35 +985,12 @@ Per branch:
 - `stage6/manifest.json`
 - `stage6/branches/<branch_id>/insight.json`
 
-### `insight.json`
-
-```json
-{
-  "branch_id": "string",
-  "analysis_validation": "confirmed | suspicious | rejected",
-  "isolation_validation": "bowler_correct | wrong_person | unclear",
-  "validation_notes": [],
-  "coaching_lines": [],
-  "social_caption": "string",
-  "confidence": 0.0
-}
-```
-
-### Validation
-
-```python
-assert analysis_validation in {"confirmed", "suspicious", "rejected"}
-assert isolation_validation in {"bowler_correct", "wrong_person", "unclear"}
-assert 0.0 <= confidence <= 1.0
-if manifest["status"] != "skipped":
-    assert len(coaching_lines) == 3
-```
-
-### Fallback
+### Failure policy
 
 - Optional stage per branch.
 - If disabled by branch plan, mark branch skipped.
-- If analysis is rejected or wrong person is detected, rerun from Stage 2 for that branch only if shared artifacts are invalidated; otherwise fail the branch.
+- If analysis is rejected or wrong person is detected, mark branch failed.
+- Stage 6 MUST NOT request rerun of shared Stage 2 artifacts. Shared artifact reruns are only triggered by Stage 5.5.
 
 ## Stage 7: Render
 
@@ -996,7 +1013,7 @@ Per branch:
 
 - `stage5/branches/<branch_id>/analysis.json`
 - optional `stage6/branches/<branch_id>/insight.json`
-- render plugin from branch plan
+- exact render template payload resolved by id and version
 
 ### Outputs
 
@@ -1009,7 +1026,12 @@ Per branch:
 ```json
 {
   "branch_id": "string",
+  "plan_ref": "string",
   "technique": "string",
+  "render_template_id": "string",
+  "render_template_version": "semver",
+  "analysis_ref": "string",
+  "insight_ref": "string | null",
   "total_frames": 0,
   "duration_s": 0.0,
   "output_fps": 30,
@@ -1029,8 +1051,10 @@ Per branch:
 assert total_frames > 0
 assert output_fps == 30
 assert 10.0 <= duration_s <= 60.0
-assert analysis_section_contains_non_black_frames
-assert verdict_card_matches_analysis_json
+# analysis_section_contains_non_black_frames
+assert any(sum(pixel) > 0 for frame in sample_analysis_frames for pixel in frame)
+# verdict_card_matches_analysis_json
+assert rendered_verdict_numeric_values == analysis_json_numeric_values
 ```
 
 ### Fallback
@@ -1054,7 +1078,14 @@ Per branch:
 ### Outputs
 
 - `stage7_5/manifest.json`
-- `stage7_5/branches/<branch_id>/interpolated_frames/` or passthrough reference
+- `stage7_5/branches/<branch_id>/interpolated_frames/`
+- `stage7_5/branches/<branch_id>/passthrough_ref.txt`
+
+### Selection contract
+
+- Branch directory MUST always exist.
+- If RIFE succeeds, `interpolated_frames/` is authoritative.
+- If RIFE is skipped, degraded, or failed, `passthrough_ref.txt` MUST point to the authoritative Stage 7 frame directory.
 
 ### Validation
 
@@ -1062,12 +1093,9 @@ Per branch:
 if rife_used:
     assert output_frame_count >= input_frame_count * 4
 else:
-    assert branch_status in {"skipped", "success"}
+    assert branch_status in {"skipped", "success", "degraded", "failed"}
+    assert passthrough_ref_exists is True
 ```
-
-### Fallback
-
-- If RIFE fails, use Stage 7 output directly.
 
 ## Stage 8: Encode
 
@@ -1079,30 +1107,25 @@ else:
 
 Per branch:
 
-- `stage7/branches/<branch_id>/rendered_frames/` or `stage7_5/branches/<branch_id>/interpolated_frames/`
+- `stage7_5` authoritative frames if `stage7_5` status is `success`
+- otherwise Stage 7 rendered frames
 - `stage7/branches/<branch_id>/render_report.json`
+
+### Selection rule
+
+```python
+if stage7_5_branch_status == "success":
+    encode_input = stage7_5_interpolated_frames
+else:
+    encode_input = stage7_rendered_frames
+```
 
 ### Outputs
 
 - `stage8/manifest.json`
 - `stage8/branches/<branch_id>/upload_ready.mp4`
 - `stage8/branches/<branch_id>/encode_report.json`
-
-### `encode_report.json`
-
-```json
-{
-  "branch_id": "string",
-  "codec": "h264",
-  "pixel_format": "yuv420p",
-  "width": 1080,
-  "height": 1920,
-  "fps": 30.0,
-  "bitrate_bps": 0,
-  "duration_s": 0.0,
-  "file_size_bytes": 0
-}
-```
+- `stage8/branches/<branch_id>/error_report.json` on failure
 
 ### Validation
 
@@ -1117,30 +1140,29 @@ assert file_size_bytes < 100 * 1024 * 1024
 assert playable is True
 ```
 
-### Fallback
-
-- Retry once with safer FFmpeg settings.
-- If still unplayable, fail the branch.
-
 ## 8. Failure Policy
 
-- `failed`: branch or shared stage cannot continue.
-- `degraded`: branch or shared stage may continue with explicit warnings.
+- `failed`: stage or branch cannot continue.
+- `degraded`: stage or branch may continue with explicit warnings.
 - `skipped`: optional stage not executed.
-- A terminal failure MUST produce `error_report.json` in the failing stage directory or branch directory.
 - Shared-stage failure fails the whole run.
-- Branch-stage failure fails only the affected branch unless the invalid artifact is shared.
+- Branch-stage failure fails only that branch.
+- Every failed branch MUST still emit:
+  - branch directory
+  - branch manifest entry
+  - `error_report.json`
+  - final branch status in the parent stage manifest
 
 ## 9. Degraded Modes
 
-| Stage | Trigger | Degraded behavior |
-|---|---|---|
-| Stage 1 | API unavailable | manual scene input |
-| Stage 2 | SAM 2 unavailable and one visible person only | synthetic full-frame masks |
-| Stage 3 | enhancement artifacts or failure | pass through source masked frames |
-| Stage 5 | implausible but non-zero ratios | flag and continue |
-| Stage 6 | optional disabled or request failed | render without coaching text |
-| Stage 7.5 | RIFE failed | use Stage 7 frames |
+| Stage | Trigger | Result status | Required fields | Downstream interpretation |
+|---|---|---|---|---|
+| Stage 1 | API unavailable | `degraded` | manual input ref | continue |
+| Stage 2 | SAM 2 unavailable and one visible person only | `degraded` | `isolation_mode=passthrough_full_frame`, synthetic mask fields | continue |
+| Stage 3 | enhancement artifacts or failure | `degraded` | `upscaled=false` | continue |
+| Stage 5 | implausible but non-zero ratios | `degraded` | flags, confidence notes | continue |
+| Stage 6 | optional disabled or request failed | `skipped` or `degraded` | branch status | continue |
+| Stage 7.5 | RIFE failed | `degraded` | passthrough ref | continue |
 
 ## 10. Non-Negotiable Assertions
 
@@ -1154,7 +1176,45 @@ assert plugins_are_selected_by_router_not_by_shared_stages
 assert segment_definitions_are_loaded_from_registry_not_hard_coded_in_stage5
 assert branch_plans_are_explicit_and_one_to_one_with_branch_outputs
 assert degraded_no_isolation_mode_still_emits_masks
+assert branch_ids_are_stable_across_all_branch_aware_stages
+assert branch_aware_stage_manifests_reference_router_plan_refs
 ```
+
+## 10.1 Logging Contract
+
+The `logs/` directory is mandatory.
+
+Required files:
+
+```text
+logs/run.log
+logs/stage0.log
+logs/stage1.log
+logs/stage1_5.log
+logs/stage2.log
+logs/stage3.log
+logs/stage4.log
+logs/stage5.log
+logs/stage5_5.log
+logs/stage6.log
+logs/stage7.log
+logs/stage7_5.log
+logs/stage8.log
+```
+
+Log format MUST be line-delimited text with this structure:
+
+```text
+<ISO-8601> level=<DEBUG|INFO|WARNING|ERROR> run_id=<id> stage=<stage> branch_id=<id|none> event=<token> message=<free text>
+```
+
+Required logging rules:
+
+- Shared stages use `branch_id=none`.
+- Branch-aware stages MUST log once per branch transition into `success`, `degraded`, `failed`, or `skipped`.
+- Every retry, fallback activation, and rerun trigger MUST emit a `WARNING` or `ERROR` line.
+- Every terminal failure MUST emit an `ERROR` line containing the path to `error_report.json`.
+- Python implementation MAY use the standard `logging` module, but emitted lines MUST conform to the required format.
 
 ## 11. Implementation Order
 
