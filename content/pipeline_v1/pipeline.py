@@ -206,13 +206,20 @@ def run_stage0(run_root, source_path, run_id, src_hash, log):
     log.info("Stage 0 start", extra={"event": "start"})
 
     cap = cv2.VideoCapture(str(source_path))
-    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = cap.get(cv2.CAP_PROP_FPS)
     fc = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     dur = round(fc / fps, 3) if fps > 0 else 0
     ci = int(cap.get(cv2.CAP_PROP_FOURCC))
     codec = "".join(chr((ci >> 8 * i) & 0xFF) for i in range(4))
+
+    # get ACTUAL frame dimensions (handles rotation metadata correctly)
+    ok, first_frame = cap.read()
+    if ok:
+        h, w = first_frame.shape[:2]
+        cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+    else:
+        w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
     sv = {"width": w, "height": h, "fps": fps, "duration_seconds": dur,
           "frame_count": fc, "codec": codec}
@@ -346,7 +353,7 @@ Rules:
     assert ts["back_foot_contact"] < ts["front_foot_contact"], "bfc < ffc"
     assert ts["front_foot_contact"] <= ts["release"], "ffc <= release"
     assert ts["release"] < ts["follow_through"], "release < follow_through"
-    # clamp follow_through
+    # clamp follow_through to source duration
     ts["follow_through"] = min(ts["follow_through"], sv["duration_seconds"])
     assert scene["bowling_arm"] in {"left", "right"}
     assert len(scene["bowler_center_points"]) >= 1
@@ -364,6 +371,68 @@ Rules:
     log.info(f"Stage 1 done: {scene['bowler_id']}, arm={scene['bowling_arm']}, "
              f"quality={scene.get('clip_quality')}", extra={"event": "done"})
     return scene
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# VIDEO CROP (between Stage 1 and Stage 1.5)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+def crop_video_to_action(run_root, sv, scene, source_path, log):
+    """Trim video to action window: [run_up_start - 0.5s, follow_through + 0.5s].
+    Returns (new_source_path, new_sv, time_offset) or (source_path, sv, 0) if no trim needed."""
+    ts = scene["timestamps_s"]
+    buf = 0.5  # seconds buffer
+    crop_start = max(0, ts["run_up_start"] - buf)
+    crop_end = min(sv["duration_seconds"], ts["follow_through"] + buf)
+
+    # skip crop if it's close to full duration
+    if crop_start < 0.2 and (sv["duration_seconds"] - crop_end) < 0.2:
+        log.info("No crop needed — action spans full clip", extra={"event": "crop_skip"})
+        return source_path, sv, 0.0
+
+    out_path = run_root / "source" / "input_cropped.mp4"
+    dur = crop_end - crop_start
+
+    cmd = [
+        "ffmpeg", "-y", "-ss", str(crop_start), "-i", str(source_path),
+        "-t", str(dur), "-c:v", "libx264", "-crf", "12", "-an", str(out_path),
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        log.warning(f"Crop failed: {result.stderr[:200]}", extra={"event": "crop_fail"})
+        return source_path, sv, 0.0
+
+    # read new metadata
+    cap = cv2.VideoCapture(str(out_path))
+    ok, fr = cap.read()
+    new_h, new_w = fr.shape[:2] if ok else (sv["height"], sv["width"])
+    if ok:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+    new_fps = cap.get(cv2.CAP_PROP_FPS)
+    new_fc = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    new_dur = round(new_fc / new_fps, 3) if new_fps > 0 else 0
+    cap.release()
+
+    new_sv = {**sv, "width": new_w, "height": new_h, "fps": new_fps,
+              "frame_count": new_fc, "duration_seconds": new_dur}
+
+    # remap timestamps
+    offset = crop_start
+    for k in ts:
+        ts[k] = round(max(0, ts[k] - offset), 4)
+    ts["follow_through"] = min(ts["follow_through"], new_dur)
+
+    # remap bowler center points
+    for pt in scene["bowler_center_points"]:
+        pt["frame_time_s"] = round(max(0, pt["frame_time_s"] - offset), 4)
+    # remap bounding box
+    if "bowler_bounding_box" in scene and scene["bowler_bounding_box"]:
+        scene["bowler_bounding_box"]["frame_time_s"] = round(
+            max(0, scene["bowler_bounding_box"]["frame_time_s"] - offset), 4)
+
+    log.info(f"Cropped: {crop_start:.2f}-{crop_end:.2f}s → {new_fc} frames ({new_dur}s)",
+             extra={"event": "crop_done"})
+    return out_path, new_sv, offset
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -463,20 +532,24 @@ def run_stage2(run_root, sv, scene, run_id, src_hash, source_path, log):
     t0 = now_iso()
     log.info("Stage 2 start", extra={"event": "start"})
 
-    W, H, fps, fc = sv["width"], sv["height"], sv["fps"], sv["frame_count"]
+    fps, fc = sv["fps"], sv["frame_count"]
 
     # extract frames to JPEG dir for SAM 2
     frames_dir = sd / "frames"; frames_dir.mkdir(exist_ok=True)
     cap = cv2.VideoCapture(str(source_path))
     idx = 0
+    actual_H, actual_W = 0, 0
     while True:
         ok, fr = cap.read()
         if not ok:
             break
+        if idx == 0:
+            actual_H, actual_W = fr.shape[:2]
         cv2.imwrite(str(frames_dir / f"{idx:06d}.jpg"), fr)
         idx += 1
     cap.release()
     actual_fc = idx
+    W, H = actual_W, actual_H
     log.info(f"Extracted {actual_fc} frames", extra={"event": "frames_extracted"})
 
     # pick prompt — prefer bounding box, fall back to center point
@@ -583,6 +656,75 @@ def run_stage2(run_root, sv, scene, run_id, src_hash, source_path, log):
     # cleanup temp frames
     shutil.rmtree(frames_dir, ignore_errors=True)
 
+    # ── mask orientation check ──
+    # If SAM 2 segmented the background instead of the bowler, invert all masks.
+    # Test: run MediaPipe on one masked frame; if no pose, try inverted.
+    _needs_invert = False
+    test_fi = actual_fc // 2  # middle frame
+    cap = cv2.VideoCapture(str(source_path))
+    cap.set(cv2.CAP_PROP_POS_FRAMES, test_fi)
+    ok, test_fr = cap.read()
+    cap.release()
+    if ok:
+        test_mask_path = masks_dir / f"frame_{test_fi:06d}.png"
+        test_mask = cv2.imread(str(test_mask_path), cv2.IMREAD_GRAYSCALE)
+        if test_mask is not None and np.sum(test_mask > 0) > 500:
+            import mediapipe as mp_lib
+            mp_opts = mp_lib.tasks.vision.PoseLandmarkerOptions(
+                base_options=mp_lib.tasks.BaseOptions(model_asset_path=str(MP_MODEL)),
+                running_mode=mp_lib.tasks.vision.RunningMode.IMAGE,
+                num_poses=1, min_pose_detection_confidence=0.3,
+                min_pose_presence_confidence=0.3,
+            )
+            mp_det = mp_lib.tasks.vision.PoseLandmarker.create_from_options(mp_opts)
+
+            # test original mask
+            masked_orig = cv2.bitwise_and(test_fr, test_fr, mask=test_mask)
+            rgb1 = cv2.cvtColor(masked_orig, cv2.COLOR_BGR2RGB)
+            r1 = mp_det.detect(mp_lib.Image(image_format=mp_lib.ImageFormat.SRGB, data=rgb1))
+
+            # test inverted mask
+            inv_mask = 255 - test_mask
+            masked_inv = cv2.bitwise_and(test_fr, test_fr, mask=inv_mask)
+            rgb2 = cv2.cvtColor(masked_inv, cv2.COLOR_BGR2RGB)
+            r2 = mp_det.detect(mp_lib.Image(image_format=mp_lib.ImageFormat.SRGB, data=rgb2))
+
+            mp_det.close()
+
+            orig_ok = len(r1.pose_landmarks) > 0
+            inv_ok = len(r2.pose_landmarks) > 0
+
+            if not orig_ok and inv_ok:
+                _needs_invert = True
+                log.warning("Mask inversion detected — flipping all masks",
+                            extra={"event": "mask_invert"})
+                for fi in range(actual_fc):
+                    mp = masks_dir / f"frame_{fi:06d}.png"
+                    m = cv2.imread(str(mp), cv2.IMREAD_GRAYSCALE)
+                    if m is not None:
+                        cv2.imwrite(str(mp), 255 - m)
+                # recompute areas and centroids
+                areas = []
+                centroids = []
+                empty_count = 0
+                for fi in range(actual_fc):
+                    m = cv2.imread(str(masks_dir / f"frame_{fi:06d}.png"), cv2.IMREAD_GRAYSCALE)
+                    area = int(np.sum(m > 0))
+                    areas.append(area)
+                    if area < 500:
+                        empty_count += 1
+                        centroids.append({"frame_index": fi, "x": 0.0, "y": 0.0})
+                    else:
+                        ys, xs = np.where(m > 0)
+                        cx = float(np.mean(xs)) / W
+                        cy = float(np.mean(ys)) / H
+                        centroids.append({"frame_index": fi, "x": round(cx, 4), "y": round(cy, 4)})
+            elif orig_ok:
+                log.info("Mask orientation correct", extra={"event": "mask_ok"})
+            else:
+                log.warning("Neither mask orientation produced pose detection",
+                            extra={"event": "mask_ambiguous"})
+
     # metrics
     masked_count = sum(1 for a in areas if a >= 500)
     areas_np = np.array(areas, dtype=float)
@@ -687,9 +829,14 @@ def run_stage2(run_root, sv, scene, run_id, src_hash, source_path, log):
 def _make_preview(source_path, masks_dir, out_path, sv):
     """Quick isolation preview video."""
     cap = cv2.VideoCapture(str(source_path))
-    W, H = sv["width"], sv["height"]
+    ok, first = cap.read()
+    if not ok:
+        cap.release()
+        return
+    fh, fw = first.shape[:2]
+    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    writer = cv2.VideoWriter(str(out_path), fourcc, sv["fps"], (W, H))
+    writer = cv2.VideoWriter(str(out_path), fourcc, sv["fps"], (fw, fh))
     fi = 0
     while True:
         ok, fr = cap.read()
@@ -698,7 +845,11 @@ def _make_preview(source_path, masks_dir, out_path, sv):
         mp = masks_dir / f"frame_{fi:06d}.png"
         if mp.exists():
             mask = cv2.imread(str(mp), cv2.IMREAD_GRAYSCALE)
-            if mask is not None and mask.shape[:2] == (H, W):
+            if mask is not None and mask.shape[:2] == fr.shape[:2]:
+                fr = cv2.bitwise_and(fr, fr, mask=mask)
+            elif mask is not None:
+                mask = cv2.resize(mask, (fr.shape[1], fr.shape[0]), interpolation=cv2.INTER_NEAREST)
+                mask = (mask > 127).astype(np.uint8) * 255
                 fr = cv2.bitwise_and(fr, fr, mask=mask)
             else:
                 fr = np.zeros_like(fr)
@@ -752,11 +903,16 @@ def _run_pose_pass(source_path, masks_dir, sv):
         if not ok:
             break
 
-        # apply mask
+        # apply mask — compare to actual frame shape, not metadata
         mp_path = masks_dir / f"frame_{fi:06d}.png"
         if mp_path.exists():
             mask = cv2.imread(str(mp_path), cv2.IMREAD_GRAYSCALE)
-            if mask is not None and mask.shape == (H, W):
+            if mask is not None and mask.shape[:2] == fr.shape[:2]:
+                fr = cv2.bitwise_and(fr, fr, mask=mask)
+            elif mask is not None:
+                # resize mask to match frame if dimensions differ
+                mask = cv2.resize(mask, (fr.shape[1], fr.shape[0]), interpolation=cv2.INTER_NEAREST)
+                mask = (mask > 127).astype(np.uint8) * 255
                 fr = cv2.bitwise_and(fr, fr, mask=mask)
             else:
                 fr = np.zeros_like(fr)
@@ -1747,6 +1903,18 @@ def run_pipeline(input_path, technique="speed_gradient", output_dir=None):
         scene = run_stage1(run_root, sv, run_id, src_hash, source_path, slog)
         print(f"  → {scene['bowler_id']}, {scene['bowling_arm']} arm, "
               f"quality={scene.get('clip_quality')}")
+
+        # Crop video to action window
+        print("▸ Cropping to action window...")
+        crop_log = get_logger("crop", logs_dir, run_id)
+        source_path, sv, crop_offset = crop_video_to_action(
+            run_root, sv, scene, source_path, crop_log)
+        if crop_offset > 0:
+            src_hash = sha256_file(source_path)
+            print(f"  → Cropped: offset={crop_offset:.2f}s, "
+                  f"now {sv['frame_count']} frames ({sv['duration_seconds']}s)")
+            # re-save scene report with remapped timestamps
+            save_json(run_root / "stage1" / "scene_report.json", scene)
 
         # Stage 1.5
         print("▸ Stage 1.5: Router...")
