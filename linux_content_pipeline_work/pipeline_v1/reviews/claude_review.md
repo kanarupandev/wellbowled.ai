@@ -1,5 +1,13 @@
 # Pipeline v1 Implementation Reviews
 
+## Context
+**This is an EXPERIMENTAL setup, not a production pipeline.** The goal is to validate the approach: can we measure and visualize energy transfer from bowling video? The review flags production issues for future reference, but the experiment bar is: does it run on a real clip and produce a viewable, meaningful output?
+
+### Experimental verdict
+**Run it.** The happy path is implemented. If SAM 2 is on Mac and Gemini API works, this produces output. Fix only if it crashes or produces garbage. Validation/fallback/retry are production concerns.
+
+---
+
 ## Reviewers
 - Linux Agent (Claude Opus) — architecture/spec review
 - Codex Agent 1 — end-to-end issue scan
