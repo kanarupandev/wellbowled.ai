@@ -2,52 +2,43 @@
 
 ## Purpose
 
-This folder consolidates the current business, brand, product, and content strategy for the bowling-analysis venture.
+This folder consolidates the current business, brand, product, content, and setup strategy for the bowling-analysis venture.
 
-It is intended to give any new agent or collaborator a compact, current view of:
-- what the business is
-- what it is not
-- what products/services exist now
-- where the market gap is
-- how IPL-season content fits into the strategy
-- how the website should function as the owned monetization layer
-
-## Document Map
-
-### 1. `business_context.md`
-What the company is trying to build, founder context, business model, and core strategic principles.
-
-### 2. `market_analysis.md`
-Current market view for 2026: IPL timing, demand, competitors, gaps, risks, and the best business wedge.
-
-### 3. `product_roadmap.md`
-Product and service architecture:
-- DNA Signature
-- extracted-figure analysis techniques
-- detailed coach report
-- seam-first roadmap with future room for spin
-
-### 4. `brand_strategy.md`
-Brand architecture and naming conclusion:
-- why the umbrella brand should remain broad enough for expansion
-- why feature-level names should live below the umbrella brand
-- current naming conclusion around `wellBowled.ai`
-
-### 5. `content_and_footage_strategy.md`
-Content strategy for an IPL-led, website-backed venture.
-Includes:
-- rights-aware content positioning
-- footage source logic
-- why the business should not depend heavily on unowned broadcast footage
-- how to think about “vs IPL bowler” outputs without owning large amounts of pro footage
+It is intended to let a fresh agent or collaborator understand the current direction quickly without reading the entire chat history.
 
 ## Recommended Reading Order
 
-1. `business_context.md`
-2. `market_analysis.md`
-3. `product_roadmap.md`
-4. `brand_strategy.md`
-5. `content_and_footage_strategy.md`
+### 1. `session_onboarding.md`
+Fast handoff summary for a new session or new agent.
+
+### 2. `business_context.md`
+High-level business shape, founder context, and strategic principles.
+
+### 3. `market_analysis.md`
+Current market view: IPL timing, demand, competitors, gaps, and main risks.
+
+### 4. `product_roadmap.md`
+Current product and service architecture, seam-first direction, and future expansion logic.
+
+### 5. `brand_strategy.md`
+Brand architecture, naming logic, and current umbrella-brand conclusion.
+
+### 6. `content_and_footage_strategy.md`
+Content model, footage/risk logic, and IPL-aware content principles.
+
+### 7. `business_setup_australia.md`
+Simple starter recommendation for business structure in Australia.
+
+## Folder Summary
+
+This folder currently covers:
+- what the business is
+- what it is not
+- how the market should be read
+- how the products should be structured
+- how the brand should be framed
+- how content should be approached
+- how the venture should be started operationally
 
 ## Core Strategic Summary
 
@@ -58,16 +49,23 @@ The company should be built as:
 - using content as acquisition
 - using premium services as monetization
 
-The business should not be framed as:
+The company should not be framed as:
 - a generic cricket AI app
 - a pure clip account
 - a broad sports-tech platform from day one
 
-## Operating Rule
+## Core Operating Rules
 
-**Narrow the business by vertical, not by brand.**
+- narrow the business by vertical, not by brand
+- start narrower in product scope than in brand scope
+- use content to build attention, but protect the business from footage fragility
+- do not underprice serious services into an unsustainable solo-founder workload
+- use the current ABN to start if needed, then formalize later when justified
 
-That means:
-- cricket is already a niche
-- bowling is already a strong vertical
-- the umbrella brand should stay broad enough to hold DNA, analysis, coaching, clip management, and future products
+## Related Docs Outside This Folder
+
+Useful supporting docs in `linux_content_pipeline_work/`:
+- `profit_target_assessment.md`
+- `ipl_content_venture_assessment.md`
+- `service_model_assessment.md`
+- `market_analysis_2026.md`
