@@ -1,0 +1,332 @@
+{
+  "bowler_id": "Person wearing a dark blue/black shirt and dark green pants with white shoes",
+  "bowling_arm": "right",
+  "bowler_clothing": {
+    "shirt": "dark blue",
+    "pants": "dark green"
+  },
+  "people_in_frame": [
+    {
+      "description": "Person wearing a dark blue/black shirt and dark green pants",
+      "role": "bowler"
+    },
+    {
+      "description": "Person wearing a red shirt and black shorts",
+      "role": "bystander"
+    },
+    {
+      "description": "People in the far background",
+      "role": "other"
+    }
+  ],
+  "bowler_positions": [
+    {
+      "time_s": 0.0,
+      "x": 0.0,
+      "y": 0.0,
+      "visible": false,
+      "note": "out of frame"
+    },
+    {
+      "time_s": 0.1,
+      "x": 0.0,
+      "y": 0.0,
+      "visible": false,
+      "note": "out of frame"
+    },
+    {
+      "time_s": 0.2,
+      "x": 0.0,
+      "y": 0.0,
+      "visible": false,
+      "note": "out of frame"
+    },
+    {
+      "time_s": 0.3,
+      "x": 0.0,
+      "y": 0.0,
+      "visible": false,
+      "note": "out of frame"
+    },
+    {
+      "time_s": 0.4,
+      "x": 0.0,
+      "y": 0.0,
+      "visible": false,
+      "note": "out of frame"
+    },
+    {
+      "time_s": 0.5,
+      "x": 0.0,
+      "y": 0.0,
+      "visible": false,
+      "note": "out of frame"
+    },
+    {
+      "time_s": 0.6,
+      "x": 0.0,
+      "y": 0.0,
+      "visible": false,
+      "note": "out of frame"
+    },
+    {
+      "time_s": 0.7,
+      "x": 0.0,
+      "y": 0.0,
+      "visible": false,
+      "note": "out of frame"
+    },
+    {
+      "time_s": 0.8,
+      "x": 0.85,
+      "y": 0.75,
+      "visible": true,
+      "note": "entering frame"
+    },
+    {
+      "time_s": 0.9,
+      "x": 0.65,
+      "y": 0.75,
+      "visible": true,
+      "note": "delivery stride"
+    },
+    {
+      "time_s": 1.0,
+      "x": 0.5,
+      "y": 0.75,
+      "visible": true,
+      "note": "back foot contact"
+    },
+    {
+      "time_s": 1.1,
+      "x": 0.4,
+      "y": 0.75,
+      "visible": true,
+      "note": "front foot contact"
+    },
+    {
+      "time_s": 1.2,
+      "x": 0.3,
+      "y": 0.75,
+      "visible": true,
+      "note": "release"
+    },
+    {
+      "time_s": 1.3,
+      "x": 0.2,
+      "y": 0.75,
+      "visible": true,
+      "note": "follow through"
+    },
+    {
+      "time_s": 1.4,
+      "x": 0.1,
+      "y": 0.75,
+      "visible": true,
+      "note": "follow through end"
+    },
+    {
+      "time_s": 1.5,
+      "x": 0.05,
+      "y": 0.75,
+      "visible": true,
+      "note": "walking"
+    },
+    {
+      "time_s": 1.6,
+      "x": 0.05,
+      "y": 0.75,
+      "visible": true,
+      "note": "walking"
+    },
+    {
+      "time_s": 1.7,
+      "x": 0.05,
+      "y": 0.75,
+      "visible": true,
+      "note": "walking"
+    },
+    {
+      "time_s": 1.8,
+      "x": 0.05,
+      "y": 0.75,
+      "visible": true,
+      "note": "walking"
+    },
+    {
+      "time_s": 1.9,
+      "x": 0.05,
+      "y": 0.75,
+      "visible": true,
+      "note": "walking"
+    },
+    {
+      "time_s": 2.0,
+      "x": 0.05,
+      "y": 0.75,
+      "visible": true,
+      "note": "walking"
+    },
+    {
+      "time_s": 2.1,
+      "x": 0.05,
+      "y": 0.75,
+      "visible": true,
+      "note": "walking"
+    },
+    {
+      "time_s": 2.2,
+      "x": 0.05,
+      "y": 0.75,
+      "visible": true,
+      "note": "walking"
+    },
+    {
+      "time_s": 2.3,
+      "x": 0.05,
+      "y": 0.75,
+      "visible": true,
+      "note": "walking"
+    },
+    {
+      "time_s": 2.4,
+      "x": 0.05,
+      "y": 0.75,
+      "visible": true,
+      "note": "walking"
+    },
+    {
+      "time_s": 2.5,
+      "x": 0.05,
+      "y": 0.75,
+      "visible": true,
+      "note": "walking"
+    },
+    {
+      "time_s": 2.6,
+      "x": 0.05,
+      "y": 0.75,
+      "visible": true,
+      "note": "walking"
+    },
+    {
+      "time_s": 2.7,
+      "x": 0.05,
+      "y": 0.75,
+      "visible": true,
+      "note": "walking"
+    },
+    {
+      "time_s": 2.8,
+      "x": 0.05,
+      "y": 0.75,
+      "visible": true,
+      "note": "walking"
+    },
+    {
+      "time_s": 2.9,
+      "x": 0.05,
+      "y": 0.75,
+      "visible": true,
+      "note": "walking"
+    },
+    {
+      "time_s": 3.0,
+      "x": 0.05,
+      "y": 0.75,
+      "visible": true,
+      "note": "walking"
+    },
+    {
+      "time_s": 3.1,
+      "x": 0.05,
+      "y": 0.75,
+      "visible": true,
+      "note": "walking"
+    },
+    {
+      "time_s": 3.2,
+      "x": 0.05,
+      "y": 0.75,
+      "visible": true,
+      "note": "walking"
+    },
+    {
+      "time_s": 3.3,
+      "x": 0.05,
+      "y": 0.75,
+      "visible": true,
+      "note": "walking"
+    },
+    {
+      "time_s": 3.4,
+      "x": 0.05,
+      "y": 0.75,
+      "visible": true,
+      "note": "walking"
+    },
+    {
+      "time_s": 3.5,
+      "x": 0.05,
+      "y": 0.75,
+      "visible": true,
+      "note": "walking"
+    },
+    {
+      "time_s": 3.6,
+      "x": 0.05,
+      "y": 0.75,
+      "visible": true,
+      "note": "walking"
+    },
+    {
+      "time_s": 3.7,
+      "x": 0.05,
+      "y": 0.75,
+      "visible": true,
+      "note": "walking"
+    },
+    {
+      "time_s": 3.8,
+      "x": 0.05,
+      "y": 0.75,
+      "visible": true,
+      "note": "walking"
+    },
+    {
+      "time_s": 3.9,
+      "x": 0.05,
+      "y": 0.75,
+      "visible": true,
+      "note": "walking"
+    },
+    {
+      "time_s": 4.0,
+      "x": 0.05,
+      "y": 0.75,
+      "visible": true,
+      "note": "walking"
+    }
+  ],
+  "action_window": {
+    "start_s": 0.8,
+    "end_s": 1.5
+  },
+  "timestamps_s": {
+    "run_up_visible": 0.8,
+    "back_foot_contact": 0.96,
+    "front_foot_contact": 1.08,
+    "release": 1.16,
+    "follow_through_end": 1.36
+  },
+  "camera_angle": "side-on",
+  "camera_movement": "static",
+  "clip_quality": 7,
+  "people_count": 4,
+  "confidence": 0.9,
+  "recommended_techniques": [
+    "Ensure a more stable base at the crease",
+    "Maintain a strong, upright posture through the delivery stride"
+  ],
+  "model_used": "gemini-3-pro-preview"
+}
