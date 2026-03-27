@@ -1,0 +1,80 @@
+{
+  "result": {
+    "camera_angles": [
+      {
+        "start_frame": 0,
+        "end_frame": 31,
+        "type": "medium"
+      },
+      {
+        "start_frame": 32,
+        "end_frame": 138,
+        "type": "wide"
+      },
+      {
+        "start_frame": 139,
+        "end_frame": 149,
+        "type": "closeup"
+      }
+    ],
+    "bowler_roi_per_angle": {
+      "closeup": {
+        "x": 0.67,
+        "y": 0.11,
+        "w": 0.26,
+        "h": 0.78
+      },
+      "wide": {
+        "x": 0.34,
+        "y": 0.26,
+        "w": 0.13,
+        "h": 0.39
+      }
+    },
+    "bowler_center_frame0": {
+      "x": 0.58,
+      "y": 0.5
+    },
+    "phases": {
+      "back_foot_contact": 2.13,
+      "front_foot_contact": 2.83,
+      "release": 3.7
+    },
+    "bowling_arm": "right",
+    "bowler_description": "A male cricketer in white uniform bowls right-arm fast-medium, running up to the crease and delivering the ball."
+  },
+  "raw": {
+    "candidates": [
+      {
+        "content": {
+          "parts": [
+            {
+              "text": "{\n  \"camera_angles\": [\n    {\n      \"start_frame\": 0,\n      \"end_frame\": 31,\n      \"type\": \"medium\"\n    },\n    {\n      \"start_frame\": 32,\n      \"end_frame\": 138,\n      \"type\": \"wide\"\n    },\n    {\n      \"start_frame\": 139,\n      \"end_frame\": 149,\n      \"type\": \"closeup\"\n    }\n  ],\n  \"bowler_roi_per_angle\": {\n    \"closeup\": {\n      \"x\": 0.67,\n      \"y\": 0.11,\n      \"w\": 0.26,\n      \"h\": 0.78\n    },\n    \"wide\": {\n      \"x\": 0.34,\n      \"y\": 0.26,\n      \"w\": 0.13,\n      \"h\": 0.39\n    }\n  },\n  \"bowler_center_frame0\": {\n    \"x\": 0.58,\n    \"y\": 0.5\n  },\n  \"phases\": {\n    \"back_foot_contact\": 2.13,\n    \"front_foot_contact\": 2.83,\n    \"release\": 3.70\n  },\n  \"bowling_arm\": \"right\",\n  \"bowler_description\": \"A male cricketer in white uniform bowls right-arm fast-medium, running up to the crease and delivering the ball.\"\n}"
+            }
+          ],
+          "role": "model"
+        },
+        "finishReason": "STOP",
+        "index": 0
+      }
+    ],
+    "usageMetadata": {
+      "promptTokenCount": 718,
+      "candidatesTokenCount": 372,
+      "totalTokenCount": 6828,
+      "promptTokensDetails": [
+        {
+          "modality": "TEXT",
+          "tokenCount": 460
+        },
+        {
+          "modality": "IMAGE",
+          "tokenCount": 258
+        }
+      ],
+      "thoughtsTokenCount": 5738
+    },
+    "modelVersion": "gemini-2.5-flash",
+    "responseId": "Cd_FaevjHbnx4-EPytGRiAY"
+  }
+}
