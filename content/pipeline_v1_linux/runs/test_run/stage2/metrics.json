@@ -1,0 +1,18 @@
+{
+  "frames_total": 111,
+  "frames_masked": 66,
+  "frames_empty": 45,
+  "mask_coverage": 0.595,
+  "avg_area_px": 4665.0,
+  "min_area_px": 707,
+  "max_area_px": 9863,
+  "max_consecutive_empty": 42,
+  "sam2_model": "sam2.1_hiera_tiny",
+  "device": "cpu",
+  "processing_time_s": 522.6,
+  "prompt": {
+    "frame_idx": 42,
+    "time_s": 1.4,
+    "type": "bbox"
+  }
+}
