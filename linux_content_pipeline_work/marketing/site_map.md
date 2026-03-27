@@ -29,6 +29,9 @@ Content model, footage/risk logic, and IPL-aware content principles.
 ### 7. `business_setup_australia.md`
 Simple starter recommendation for business structure in Australia.
 
+### 8. `launch_plan_30_days.md`
+Practical first-30-days execution plan from domain purchase to first validation.
+
 ## Folder Summary
 
 This folder currently covers:
