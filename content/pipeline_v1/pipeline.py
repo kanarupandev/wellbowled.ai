@@ -292,6 +292,10 @@ Analyze the bowling action and respond with ONLY valid JSON (no markdown, no cod
   "bowler_center_points": [
     {{"frame_time_s": 0.0, "x": 0.5, "y": 0.5}}
   ],
+  "bowler_bounding_box": {{
+    "frame_time_s": 0.0,
+    "x1": 0.0, "y1": 0.0, "x2": 0.0, "y2": 0.0
+  }},
   "timestamps_s": {{
     "run_up_start": 0.0,
     "back_foot_contact": 0.0,
@@ -308,6 +312,7 @@ Analyze the bowling action and respond with ONLY valid JSON (no markdown, no cod
 
 Rules:
 - bowler_center_points: one entry per contact sheet frame showing bowler torso center in normalized [0,1] coords (origin top-left)
+- bowler_bounding_box: tight box around the bowler in the frame where they are LARGEST and most visible. x1,y1=top-left corner, x2,y2=bottom-right corner, all normalized [0,1]. Pick the frame where the bowler is closest to camera / biggest.
 - Timestamps in seconds from clip start. Must be ordered: run_up_start < back_foot_contact < front_foot_contact <= release < follow_through <= {sv['duration_seconds']}
 - clip_quality: 1=unusable 10=perfect broadcast
 - recommended_techniques from: speed_gradient, xfactor, kinogram, arm_arc, goniogram
@@ -474,17 +479,10 @@ def run_stage2(run_root, sv, scene, run_id, src_hash, source_path, log):
     actual_fc = idx
     log.info(f"Extracted {actual_fc} frames", extra={"event": "frames_extracted"})
 
-    # pick prompt point — use first bowler_center_point
+    # pick prompt — prefer bounding box, fall back to center point
+    bbox = scene.get("bowler_bounding_box")
     pts = scene["bowler_center_points"]
-    prompt_pt = pts[0]
-    prompt_frame_idx = sfidx(prompt_pt["frame_time_s"], fps)
-    prompt_frame_idx = min(prompt_frame_idx, actual_fc - 1)
-    px = prompt_pt["x"] * W
-    py = prompt_pt["y"] * H
-    log.info(f"Prompt: frame {prompt_frame_idx}, pixel ({px:.0f}, {py:.0f})",
-             extra={"event": "sam2_prompt"})
 
-    # SAM 2
     import torch
     from sam2.build_sam import build_sam2_video_predictor
 
@@ -492,13 +490,59 @@ def run_stage2(run_root, sv, scene, run_id, src_hash, source_path, log):
     predictor = build_sam2_video_predictor(SAM2_CFG, str(SAM2_CKPT), device=device)
     state = predictor.init_state(video_path=str(frames_dir))
 
-    predictor.add_new_points_or_box(
-        inference_state=state,
-        frame_idx=prompt_frame_idx,
-        obj_id=1,
-        points=np.array([[px, py]], dtype=np.float32),
-        labels=np.array([1], dtype=np.int32),
-    )
+    if bbox and bbox.get("x1") is not None:
+        # primary prompt: bounding box — much more precise than a single point
+        prompt_frame_idx = sfidx(bbox["frame_time_s"], fps)
+        prompt_frame_idx = min(prompt_frame_idx, actual_fc - 1)
+        box = np.array([
+            bbox["x1"] * W, bbox["y1"] * H,
+            bbox["x2"] * W, bbox["y2"] * H,
+        ], dtype=np.float32)
+        log.info(f"Box prompt: frame {prompt_frame_idx}, box [{box[0]:.0f},{box[1]:.0f},{box[2]:.0f},{box[3]:.0f}]",
+                 extra={"event": "sam2_prompt"})
+        predictor.add_new_points_or_box(
+            inference_state=state,
+            frame_idx=prompt_frame_idx,
+            obj_id=1,
+            box=box,
+        )
+    else:
+        # fallback: first center point as point prompt
+        prompt_pt = pts[0]
+        prompt_frame_idx = sfidx(prompt_pt["frame_time_s"], fps)
+        prompt_frame_idx = min(prompt_frame_idx, actual_fc - 1)
+        px = prompt_pt["x"] * W
+        py = prompt_pt["y"] * H
+        log.info(f"Point prompt: frame {prompt_frame_idx}, pixel ({px:.0f}, {py:.0f})",
+                 extra={"event": "sam2_prompt"})
+        predictor.add_new_points_or_box(
+            inference_state=state,
+            frame_idx=prompt_frame_idx,
+            obj_id=1,
+            points=np.array([[px, py]], dtype=np.float32),
+            labels=np.array([1], dtype=np.int32),
+        )
+
+    # add reinforcement prompts at other center points (handles camera cuts)
+    prompted_frames = {prompt_frame_idx}
+    for pt in pts:
+        fi = sfidx(pt["frame_time_s"], fps)
+        fi = min(fi, actual_fc - 1)
+        if fi in prompted_frames:
+            continue
+        px = pt["x"] * W
+        py = pt["y"] * H
+        if px > 0 and py > 0:
+            log.info(f"Reinforcement point: frame {fi}, ({px:.0f}, {py:.0f})",
+                     extra={"event": "sam2_reinforce"})
+            predictor.add_new_points_or_box(
+                inference_state=state,
+                frame_idx=fi,
+                obj_id=1,
+                points=np.array([[px, py]], dtype=np.float32),
+                labels=np.array([1], dtype=np.int32),
+            )
+            prompted_frames.add(fi)
 
     # propagate
     masks_dict = {}
@@ -582,8 +626,10 @@ def run_stage2(run_root, sv, scene, run_id, src_hash, source_path, log):
         "max_centroid_drift_ratio": round(max_drift, 4),
         "max_adjacent_mask_area_change_ratio": round(max_area_change, 4),
         "sam2_model": "sam2.1_hiera_large",
-        "sam2_prompt": {"frame_time_s": prompt_pt["frame_time_s"],
-                        "x": prompt_pt["x"], "y": prompt_pt["y"]},
+        "sam2_prompt": {"frame_time_s": bbox["frame_time_s"] if bbox else pts[0]["frame_time_s"],
+                        "type": "box" if bbox else "point",
+                        "box": bbox if bbox else None,
+                        "point": pts[0] if not bbox else None},
         "isolation_mode": "sam2_masks",
         "synthetic_mask_fill_value": 255,
         "single_person_gate_passed": False,
