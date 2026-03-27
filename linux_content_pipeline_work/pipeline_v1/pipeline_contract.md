@@ -84,7 +84,11 @@ stage1/
 - [ ] FAIL quality < 5 → stop "Clip quality too low for analysis"
 - [ ] FAIL no bowler → stop "No bowler detected"
 
-**Note on model choice:** Using Pro (not Flash) because this stage feeds ALL downstream stages. Wrong timestamps corrupt everything. Cost difference is negligible (~$0.009) at 1-10 clips/day. If testing shows Flash is equally accurate, downgrade later.
+**Model choice:** Start with **gemini-3-pro-preview** for BOTH Stage 1 and Stage 6.
+
+**Philosophy (from user):** Use the BEST available option first. This is a fail-fast approach — if the pipeline doesn't produce upload-quality results with the best model, we know the limitation is in the approach, not the model. Only downgrade to Flash AFTER confirming Pro works well and the cost/speed trade-off justifies it. Trying to optimize cost before validating quality is premature.
+
+**Fallback:** If Gemini fails (API error, timeout), allow manual input: user provides bowler center point and approximate BFC/release times.
 
 ---
 
@@ -369,3 +373,106 @@ stage8/
 - [ ] Duration matches render_report.json
 - [ ] File size < 100 MB
 - [ ] Plays in video player without errors
+
+---
+
+## CROSS-STAGE SANITY CHECKS
+
+Run after Stage 5, before rendering:
+
+1. **Bowling arm consistency:** Stage 1 says "right" → Stage 4 should show joint 16 (right wrist) as the fastest arm joint, not joint 15 (left). If mismatched → flag.
+2. **Centroid continuity:** Stage 2 mask centroids should roughly follow a path predicted by Stage 1 bowler_center_points. If centroid deviates >30% from expected track → SAM 2 may have jumped.
+3. **Release posture:** Stage 4 pose at Stage 1's release timestamp should show the bowling arm extended. If wrist is below hip at release time → timestamps are wrong.
+4. **Body size continuity:** Stage 4 torso_length should be consistent (stddev < 20% of mean). Sudden change = person switch.
+5. **Delivery window sanity:** Stage 5 peak wrist velocity should occur within ±0.2s of Stage 1's release timestamp. If not → Stage 1 timestamps are inaccurate.
+
+---
+
+## EXACT SEGMENT VELOCITY FORMULAS
+
+For Stage 5, segment velocity is computed as:
+
+```python
+# Per joint velocity (torso-lengths per second)
+def joint_velocity(landmarks_t, landmarks_t_minus_1, joint_idx, torso_length, fps):
+    dx = landmarks_t[joint_idx][0] - landmarks_t_minus_1[joint_idx][0]
+    dy = landmarks_t[joint_idx][1] - landmarks_t_minus_1[joint_idx][1]
+    pixel_velocity = sqrt(dx² + dy²) * fps
+    return pixel_velocity / torso_length
+
+# Torso length (normalization ruler)
+def torso_length(landmarks):
+    mid_shoulder = midpoint(landmarks[11], landmarks[12])
+    mid_hip = midpoint(landmarks[23], landmarks[24])
+    return distance(mid_shoulder, mid_hip)
+
+# Segment peak velocity = max velocity of constituent joints
+# For RIGHT-ARM bowler:
+segments = {
+    "Hips":  max(velocity(joint_23), velocity(joint_24)),
+    "Trunk": max(velocity(joint_11), velocity(joint_12)),
+    "Arm":   max(velocity(joint_14), velocity(joint_16)),  # R elbow, R wrist
+    "Wrist": velocity(joint_16),                            # R wrist only
+}
+
+# For LEFT-ARM bowler:
+segments = {
+    "Hips":  max(velocity(joint_23), velocity(joint_24)),
+    "Trunk": max(velocity(joint_11), velocity(joint_12)),
+    "Arm":   max(velocity(joint_13), velocity(joint_15)),  # L elbow, L wrist
+    "Wrist": velocity(joint_15),                            # L wrist only
+}
+
+# Transfer ratio
+ratio["Hips → Trunk"] = segment_peak["Trunk"] / segment_peak["Hips"]
+
+# Smoothing: 3-frame median filter on raw velocities before peak detection
+```
+
+---
+
+## FALLBACK MODES
+
+| Failure | Fallback | Result quality |
+|---------|----------|----------------|
+| Stage 1 Gemini fails (API error) | Manual input: user provides bowler point + timestamps | Same quality |
+| Stage 1 low confidence | Re-run on different contact sheet frames | Retry |
+| Stage 2 SAM 2 fails (<90% masks) | Try different prompt point from Stage 1 | Retry |
+| Stage 2 SAM 2 unavailable | Skip isolation, use full frame (only for single-person clips) | Degraded |
+| Stage 3 upscale introduces artifacts | Skip upscale, use original resolution | Slightly degraded |
+| Stage 4 detection < 80% | Clip is unusable for this technique. Output error report. | No output |
+| Stage 5 implausible ratios | Flag in analysis.json, add confidence_notes, still render with warning | Degraded |
+| Stage 6 Gemini rejects analysis | Re-examine Stage 2 isolation. If confirmed wrong → re-run from Stage 2 | Retry |
+
+---
+
+## STAGE 7.5: RENDER-TIME ENHANCEMENT (conditional)
+
+Separated from Stage 3. RIFE interpolation happens HERE, not before analysis.
+
+**Tool:** RIFE
+**Input:** rendered_frames/ from Stage 7
+**Condition:** ONLY if render_speed < 0.1x AND source fps < 60
+**Process:** 4x frame interpolation on rendered output (not analysis data)
+**Output:** interpolated_frames/
+
+**Key principle:** Analysis (Stages 4-5) ALWAYS runs on source-fps frames. RIFE only smooths the final rendered output. This preserves measurement integrity.
+
+---
+
+## 10-STAGE SUMMARY
+
+```
+0.   Input Validation
+1.   Scene Understanding (Gemini Flash)
+1.5  Technique Router
+2.   Bowler Isolation (SAM 2 Large)
+3.   Enhancement / Upscale (conditional, analysis-safe)
+4.   Pose Extraction (MediaPipe Heavy)
+5.   Analysis (velocity, ratios, peaks)
+     → Cross-stage sanity checks
+6.   Insight + Validation (Gemini Pro, optional)
+7.   Render (technique-specific)
+7.5  Render-time Interpolation (RIFE, conditional)
+8.   Encode (FFmpeg)
+```
