@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nets Analysis Review</title>
+  <style>
+    :root {
+      --bg: #0a0e14;
+      --panel: #101722;
+      --line: #253245;
+      --text: #eef3f8;
+      --muted: #9aa8b8;
+      --accent: #4be0ff;
+      --accent2: #ffba40;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Helvetica, Arial, sans-serif;
+      background: radial-gradient(circle at top, #152033 0%, var(--bg) 55%);
+      color: var(--text);
+    }
+    .wrap {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 28px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 40px;
+      line-height: 1;
+    }
+    p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 18px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(320px, 420px) 1fr;
+      gap: 24px;
+      margin-top: 28px;
+      align-items: start;
+    }
+    .panel {
+      background: rgba(16, 23, 34, 0.88);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      padding: 18px;
+      backdrop-filter: blur(8px);
+    }
+    video {
+      width: 100%;
+      border-radius: 18px;
+      background: #000;
+      display: block;
+    }
+    .controls {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+    button {
+      background: #192334;
+      color: var(--text);
+      border: 1px solid #314258;
+      border-radius: 999px;
+      padding: 10px 14px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    button.active {
+      border-color: var(--accent);
+      color: #091118;
+      background: linear-gradient(135deg, var(--accent), #92f3ff);
+    }
+    .meta {
+      margin-top: 14px;
+      font-size: 14px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .variants {
+      margin-top: 24px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(240px, 1fr));
+      gap: 24px;
+    }
+    .variant-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .variant-header h2 {
+      margin: 0;
+      font-size: 22px;
+    }
+    .variant-header span {
+      color: var(--muted);
+      font-size: 13px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .variant-shot {
+      margin-top: 14px;
+      border-radius: 18px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      background: rgba(6, 10, 15, 0.78);
+    }
+    .variant-shot img {
+      width: 100%;
+    }
+    .variant-shot figcaption {
+      padding: 10px 12px 12px;
+      font-size: 13px;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+    }
+    .shots {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(180px, 1fr));
+      gap: 16px;
+    }
+    figure {
+      margin: 0;
+      background: rgba(6, 10, 15, 0.78);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      overflow: hidden;
+    }
+    img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+    figcaption {
+      padding: 10px 12px 12px;
+      font-size: 13px;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+    }
+    @media (max-width: 920px) {
+      .grid { grid-template-columns: 1fr; }
+      .shots { grid-template-columns: 1fr; }
+      .variants { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Nets Analysis Review</h1>
+    <p>Browser-based verification for the annotated bowling analysis export.</p>
+    <div class="grid">
+      <section class="panel">
+        <video id="video" controls preload="auto" playsinline>
+          <source src="annotated_analysis_qt.m4v" type="video/mp4">
+          <source src="annotated_analysis.mp4" type="video/mp4">
+        </video>
+        <div class="controls">
+          <button data-rate="1">1.0x</button>
+          <button data-rate="0.5">0.5x</button>
+          <button data-rate="0.25" class="active">0.25x</button>
+          <button id="play">Play</button>
+          <button id="pause">Pause</button>
+          <button id="restart">Restart</button>
+        </div>
+        <div class="meta">
+          File: <code>annotated_analysis_qt.m4v</code> (fallback: <code>annotated_analysis.mp4</code>)<br>
+          Suggested review mode: <code>0.25x</code><br>
+          If this still artifacts in Chrome, the export itself needs a safer transcode.
+        </div>
+      </section>
+      <section class="shots">
+        <figure>
+          <img src="snapshots/intro.jpg" alt="Intro frame">
+          <figcaption>INTRO</figcaption>
+        </figure>
+        <figure>
+          <img src="snapshots/load.jpg" alt="Load frame">
+          <figcaption>LOAD</figcaption>
+        </figure>
+        <figure>
+          <img src="snapshots/release.jpg" alt="Release frame">
+          <figcaption>RELEASE</figcaption>
+        </figure>
+        <figure>
+          <img src="snapshots/freeze.jpg" alt="Freeze frame">
+          <figcaption>FREEZE</figcaption>
+        </figure>
+      </section>
+    </div>
+    <div class="variants">
+      <section class="panel">
+        <div class="variant-header">
+          <h2>Bowler Figure Only</h2>
+          <span>Subject Isolated</span>
+        </div>
+        <video controls preload="auto" playsinline data-default-rate="0.25">
+          <source src="bowler_figure_only_qt.m4v" type="video/mp4">
+          <source src="bowler_figure_only.mp4" type="video/mp4">
+        </video>
+        <div class="meta">
+          File: <code>bowler_figure_only_qt.m4v</code><br>
+          Purpose: verify full-video subject isolation without background people.
+        </div>
+        <figure class="variant-shot">
+          <img src="playwright_checks/figure_release_v4.png" alt="Bowler figure only verification frame">
+          <figcaption>RELEASE CHECK</figcaption>
+        </figure>
+      </section>
+      <section class="panel">
+        <div class="variant-header">
+          <h2>Pose Only</h2>
+          <span>On-Device Skeleton</span>
+        </div>
+        <video controls preload="auto" playsinline data-default-rate="0.25">
+          <source src="bowler_pose_only_qt.m4v" type="video/mp4">
+          <source src="bowler_pose_only.mp4" type="video/mp4">
+        </video>
+        <div class="meta">
+          File: <code>bowler_pose_only_qt.m4v</code><br>
+          Purpose: inspect just the tracked bowling motion without visual clutter.
+        </div>
+        <figure class="variant-shot">
+          <img src="playwright_checks/pose_release_final.png" alt="Pose only verification frame">
+          <figcaption>RELEASE CHECK</figcaption>
+        </figure>
+      </section>
+      <section class="panel">
+        <div class="variant-header">
+          <h2>Brace Focus</h2>
+          <span>Knee + Ankles</span>
+        </div>
+        <video controls preload="auto" playsinline data-default-rate="0.25">
+          <source src="bowler_figure_brace_qt.m4v" type="video/mp4">
+          <source src="bowler_figure_brace.mp4" type="video/mp4">
+        </video>
+        <div class="meta">
+          File: <code>bowler_figure_brace_qt.m4v</code><br>
+          Purpose: inspect the front-foot brace window without background clutter.
+        </div>
+        <figure class="variant-shot">
+          <img src="playwright_checks/brace_release_final.png" alt="Brace focus verification frame">
+          <figcaption>RELEASE CHECK</figcaption>
+        </figure>
+      </section>
+    </div>
+  </div>
+  <script>
+    const video = document.getElementById('video');
+    const allVideos = [...document.querySelectorAll('video')];
+    const buttons = [...document.querySelectorAll('[data-rate]')];
+    const setRate = (rate) => {
+      allVideos.forEach((node) => {
+        node.playbackRate = rate;
+      });
+      buttons.forEach((button) => {
+        button.classList.toggle('active', Number(button.dataset.rate) === rate);
+      });
+    };
+    buttons.forEach((button) => {
+      button.addEventListener('click', () => setRate(Number(button.dataset.rate)));
+    });
+    document.getElementById('play').addEventListener('click', () => video.play());
+    document.getElementById('pause').addEventListener('click', () => video.pause());
+    document.getElementById('restart').addEventListener('click', () => {
+      video.currentTime = 0;
+      video.play();
+    });
+    allVideos.forEach((node) => {
+      node.playbackRate = Number(node.dataset.defaultRate || 0.25);
+    });
+    setRate(0.25);
+  </script>
+</body>
+</html>

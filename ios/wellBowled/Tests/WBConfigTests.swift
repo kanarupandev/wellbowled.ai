@@ -146,8 +146,8 @@ final class WBConfigTests: XCTestCase {
         UserDefaults.standard.set(oldRaw, forKey: "mate_persona")
     }
 
-    func testLiveSessionTimeoutIsThreeMinutes() {
-        XCTAssertEqual(WBConfig.liveSessionMaxDurationSeconds, 180)
+    func testLiveSessionDefaultDurationIsFiveMinutes() {
+        XCTAssertEqual(WBConfig.liveSessionDefaultDurationSeconds, 300)
     }
 
     func testGenerateContentURLUsesModelAndConfiguredKey() {

@@ -75,6 +75,28 @@ Primary documents:
 Read-only UX reference (flow only, no theme copy):
 - `/Users/kanarupan/workspace/obsolete-wellbowled-alpha/`
 
+## Content Pipelines (Video Analysis)
+
+Path:
+`/Users/kanarupan/workspace/wellbowled.ai/content/`
+
+Each pipeline takes a 3-10s bowling clip → upload-ready 9:16 Instagram Reel (1080×1920, H.264, 30fps).
+
+| # | Pipeline | Path | Status | Output |
+|---|----------|------|--------|--------|
+| 1 | **X-Factor** | `content/xfactor_pipeline/` | v0.0.1 | Hip-shoulder separation overlay, peak freeze, verdict card |
+| 2 | **Kinogram** | `content/kinogram_pipeline/` | v0.0.1 POC — 7 fixes pending | 7-phase stroboscopic composite with color-coded skeletons |
+| 3 | **Goniogram** | `content/goniogram_pipeline/` | v0.0.1 | Elbow extension + knee brace arcs, centroid-tracked bowler |
+| 4 | **Velocity Waterfall** | `content/waterfall_pipeline/` | v0.0.1 — untested | Stacked segment speed curves animated with slo-mo (kinetic chain whip) |
+| 5 | **Phase Portrait** | `content/portrait_pipeline/` | v0.0.1 — untested | Angle-vs-angle signature loop — elite=tight, amateur=chaos |
+| 6 | **Spine Stress Gauge** | `content/spine_gauge_pipeline/` | v0.0.1 — unverified | Lumbar flexion+rotation risk arc — pulsing red in danger zone |
+
+All pipelines are v0.0.1. None are upload-ready. Each needs: background person exclusion, delivery-window gating, 75-point video quality checklist pass.
+
+Shared dependencies: MediaPipe PoseLandmarker (heavy model), OpenCV, Pillow, FFmpeg, google-generativeai.
+Shared venv: symlinked from `xfactor_pipeline/.venv`.
+Input sample: `resources/samples/3_sec_1_delivery_nets.mp4`.
+
 ## Archived Areas
 
 Paths:

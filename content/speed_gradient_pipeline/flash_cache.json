@@ -1,0 +1,14 @@
+{
+  "delivery_roi": {
+    "x": 0.35,
+    "y": 0.05,
+    "w": 0.4,
+    "h": 0.75
+  },
+  "bowling_arm": "right",
+  "phases": {
+    "back_foot_contact": 0.0,
+    "release": 1.48,
+    "follow_through": 2.22
+  }
+}

@@ -4,14 +4,14 @@ import os
 
 private let log = Logger(subsystem: "com.wellbowled", category: "HomeView")
 
-/// Step 1 entry point: single button to start a Live API voice session.
+/// Home screen: start a bowling session, analyze recordings, or configure settings.
 struct HomeView: View {
     @State private var showAPIKeyPrompt = false
     @State private var apiKeyInput = ""
     @State private var hasKey = WBConfig.hasAPIKey
     @State private var showSettings = false
     @State private var showSession = false
-    @State private var selectedPersona = WBConfig.matePersona
+    @State private var showAdmin = false
     @State private var selectedRecordingItem: PhotosPickerItem?
     @State private var isImportingRecording = false
     @State private var recordingImportError: String?
@@ -29,7 +29,6 @@ struct HomeView: View {
                         heroCard
 
                         if hasKey {
-                            modeSelectionCard
                             startButton
                             recordingPickerButton
 
@@ -65,7 +64,7 @@ struct HomeView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Paste your Google AI Studio Gemini key to enable live session audio + video feedback.")
+            Text("Paste your Google AI Studio Gemini key to enable post-session analysis.")
         }
         .fullScreenCover(isPresented: $showSession) {
             LiveSessionView()
@@ -83,7 +82,10 @@ struct HomeView: View {
             }
         }
         .sheet(isPresented: $showSettings) {
-            MateSettingsView(selectedPersona: $selectedPersona, showAPIKeyPrompt: $showAPIKeyPrompt)
+            HomeSettingsView(showAPIKeyPrompt: $showAPIKeyPrompt, showAdmin: $showAdmin)
+        }
+        .sheet(isPresented: $showAdmin) {
+            AdminDashboardView()
         }
         .onAppear {
             hasKey = WBConfig.hasAPIKey
@@ -92,10 +94,6 @@ struct HomeView: View {
             guard let newItem else { return }
             Task { await importRecording(from: newItem) }
         }
-    }
-
-    private var startButtonTitle: String {
-        "Start Live Session"
     }
 
     private var homeBackground: some View {
@@ -157,7 +155,7 @@ struct HomeView: View {
                 .font(.system(size: 42, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
 
-            Text("Your AI bowling mate with Gemini voice feedback, smart delivery capture, and deep phase analysis.")
+            Text("On-device stump detection, speed tracking, biomechanics analysis, and action DNA matching.")
                 .font(.subheadline)
                 .foregroundColor(.white.opacity(0.78))
                 .lineSpacing(3)
@@ -174,36 +172,14 @@ struct HomeView: View {
         )
     }
 
-    private var modeSelectionCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Live Expert Mate")
-                .font(.headline)
-                .foregroundColor(.white)
-
-            Text("Your AI bowling buddy observes, challenges, and debriefs — all through voice.")
-                .font(.subheadline)
-                .foregroundColor(.white.opacity(0.6))
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.white.opacity(0.06))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.white.opacity(0.14), lineWidth: 1)
-        )
-    }
-
     private var startButton: some View {
         Button {
             showSession = true
         } label: {
             HStack(spacing: 10) {
-                Image(systemName: "mic.fill")
+                Image(systemName: "video.fill")
                     .font(.headline)
-                Text(startButtonTitle)
+                Text("Start Session")
                     .font(.headline.weight(.semibold))
             }
             .foregroundColor(.black)
@@ -288,9 +264,9 @@ struct HomeView: View {
 
     private var valueProps: some View {
         VStack(alignment: .leading, spacing: 8) {
-            valueRow(icon: "bolt.fill", text: "Real-time voice coaching from your AI mate at the nets.")
-            valueRow(icon: "film.stack.fill", text: "Auto-captured delivery clips with deep on-demand analysis.")
-            valueRow(icon: "figure.cricket", text: "Action-signature DNA matching against iconic bowlers.")
+            valueRow(icon: "bolt.fill", text: "Real-time stump detection and speed tracking at the nets.")
+            valueRow(icon: "film.stack.fill", text: "Auto-captured delivery clips with deep biomechanics analysis.")
+            valueRow(icon: "figure.cricket", text: "Action DNA matching against 103 iconic bowlers.")
         }
         .padding(14)
         .background(
@@ -374,68 +350,31 @@ private struct ImportedSessionReplayContainer: View {
 
 // MARK: - Settings
 
-struct MateSettingsView: View {
-    @Binding var selectedPersona: WBConfig.MatePersona
+struct HomeSettingsView: View {
     @Binding var showAPIKeyPrompt: Bool
+    @Binding var showAdmin: Bool
     @Environment(\.dismiss) private var dismiss
-
-    private let personaGroups: [(title: String, male: WBConfig.MatePersona, female: WBConfig.MatePersona)] = [
-        ("Aussie Mate", .aussieMale, .aussieFemale),
-        ("English", .englishMale, .englishFemale),
-        ("தமிழ் (Tamil)", .tamilMale, .tamilFemale),
-        ("Tanglish", .tanglishMale, .tanglishFemale),
-    ]
 
     var body: some View {
         NavigationStack {
             List {
-                Section("Mate Persona") {
-                    ForEach(personaGroups, id: \.title) { group in
-                        HStack {
-                            Text(group.title)
-                                .foregroundColor(.primary)
-
-                            Spacer()
-
-                            // Male button
-                            Button {
-                                selectedPersona = group.male
-                                WBConfig.matePersona = group.male
-                            } label: {
-                                Image(systemName: "person.fill")
-                                    .font(.body)
-                                    .foregroundColor(selectedPersona == group.male ? .white : .gray)
-                                    .frame(width: 36, height: 36)
-                                    .background(
-                                        Circle().fill(selectedPersona == group.male ? Color.blue.opacity(0.7) : Color.clear)
-                                    )
-                            }
-                            .buttonStyle(.plain)
-
-                            // Female button
-                            Button {
-                                selectedPersona = group.female
-                                WBConfig.matePersona = group.female
-                            } label: {
-                                Image(systemName: "person.fill")
-                                    .font(.body)
-                                    .foregroundColor(selectedPersona == group.female ? .white : .gray)
-                                    .frame(width: 36, height: 36)
-                                    .background(
-                                        Circle().fill(selectedPersona == group.female ? Color.pink.opacity(0.7) : Color.clear)
-                                    )
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-
-                Section {
+                Section("Gemini API") {
                     Button {
                         dismiss()
                         showAPIKeyPrompt = true
                     } label: {
                         Label("Change API Key", systemImage: "key.fill")
+                    }
+                }
+
+                Section("Admin") {
+                    Button {
+                        dismiss()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            showAdmin = true
+                        }
+                    } label: {
+                        Label("Admin Dashboard", systemImage: "slider.horizontal.3")
                     }
                 }
             }

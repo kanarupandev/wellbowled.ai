@@ -1,0 +1,18 @@
+{
+  "source_path": "/home/kanarupan/perSONAL/content_work_wellBowled/wellbowled.ai/resources/samples/3_sec_1_delivery_nets.mp4",
+  "source_hash": "sha256:908fe172b57435c5c6771e499f8f6dc410c8421bfed0e7e2a86b06248ca6a65e",
+  "width": 480,
+  "height": 848,
+  "fps": 30.0,
+  "duration_seconds": 3.7,
+  "frame_count": 111,
+  "codec": "h264",
+  "contact_sheet_frame_times_s": [
+    0.0,
+    0.74,
+    1.48,
+    2.22,
+    2.96,
+    3.7
+  ]
+}

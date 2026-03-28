@@ -15,6 +15,10 @@ struct LiveSessionView: View {
     @State private var isAutoStarting = false
     @State private var isExitingToHome = false
 
+    // Stump marking box (normalized 0-1 coordinates)
+    @State private var stumpBoxCenter = CGPoint(x: 0.5, y: 0.7)
+    @State private var stumpBoxSize = CGSize(width: 0.18, height: 0.22)
+
     var body: some View {
         ZStack {
             // Camera preview (full screen)
@@ -27,6 +31,93 @@ struct LiveSessionView: View {
             }
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
+
+            // Stump marking — draggable box the user positions over the stumps
+            if viewModel.isMarkingStumps {
+                GeometryReader { geo in
+                    let boxW = stumpBoxSize.width * geo.size.width
+                    let boxH = stumpBoxSize.height * geo.size.height
+                    let boxX = stumpBoxCenter.x * geo.size.width
+                    let boxY = stumpBoxCenter.y * geo.size.height
+
+                    ZStack {
+                        // Dim background outside the box
+                        Color.black.opacity(0.3)
+                            .ignoresSafeArea()
+                            .allowsHitTesting(false)
+
+                        // Draggable stump box
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(peacockBlue, style: StrokeStyle(lineWidth: 2, dash: [10, 6]))
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(peacockBlue.opacity(0.08))
+                            )
+                            .frame(width: boxW, height: boxH)
+                            .position(x: boxX, y: boxY)
+                            .gesture(
+                                DragGesture()
+                                    .onChanged { value in
+                                        stumpBoxCenter = CGPoint(
+                                            x: min(max(value.location.x / geo.size.width, 0.1), 0.9),
+                                            y: min(max(value.location.y / geo.size.height, 0.1), 0.9)
+                                        )
+                                    }
+                            )
+
+                        // Label on the box
+                        Text("STUMPS")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundColor(peacockBlue.opacity(0.7))
+                            .position(x: boxX, y: boxY - boxH / 2 - 10)
+
+                        // Confirm button below the box
+                        Button {
+                            viewModel.markStumpsAt(normalizedPoint: stumpBoxCenter, normalizedSize: stumpBoxSize)
+                        } label: {
+                            Text("Start Monitoring")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundColor(.black)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 10)
+                                .background(Capsule().fill(peacockBlue))
+                        }
+                        .position(x: geo.size.width / 2, y: geo.size.height - 140)
+                    }
+                }
+                .zIndex(5)
+                .transition(.opacity)
+            }
+
+            // Stump monitoring box — stays visible during monitoring, color = state
+            if viewModel.stumpMonitoringActive {
+                GeometryReader { geo in
+                    let boxW = stumpBoxSize.width * geo.size.width
+                    let boxH = stumpBoxSize.height * geo.size.height
+                    let boxX = stumpBoxCenter.x * geo.size.width
+                    let boxY = stumpBoxCenter.y * geo.size.height
+                    let boxColor = stumpBoxColor
+
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(boxColor, style: StrokeStyle(lineWidth: 1.5))
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(boxColor.opacity(0.06))
+                            )
+                            .frame(width: boxW, height: boxH)
+                            .position(x: boxX, y: boxY)
+
+                        // State label above the box
+                        Text(stumpStateLabel)
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundColor(boxColor)
+                            .position(x: boxX, y: boxY - boxH / 2 - 10)
+                    }
+                }
+                .allowsHitTesting(false)
+                .animation(.easeInOut(duration: 0.3), value: viewModel.cliffState)
+            }
 
             // Stump calibration overlay:
             // Phase 1 (.detecting): 2 dashed boxes for alignment
@@ -53,6 +144,19 @@ struct LiveSessionView: View {
                 }
             }
 
+            // Speed setup overlay (after stumps detected, before monitoring)
+            if viewModel.showSpeedSetup {
+                SpeedSetupOverlay(
+                    distanceMetres: $viewModel.speedDistanceMetres,
+                    onStart: { viewModel.confirmSpeedSetup() }
+                )
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                .animation(.easeOut(duration: 0.3), value: viewModel.showSpeedSetup)
+                .zIndex(10)
+            }
+
+            // (cliff status is now shown via the stump monitoring box above)
+
             // Delivery flash overlay (large centered count that fades)
             if let count = deliveryFlashCount {
                 Text("\(count)")
@@ -71,18 +175,18 @@ struct LiveSessionView: View {
 
             // Overlay
             VStack(spacing: 0) {
-                // Top bar: connection status + delivery count + timer
+                // Top bar: session status + delivery count + timer
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Live Session")
+                        Text("Session")
                             .font(.caption2.weight(.semibold))
                             .foregroundColor(peacockBlue)
 
                         HStack(spacing: 6) {
                             Circle()
-                                .fill(statusColor)
+                                .fill(isSessionActive ? peacockBlue : .gray)
                                 .frame(width: 10, height: 10)
-                            Text(statusText)
+                            Text(isSessionActive ? "Recording" : "Idle")
                                 .font(.caption2)
                                 .foregroundColor(.white)
                         }
@@ -104,16 +208,6 @@ struct LiveSessionView: View {
                         .background(Capsule().fill(peacockBlue.opacity(0.15)))
                     }
 
-                    // Session countdown
-                    if viewModel.session.isActive {
-                        HStack(spacing: 4) {
-                            Image(systemName: "timer")
-                                .font(.caption)
-                            Text(viewModel.sessionRemainingText)
-                                .font(.caption.bold().monospacedDigit())
-                        }
-                        .foregroundColor(timerColor)
-                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
@@ -145,8 +239,8 @@ struct LiveSessionView: View {
 
                 Spacer()
 
-                // Transcript overlay
-                if !viewModel.lastTranscript.isEmpty {
+                // Transcript overlay (only when live mate is enabled)
+                if WBConfig.enableLiveAPI, !viewModel.lastTranscript.isEmpty {
                     Text(viewModel.lastTranscript)
                         .font(.callout)
                         .foregroundColor(.white)
@@ -156,37 +250,6 @@ struct LiveSessionView: View {
                         .cornerRadius(12)
                         .padding(.horizontal, 20)
                         .transition(.opacity.combined(with: .move(edge: .bottom)))
-                }
-
-                // Speaking indicator — waveform style
-                if viewModel.isMateSpeaking {
-                    HStack(spacing: 2) {
-                        ForEach(0..<5, id: \.self) { i in
-                            Capsule()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [peacockBlue, .cyan],
-                                        startPoint: .bottom,
-                                        endPoint: .top
-                                    )
-                                )
-                                .frame(width: 3, height: speakingBarHeight(for: i))
-                                .animation(
-                                    .easeInOut(duration: [0.35, 0.45, 0.3, 0.5, 0.4][i])
-                                    .repeatForever(autoreverses: true)
-                                    .delay(Double(i) * 0.1),
-                                    value: viewModel.isMateSpeaking
-                                )
-                        }
-                        Text("Mate")
-                            .font(.caption2.bold())
-                            .foregroundColor(peacockBlue)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(.ultraThinMaterial.opacity(0.8))
-                    .cornerRadius(12)
-                    .transition(.scale.combined(with: .opacity))
                 }
 
                 // Error / reconnecting banner
@@ -223,6 +286,45 @@ struct LiveSessionView: View {
                     }
                     .padding(.horizontal, 40)
                     .padding(.top, 8)
+                }
+
+                // Session instruction subtitle
+                if let instruction = viewModel.sessionInstruction {
+                    Text(instruction)
+                        .font(.caption.weight(.medium))
+                        .foregroundColor(.white.opacity(0.9))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(Color.black.opacity(0.6).cornerRadius(10))
+                        .padding(.bottom, 4)
+                        .transition(.opacity)
+                        .animation(.easeOut(duration: 0.3), value: viewModel.sessionInstruction)
+                }
+
+                // Mark Stumps button (shown when session active, stumps not yet marked)
+                if isSessionActive, !viewModel.stumpMonitoringActive, !viewModel.isMarkingStumps {
+                    Button {
+                        viewModel.isMarkingStumps = true
+                    } label: {
+                        Label("Mark Stumps", systemImage: "scope")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(Capsule().fill(Color.white.opacity(0.2)))
+                            .overlay(Capsule().stroke(Color.white.opacity(0.3), lineWidth: 1))
+                    }
+                    .padding(.bottom, 8)
+                }
+
+                if viewModel.isMarkingStumps {
+                    Text("Tap on the stumps")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(peacockBlue)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(Capsule().fill(Color.black.opacity(0.6)))
+                        .padding(.bottom, 8)
                 }
 
                 // Bottom controls
@@ -369,6 +471,22 @@ struct LiveSessionView: View {
 
     private var isSessionActive: Bool {
         viewModel.session.isActive
+    }
+
+    private var stumpBoxColor: Color {
+        switch viewModel.cliffState {
+        case .monitoring: return .green
+        case .stumpsHit: return peacockBlue
+        case .rearranging: return .orange
+        }
+    }
+
+    private var stumpStateLabel: String {
+        switch viewModel.cliffState {
+        case .monitoring: return "READY"
+        case .stumpsHit: return "WELL BOWLED!"
+        case .rearranging: return "FIX STUMPS"
+        }
     }
 
     private var isChallengeSession: Bool {
@@ -607,6 +725,9 @@ private struct SessionDeliveryResultPage: View {
                                             .background(Circle().fill(Color.black.opacity(0.45)))
                                     }
                                     Spacer()
+                                    if deepAnalysisReady {
+                                        compositedExportButton
+                                    }
                                     saveButton
                                 }
                                 .padding(.horizontal, 16)
@@ -748,6 +869,33 @@ private struct SessionDeliveryResultPage: View {
             .foregroundColor(.white)
             .padding(10)
             .background(Circle().fill(Color.black.opacity(0.45)))
+        }
+        .disabled(status == .saving || status == .saved)
+    }
+
+    @ViewBuilder
+    private var compositedExportButton: some View {
+        let status = viewModel.compositedExportStatus
+        Button {
+            liveViewLog.debug("Composited export tapped: deliveryID=\(deliveryID.uuidString.prefix(8), privacy: .public)")
+            Task { await viewModel.exportComposited(for: deliveryID) }
+        } label: {
+            Group {
+                switch status {
+                case .idle:
+                    Image(systemName: "film.stack")
+                case .saving:
+                    ProgressView().tint(.white).scaleEffect(0.7)
+                case .saved:
+                    Image(systemName: "checkmark.circle.fill")
+                case .failed:
+                    Image(systemName: "exclamationmark.triangle")
+                }
+            }
+            .font(.system(size: 18, weight: .semibold))
+            .foregroundColor(.white)
+            .padding(10)
+            .background(Circle().fill(Color(red: 0, green: 0.427, blue: 0.467).opacity(0.85)))
         }
         .disabled(status == .saving || status == .saved)
     }
