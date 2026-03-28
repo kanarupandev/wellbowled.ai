@@ -44,3 +44,15 @@ Current intended scope:
 ## Key Rule
 
 **Nearest-bowler retrieval should be driven mainly by action signature, not by biography or fame.**
+## Quality Principle
+
+The Bowling Signature DNA store must optimize for richness, accuracy, and reference quality over ingestion speed.
+
+This means:
+- no single-clip truth claims for a canonical bowler profile
+- multi-angle and multi-clip cross-checking whenever possible
+- explicit confidence per parameter
+- parameter values may be revised as better footage is added
+- a canonical bowler record should improve iteratively over time
+- the database is intended to become a high-trust archetype reference set, not just a lightweight similarity index
+
