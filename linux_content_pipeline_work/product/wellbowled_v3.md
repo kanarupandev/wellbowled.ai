@@ -1,4 +1,4 @@
-# wellBowled.ai — v3
+# wellBowled.ai — v3 (CURRENT)
 
 ## The Idea
 
@@ -27,6 +27,76 @@ Help upcoming bowlers:
 **Every body is unique.** Two bowlers can have identical techniques and different results because of height, strength, flexibility, body proportions. The system acknowledges this. "You're 5'8" comparing to Steyn at 5'11" — your stride will naturally be shorter. Focus on the ratios, not the absolutes."
 
 **The idol as compass, not destination.** The pro bowler is a reference point. A direction to explore. Not a template to copy exactly. The user's job is to find what works for THEIR body, using the comparison as a guide.
+
+## IMPORTANT PRINCIPLES
+
+1. **We NEVER tell anyone how to bowl.** We only find relevant info matching actions based on their current action.
+2. **We show, not prescribe.** The pointers are: these bowlers excel at these points. Pick yours.
+3. **The system is a menu, not a prescription.** The user discovers. The system informs. Nobody preaches.
+4. **No scores. No grades. No "you're doing it wrong."**
+5. **Every action is valid.** Malinga, Bumrah, Anderson — all wildly different, all elite.
+
+## What the User Gets — The Core Output
+
+### Step 1: Hard Filter (before any matching)
+
+The system first filters the 1000-bowler database to a relevant subset:
+
+```
+Bowling arm:      right / left (detected automatically by MediaPipe)
+Arm rotation:     over-the-top / round-arm / sling (detected from arm arc geometry)
+Pace category:    fast / medium / spin (user self-selects or detected from action speed)
+```
+
+A right-arm over-the-top fast bowler is ONLY matched against other right-arm over-the-top fast bowlers. No comparing apples to oranges.
+
+### Step 2: Overall Top 5 Closest (within the filtered subset)
+
+```
+Among right-arm fast bowlers, your 5 closest action matches:
+
+1. James Anderson — similar knee brace, similar lean
+2. Chris Woakes — similar hip rotation
+3. Stuart Broad — similar stride profile
+4. Tim Southee — similar overall profile
+5. Kyle Jamieson — similar trunk angle
+
+Tap any bowler to see the side-by-side.
+```
+
+No verdict. No score. Just: here are 5 real bowlers in your category whose actions most resemble yours. See what they do. Learn what you want.
+
+### Step 3: Phase-Wise Matches (deeper exploration)
+
+Beyond the overall top 5, the user can explore who in their filtered subset matches them at EACH phase:
+
+```
+Your action broken down (right-arm fast bowlers):
+
+FRONT FOOT BRACE:
+  Most similar to: Anderson, Broad, Woakes
+  These bowlers all have a firm front leg like yours.
+  They tend to generate good seam position.
+
+HIP-SHOULDER SEPARATION:
+  Most similar to: Bumrah, Rabada, Archer
+  Your hip rotation resembles these express pace bowlers.
+  They use this rotation to generate raw speed.
+
+TRUNK LEAN:
+  Most similar to: Cummins, Hazlewood, Starc
+  Your trunk angle at release is similar to these bowlers.
+```
+
+The user might have Anderson's knee and Bumrah's hip rotation — a unique combination within the right-arm fast subset. That's THEIR action. The system helps them understand it.
+
+### What the user does with this
+
+They browse. They tap. They see the side-by-side. They think: "Interesting — among right-arm fast bowlers, my hip rotation is like Bumrah's but my knee is like Anderson's."
+
+That's self-directed learning. We provided the information. They made the decision.
+
+---
 
 ## What the User Gets
 
