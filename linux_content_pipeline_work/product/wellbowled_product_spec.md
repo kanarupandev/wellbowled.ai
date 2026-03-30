@@ -241,3 +241,37 @@ At 100 analyses/day = $60/day margin = $1800/month.
 2. **Camera angle variation** — user's phone angle vs international bowler's broadcast angle. Mitigation: only compare angles that are stable across angles (hip-shoulder sep is most stable).
 3. **MediaPipe accuracy on amateur footage** — lower resolution, unusual clothing. Mitigation: show confidence score, allow re-upload.
 4. **Bowler database effort** — processing 20-30 bowlers manually. Mitigation: start with 5, add more over time.
+
+## codex: review comments
+
+1. The core measurement claim is too strong for the current method. The spec still sells “personalized comparison” and “Steyn DNA” off a 5-angle vector at 30 fps, but that is not enough to support a robust cross-bowler similarity claim. The product should be framed more defensibly as archetype-style comparison, not precise DNA matching.
+
+2. The matching model is underpowered and likely misleading. The current vector of `front_knee, hip_shoulder_sep, trunk_lean, stride_pct, arm_slot` with cosine similarity is too little signal to distinguish elite bowlers reliably, especially across different camera angles and clip quality.
+
+3. The hard filters are not operationally defined. Filtering by `action type` and `pace category` is not machine-safe as written. Pace cannot be inferred from a casual user clip, and labels like `side-on / front-on / sling / unique` are too loose.
+
+4. The user flow hides a major compute/product risk before payment. Running SAM2 propagation, pose extraction, comparison, and likely rendering before charging only `$1` creates abuse risk and weak unit economics unless payment is taken earlier or the pre-pay pipeline is heavily capped.
+
+5. The pricing is probably too low for the amount of failure handling implied. Failed masks, bad clips, re-uploads, support, and payment friction will likely eat the modeled margin fast.
+
+6. The comparison output overclaims coaching precision. Statements like “This alone could add 5-10 km/h” are too strong and not supportable from this pipeline.
+
+7. The international bowler database schema is inconsistent and not build-ready. It mixes partial phase keys, placeholder objects, and a flat `angle_vector` without defining exact vector order, normalization, or missing-value handling.
+
+8. The target bowler list contains obvious taxonomy mistakes, which is a bad sign for downstream ontology quality. Examples in the spec itself show category confusion.
+
+9. Side 1 and Side 2 are mixed together but have different truth standards. The content side can tolerate more editorial interpretation; the paid comparison side cannot. The spec should separate these products more clearly.
+
+10. The phase model is not aligned with what current clip quality reliably supports. The spec assumes more stable phase anchors than recent 30 fps findings justify.
+
+11. Language support is underspecified operationally. English/Tamil/Hindi are listed, but there is no review policy, fallback behavior, or quality threshold for multilingual coaching text.
+
+12. Camera angle variation is treated too lightly. It is not a small mitigation issue; it is one of the core validity risks for angle-based comparison.
+
+13. The spec has no explicit clip acceptance contract. There is no minimum input standard for frame rate, camera angle, body visibility, final steps, lighting, or camera stability.
+
+14. “Manual override to any bowler” weakens the credibility of the match system unless the product clearly distinguishes system-ranked nearest match from user-forced comparison.
+
+15. The cost model is optimistic and omits moderation, retries, failed jobs, storage, and support.
+
+Overall verdict: good direction, but not ready as a paid product spec. The biggest problem is that it jumps from a promising content/comparison concept to an overconfident paid measurement product without tightening the claims, ontology, input contract, and matching model first.
