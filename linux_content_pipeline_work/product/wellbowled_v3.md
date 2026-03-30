@@ -268,6 +268,88 @@ Before taking $1:
 - Make it fun, shareable, and educational
 - In your language
 
+## Roadmap
+
+### Phase 1: Build DB + Manual Input Matching (NOW)
+
+**Goal:** 10 bowlers in DB. Interface takes JSON input → returns top 5 matches.
+
+```
+Step 1: Find 10 side-on clips (YouTube, 5 right-arm, 3 left-arm, 2 unique)
+Step 2: SAM 2 extract each bowler (manual clicks, ~30 min each on CPU)
+Step 3: MediaPipe → measure 3 angles at front-foot-contact frame
+Step 4: Store as JSON in bowler_db/
+Step 5: Build matching function:
+        Input:  {"bowling_arm": "right", "pace_type": "fast",
+                 "front_knee": 145, "hip_shoulder_sep": 31, "trunk_lean": 15}
+        Output: top 5 matches with distances
+Step 6: Simple web page to enter angles manually + see matches
+```
+
+**Effort:** ~1 week
+**Proves:** The pipeline works end-to-end. Matching is meaningful.
+
+### Phase 2: Scale DB to 50-100 bowlers
+
+**Goal:** Enough bowlers that matches are genuinely close within each category.
+
+```
+Step 1: Batch-process clips (tooling from Phase 1 speeds this up)
+Step 2: Cover all categories: right/left × fast/medium/spin × over/round/sling
+Step 3: Add phase-wise angles (not just front-foot-contact)
+Step 4: Validate: do the top 5 matches make intuitive cricket sense?
+```
+
+**Effort:** ~2 weeks
+**Proves:** The matching produces results that cricket people find credible.
+
+### Phase 3: User Video Input (the $1 product)
+
+**Goal:** User uploads their clip → system extracts angles → matches against DB.
+
+```
+Step 1: Side-on detection (code check, before payment)
+Step 2: SAM 2 self-annotation (user clicks on themselves)
+Step 3: MediaPipe → angles extracted automatically
+Step 4: Matching against DB → top 5 overall + phase-wise
+Step 5: Comparison card rendered
+Step 6: Stripe payment integration
+```
+
+**Effort:** ~2-3 weeks
+**Proves:** Users will pay $1 for this.
+
+### Phase 4: Scale to 1000 bowlers + multilingual
+
+**Goal:** Comprehensive reference library. Tamil/Hindi support.
+
+```
+Step 1: Batch-process remaining bowlers (tooling is mature by now)
+Step 2: Gemini multilingual coaching observations
+Step 3: Browse/search on website (free, drives traffic)
+Step 4: Content creation pipeline for social media
+```
+
+**Effort:** ~4-6 weeks
+**Proves:** This is a sustainable business.
+
+### Feasibility Assessment
+
+| Phase | Feasible? | Risk |
+|-------|-----------|------|
+| Phase 1 (10 bowlers, manual input) | YES — proven tech, small scope | Low |
+| Phase 2 (50-100 bowlers) | YES — same process, just more clips | Medium (finding quality side-on clips for all) |
+| Phase 3 (user video input) | YES — SAM 2 + MediaPipe proven | Medium (diverse user clip quality) |
+| Phase 4 (1000 bowlers) | YES but time-intensive | High (50+ hours of clip processing) |
+
+### What Could Kill This
+
+1. **3 angles isn't enough signal** — if all right-arm fast bowlers look identical on 3 metrics, matching is meaningless. Mitigation: test with 10 bowlers first. If they cluster too tightly, add more metrics or switch approach.
+2. **Side-on clips don't exist for many bowlers** — some only have broadcast footage. Mitigation: accept "roughly side-on" for the DB, strict side-on for user clips.
+3. **Nobody cares** — the comparison might not be interesting enough to share or pay for. Mitigation: Phase 1 is cheap to test. Kill it early if there's no interest.
+
+---
+
 ## Experiments Completed
 
 | Experiment | Result |
