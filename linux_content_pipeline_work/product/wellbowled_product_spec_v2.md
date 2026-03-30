@@ -1,301 +1,303 @@
-# wellBowled.ai — Product Spec v2 (Feasible)
+# wellBowled.ai — Product Spec
 
-Addresses all 15 Codex review comments. Grounded in what's proven experimentally.
+## Overview
 
----
+Two-sided product:
+1. **Content (marketing):** Annotated international bowler videos on Instagram/YouTube
+2. **Paid comparison ($1):** User uploads clip, gets personalized comparison to international bowler
 
-## What We're Selling
+## Side 1: Content Creation
 
-**"See how your bowling action compares to the pros."**
+Annotated videos of international bowlers (Bumrah, Steyn, Starc, Anderson, etc.) with skeleton overlay, phase annotations, angle measurements. Posted on Instagram/YouTube with wellBowled.ai watermark. Drives traffic to the site.
 
-NOT: precise biomechanical measurement.
-NOT: coaching prescription.
-IS: visual, educational, fun comparison of bowling posture at key moments.
+## Side 2: Paid Comparison ($1)
 
-The framing is "style comparison" — like a personality quiz for your bowling action. Entertaining, educational, shareable. Not a medical-grade analysis.
-
----
-
-## Two Products (Separate Truth Standards)
-
-### Product 1: Content (editorial, can interpret)
-- Annotated videos of international bowlers
-- "Bumrah's hip rotation is extraordinary — look at that separation"
-- Can use approximate language, visual storytelling
-- Purpose: marketing, brand building, drive traffic
-
-### Product 2: Paid Comparison ($1, must be defensible)
-- User's posture compared to a pro at matching delivery phases
-- Shows angle differences, not prescriptions
-- "Your front knee at landing: 145°. Steyn at landing: 172°. Difference: 27°"
-- Does NOT say "this will add 10 km/h" — says "this is the biggest postural difference"
-- Purpose: revenue, user engagement, shareable result
-
----
-
-## Paid Comparison — User Flow
+### User Flow
 
 ```
-1. Land on wellBowled.ai
-2. Pay $1 (Stripe) — BEFORE any compute
-3. Upload clip (3-10 sec, requirements shown)
-4. SAM 2 self-annotation:
-   - See a frame from their clip
-   - Click on themselves (green mask grows)
+1. Land on wellBowled.ai (from social media content)
+2. Upload bowling clip (3-10 seconds)
+3. Interactive SAM 2 annotation:
+   - User clicks on themselves in one frame
+   - Green mask grows with each click (real-time feedback)
+   - Keep clicking until full body is highlighted
    - "Looks good? → Analyze"
-5. Processing (30-90 sec, loading bar):
-   - SAM 2 propagation (cloud GPU)
-   - MediaPipe pose extraction
-   - Phase detection + angle measurement
-6. Auto-match:
-   - Filter by bowling arm (detected by MediaPipe)
-   - Match against bowler database by posture similarity
-   - "Your closest style match: Dale Steyn (side-on fast)"
-7. Pick language (English / Tamil / Hindi)
-8. Receive:
-   - Comparison card image
-   - Optional: user can browse other bowlers to compare
+4. SAM 2 propagates masks through all frames (30-60 sec, cloud GPU)
+5. MediaPipe extracts pose → angles computed at 5 delivery phases
+6. Bowler matching:
+   AUTO: system filters → matches → "You're 82% Steyn among right-arm fast bowlers"
+   OR MANUAL: user searches by name, picks any bowler
+7. Language: English / Tamil / Hindi
+8. Pay $1 (Stripe)
+9. Receive in <5 minutes:
+   - Comparison card image (shareable, 1080x1920)
+   - Short annotated video (15-20s)
+   - Both watermarked wellBowled.ai
 ```
 
-Payment is BEFORE compute. Failed clips get a refund or retry. No abuse vector.
+### Bowler Matching Logic
 
----
-
-## Clip Acceptance Contract
-
-User is shown these requirements before upload:
-
+**Step 1: Hard filter (eliminate incompatible bowlers)**
 ```
-✓ 3-10 seconds long
-✓ Shows one full delivery (run-up through release)
-✓ Bowler clearly visible (not too far, not cut off)
-✓ Camera roughly steady (not shaking wildly)
-✓ Minimum 480p resolution
-✓ Side-on angle preferred (gives best comparison)
-✗ No slow-motion clips (must be real-time 25-30fps)
-✗ No screen recordings of other videos
+Filter by bowling arm:    left / right
+Filter by action type:    side-on / front-on / sling / round-arm / unique
+Filter by pace category:  fast (140+) / medium-fast (130-140) / medium (120-130) / spin
 ```
 
-After upload, Gemini Flash validates:
-- Is there a bowler? Is the delivery visible?
-- Quality score 1-10. Below 4 → reject with guidance.
-
----
-
-## What We Measure (honest about limitations)
-
-### Reliable at 30fps (use these):
-
-| Metric | How | Why reliable |
-|--------|-----|-------------|
-| Front knee angle at landing | Angle at knee joint (hip-knee-ankle) | Holds for 3-5 frames, slow-changing |
-| Hip-shoulder separation | Angle between hip line and shoulder line | Proven (X-factor pipeline), slow-changing |
-| Trunk lateral lean | Angle from vertical at spine midpoint | Holds for several frames |
-| Stride length ratio | Ankle-to-ankle distance / torso length | Static measurement, one frame |
-
-### Unreliable at 30fps (do NOT use):
-
-| Metric | Why unreliable |
-|--------|---------------|
-| Arm slot / arm speed | Changes 90° in 2 frames |
-| Elbow flexion | ICC needs 240fps for this |
-| Wrist snap timing | Changes in 1 frame |
-| Energy transfer timing | Peaks overlap within 1-2 frames |
-
-### Camera angle caveat:
-
-Absolute angles are affected by camera position. We mitigate by:
-- Recommending side-on filming
-- Comparing only metrics stable across angles (hip-shoulder sep is most stable)
-- Showing the comparison VISUALLY (side-by-side frames) not just numbers
-- Adding disclaimer: "Angles are approximate from video. Film from side-on for best accuracy."
-
----
-
-## Bowler Matching
-
-### Step 1: Auto-detect bowling arm
-MediaPipe detects which wrist moves fastest during delivery → left or right arm bowler. Binary filter, reliable.
-
-### Step 2: Action archetype (simple, not over-classified)
-Three categories only:
+**Step 2: Soft match within filtered subset**
 ```
-PACE:     Bowls fast/medium-fast (arm comes over the top or high)
-MEDIUM:   Medium pace, emphasis on swing/seam
-SPIN:     Wrist spin or finger spin (completely different metrics)
+Compute angle vector per bowler at each phase:
+  [front_knee, hip_shoulder_sep, trunk_lean, stride_pct, arm_slot]
+
+Cosine similarity between user's vector and each bowler in filtered subset.
+Best match = highest similarity.
 ```
 
-Detected by: arm speed relative to body speed. Fast bowlers have wrist velocity >> hip velocity. Spinners have wrist rotation >> linear wrist velocity.
+A left-arm sling bowler is never compared to a right-arm over-the-top bowler. The comparison is always within the same bowling archetype.
 
-Do NOT try to classify side-on/front-on/sling — too granular, too error-prone from user video.
-
-### Step 3: Posture similarity within archetype
+**Step 3: Present result**
 ```
-Angle vector: [front_knee, hip_shoulder_sep, trunk_lean, stride_ratio]
-Similarity: cosine similarity (normalized)
+"Among right-arm fast bowlers, you're closest to Dale Steyn (82% match)"
+Also show: "65% Bumrah, 58% Starc" as alternatives
+User can override: "Compare me to Bumrah instead"
 ```
 
-4 metrics, not 5. Dropped arm_slot (unreliable at 30fps).
-
-Result: "Your closest match among right-arm pace bowlers: Dale Steyn"
-
-### What "closest match" means (honest framing)
-"Based on your body position at key delivery moments, your action most resembles Steyn's among the bowlers in our database. This is a postural similarity score, not a performance prediction."
-
-NOT: "You bowl like Steyn."
-NOT: "You have 82% Steyn DNA."
-IS: "Your posture at these moments is closest to Steyn's."
-
----
-
-## The Comparison Card
+### The Comparison Card
 
 ```
 ┌──────────────────────────────────────────┐
 │                                          │
-│   YOUR ACTION vs DALE STEYN              │
-│   Closest style match (pace bowlers)     │
+│   YOU  vs  DALE STEYN  (82% match)       │
+│   Right-arm fast · Side-on action        │
 │                                          │
 │   [your frame]      [steyn frame]        │
 │   at FRONT FOOT     at FRONT FOOT        │
 │                                          │
-│   Front Knee:    145°  vs  172°          │
-│   Hip-Shoulder:   28°  vs   47°          │
-│   Trunk Lean:     34°  vs   22°          │
-│   Stride:         85%  vs   92%          │
+│   Front Knee:    145°  vs  172°  (-27°)  │
+│   Hip-Shoulder:   28°  vs   47°  (-19°)  │
+│   Trunk Lean:     34°  vs   22°  (+12°)  │
+│   Stride:         85%  vs   92%  (-7%)   │
 │                                          │
-│   BIGGEST DIFFERENCE:                    │
-│   Hip-shoulder separation (19° gap)      │
-│   Steyn's hips rotate further ahead      │
-│   of his shoulders before release.       │
+│   VERDICT:                               │
+│   "Your biggest gap is hip-shoulder      │
+│    separation. Lead with the hip before  │
+│    the shoulders open. This alone could  │
+│    add 5-10 km/h."                       │
 │                                          │
-│   📐 Angles measured from video.         │
-│   Film side-on for best accuracy.        │
+│   🏏 82% Steyn DNA                       │
 │                                          │
 │   wellBowled.ai                          │
 └──────────────────────────────────────────┘
 ```
 
-No speed claims. No "this will add X km/h." Just the measured differences and which is biggest.
+Tamil version:
+```
+"உங்கள் மிகப்பெரிய இடைவெளி இடுப்பு-தோள்பட்டை
+ பிரிவினை. தோள்பட்டைகள் திறக்கும் முன்
+ இடுப்பை முன்னிலையில் வைக்கவும்."
+```
 
-Gemini generates the description text in the chosen language.
+Hindi version:
+```
+"आपका सबसे बड़ा अंतर हिप-शोल्डर सेपरेशन है।
+ कंधे खुलने से पहले हिप को आगे ले जाएं।"
+```
 
----
+### International Bowler Database
 
-## Bowler Database (corrected taxonomy)
+Pre-computed once per bowler. Stored as JSON:
 
-### Right-arm pace
-- Dale Steyn (SA) — 150 km/h, side-on
-- Jasprit Bumrah (IND) — 145 km/h, unique/chest-on
-- Pat Cummins (AUS) — 145 km/h, side-on
-- Kagiso Rabada (SA) — 145 km/h, side-on
-- Jofra Archer (ENG) — 150 km/h, side-on
+```json
+{
+  "bowler_id": "steyn",
+  "name": "Dale Steyn",
+  "country": "South Africa",
+  "height_cm": 179,
+  "stock_pace_kmh": 150,
+  "bowling_arm": "right",
+  "action_type": "side-on",
+  "pace_category": "fast",
+  "searchable_names": ["dale steyn", "steyn", "dale"],
+  "phase_angles": {
+    "ground_contact": {
+      "front_knee": 168,
+      "hip_shoulder_sep": 42,
+      "trunk_lean": 18,
+      "stride_pct_height": 90,
+      "arm_slot_clock": 12
+    },
+    "front_foot_brace": { ... },
+    "hip_rotation": { ... },
+    "arm_over": { ... },
+    "release": { ... }
+  },
+  "angle_vector": [168, 42, 18, 90, 12, ...],
+  "source_clip": "resources/bowler_db/steyn_nets_3sec.mp4",
+  "source_camera_angle": "side-on",
+  "phase_frames": {
+    "ground_contact": "resources/bowler_db/steyn_phase_1.png",
+    "front_foot_brace": "resources/bowler_db/steyn_phase_2.png",
+    "arm_over": "resources/bowler_db/steyn_phase_4.png",
+    "release": "resources/bowler_db/steyn_phase_5.png"
+  }
+}
+```
 
-### Right-arm medium
-- James Anderson (ENG) — 135 km/h, side-on, swing
-- Josh Hazlewood (AUS) — 135 km/h, side-on, seam
-- Glenn McGrath (AUS) — 135 km/h, side-on, line/length
+Target: 20-30 bowlers covering:
+- Right-arm fast (Steyn, Bumrah, Starc, Archer, Rabada)
+- Right-arm medium-fast (Anderson, Broad, Hazlewood, McGrath)
+- Left-arm fast (Wasim, Boult, Starc, Johnson)
+- Left-arm medium (Anderson... wait he's right)
+- Sling/round-arm (Malinga, Bumrah's unique)
+- Spin (Warne, Murali, Ashwin, Bumrah) — different metrics
 
-### Left-arm pace
-- Mitchell Starc (AUS) — 155 km/h, front-on
-- Mitchell Johnson (AUS) — 150 km/h, side-on
-- Trent Boult (NZ) — 140 km/h, side-on
-- Wasim Akram (PAK) — 145 km/h, side-on
+### Gemini's Role
 
-### Left-arm medium
-- Sam Curran (ENG) — 130 km/h
-- Chaminda Vaas (SL) — 130 km/h
+One call per analysis for multilingual coaching text:
 
-### Unique action
-- Lasith Malinga (SL) — sling/round-arm
-- Shaun Tait (AUS) — extreme pace, slinging
+```
+Prompt:
+"You are a cricket bowling coach. Given these comparison results:
 
-Start with 5 for MVP: **Steyn, Bumrah, Starc, Anderson, Malinga**
+Bowler: {user_description}
+Compared to: {bowler_name} ({match_pct}% match)
+Category: {bowling_arm} {action_type} {pace_category}
 
-Each bowler needs: one clean 3-5 sec side-on clip processed through SAM 2 + MediaPipe. Angles stored. Phase frames stored. One-time effort per bowler.
+Angles:
+  Front Knee: User {user_knee}° vs {bowler_name} {bowler_knee}°
+  Hip-Shoulder: User {user_hss}° vs {bowler_name} {bowler_hss}°
+  Trunk Lean: User {user_lean}° vs {bowler_name} {bowler_lean}°
+  Stride: User {user_stride}% vs {bowler_name} {bowler_stride}%
 
----
+Generate a 3-line coaching verdict in {language}.
+Line 1: The biggest gap and what it means
+Line 2: Why fixing this matters (pace / accuracy / injury)
+Line 3: One specific drill or focus to improve
 
-## Experiments to Run Today
+Be specific to these numbers. Not generic advice.
+Use cricket terminology appropriate for the language.
+Languages: English, Tamil (தமிழ்), Hindi (हिंदी)"
+```
 
-### Experiment 1: Angle measurement accuracy
-- Take the nets clip (already isolated by SAM 2)
-- Measure front_knee, hip_shoulder_sep, trunk_lean, stride_ratio at frame 28 (arm over)
-- Manually verify by looking at the frame: does 145° knee look right?
-- Run 3 times: must be identical (determinism)
+### Angles Measured (reliable at 30fps)
 
-### Experiment 2: Two-bowler comparison
-- Measure same 4 angles on the nets clip bowler
-- Measure same 4 angles on the Steyn side-on clip
-- Produce a comparison card image
-- Visually verify: does the comparison look credible?
+| Angle | What it measures | How computed | Reliable? |
+|-------|-----------------|-------------|-----------|
+| Front knee | Brace stiffness at landing | Angle at joint 26 (hip-knee-ankle) | ✓ holds 3-5 frames |
+| Hip-shoulder separation | Rotational energy storage | Angle between hip line and shoulder line | ✓ proven in X-Factor |
+| Trunk lean | Lateral flexion (injury risk) | Angle from vertical at spine midpoint | ✓ holds several frames |
+| Stride length | Delivery stride as % of height | Distance between ankles / torso length | ✓ static measurement |
+| Arm slot | Over-the-top vs round-arm | Clock position of wrist relative to shoulder | ⚠ changes fast, measure at arm-over frame |
 
-### Experiment 3: Auto bowler matching
-- Create angle vectors for nets bowler, Steyn, Bumrah (from existing clips)
-- Compute cosine similarity
-- Check: does the matching make intuitive sense?
+### Tech Stack
 
-### Experiment 4: Gemini multilingual coaching text
-- Send comparison data to Gemini Pro
-- Get coaching text in English, Tamil, Hindi
-- Check: is the text specific and sensible in all 3 languages?
+| Component | Tech | Cost |
+|-----------|------|------|
+| Frontend | Next.js or plain HTML+JS | Free (Vercel) |
+| SAM 2 | Replicate API (cloud GPU) | ~$0.05/clip |
+| Pose | MediaPipe (server CPU) | Free |
+| Coaching text | Gemini Pro | ~$0.01 |
+| Payment | Stripe | 30¢ + 2.9% |
+| Hosting | Vercel + Railway/Fly.io | ~$10/mo |
+| **Total per analysis** | | **~$0.40** |
+| **Revenue per analysis** | | **$1.00** |
+| **Margin** | | **~60%** |
 
-### Experiment 5: End-to-end user flow mock
-- Upload the nets clip
-- Use SAM 2 web UI to annotate
-- Run analysis
-- Generate comparison card
-- Time the whole process
-- Target: under 5 minutes
+### Cost Revised (with Stripe)
 
----
+```
+Compute: $0.06
+Stripe fee: $0.33 (30¢ + 2.9% of $1)
+Hosting amortized: $0.01
+Total cost: ~$0.40
+Revenue: $1.00
+Margin: $0.60 (60%)
+```
 
-## Cost Model (revised, conservative)
+At 100 analyses/day = $60/day margin = $1800/month.
 
-| Item | Cost |
-|------|------|
-| SAM 2 (Replicate cloud GPU) | $0.05 |
-| Gemini Pro (coaching text) | $0.01 |
-| Gemini Flash (clip validation) | $0.001 |
-| Stripe fee (on $1) | $0.33 |
-| Server/hosting (amortized) | $0.02 |
-| Failed job buffer (10% fail rate) | $0.05 |
-| **Total cost** | **~$0.46** |
-| **Revenue** | **$1.00** |
-| **Margin** | **$0.54 (54%)** |
+### MVP Build Order
 
-At 50 analyses/day = $27/day margin = $810/month.
-At 200 analyses/day = $108/day = $3240/month.
+1. **Bowler database** — process 5 bowlers (Steyn, Bumrah, Starc, Anderson, Malinga), store angle profiles
+2. **Comparison engine** — filter → match → generate card image
+3. **SAM 2 web UI** — polish the existing bowler_selector/app.py for user self-annotation
+4. **Payment** — Stripe integration
+5. **Gemini multilingual** — coaching text in 3 languages
+6. **Content pipeline** — semi-automated annotation of international bowler clips for social media
 
----
+### What Already Exists
 
-## MVP Build Order
+- SAM 2 web UI (`bowler_selector/app.py`) — working prototype
+- MediaPipe pose extraction — working, deterministic (60/60 identical)
+- Angle computation — working (hip-shoulder, knee, trunk lean)
+- X-Factor pipeline — working (Steyn 47°, Bumrah 41°)
+- Video rendering with overlays — working
+- Gemini integration — working
+- Isolated bowler video — working (SAM 2 large + manual clicks)
 
-1. **Today: Run experiments 1-4** (prove angles work, comparison is credible)
-2. **This week: Bowler database** (5 bowlers, process clips, store angles)
-3. **This week: Comparison card renderer** (side-by-side image generator)
-4. **Next week: Web UI** (upload + SAM 2 annotation + payment)
-5. **Next week: Gemini multilingual** (3 languages)
-6. **Ongoing: Content creation** (annotated international bowler videos)
+### Risks
 
----
+1. **SAM 2 on diverse user clips** — may fail on poor quality phone footage. Mitigation: user sees the mask and can retry.
+2. **Camera angle variation** — user's phone angle vs international bowler's broadcast angle. Mitigation: only compare angles that are stable across angles (hip-shoulder sep is most stable).
+3. **MediaPipe accuracy on amateur footage** — lower resolution, unusual clothing. Mitigation: show confidence score, allow re-upload.
+4. **Bowler database effort** — processing 20-30 bowlers manually. Mitigation: start with 5, add more over time.
 
-## What Changed from v1 (addressing Codex review)
+## codex: review comments
 
-| # | Codex concern | Fix |
-|---|--------------|-----|
-| 1 | Claims too strong | Reframed as "style comparison" not "DNA match" |
-| 2 | Matching underpowered | Acknowledged — 4 angles is coarse. Visual comparison is the real product, not the % |
-| 3 | Filters not operational | Simplified to 3 categories. Arm detected by MediaPipe. |
-| 4 | Compute before payment | Payment FIRST, then compute |
-| 5 | Pricing too low | Revised cost model with Stripe fees, failure buffer. 54% margin. |
-| 6 | Coaching overclaims | Removed "add 5-10 km/h." Now just shows differences. |
-| 7 | Schema inconsistent | To be defined properly in experiment phase |
-| 8 | Taxonomy mistakes | Fixed bowler list with correct categories |
-| 9 | Side 1 vs Side 2 mixed | Separated with explicit truth standards |
-| 10 | Phase model overfit | Only use phases we can reliably detect at 30fps |
-| 11 | Language underspecified | Acknowledged — validate in experiment 4 |
-| 12 | Camera angle variation | Added explicit caveat, recommend side-on, visual comparison compensates |
-| 13 | No clip acceptance | Added acceptance contract with requirements |
-| 14 | Manual override weakens match | Framed as "browse other bowlers" not override |
-| 15 | Cost model optimistic | Added Stripe, failure buffer, realistic margin |
+1. The core measurement claim is too strong for the current method. The spec still sells “personalized comparison” and “Steyn DNA” off a 5-angle vector at 30 fps, but that is not enough to support a robust cross-bowler similarity claim. The product should be framed more defensibly as archetype-style comparison, not precise DNA matching.
+
+2. The matching model is underpowered and likely misleading. The current vector of `front_knee, hip_shoulder_sep, trunk_lean, stride_pct, arm_slot` with cosine similarity is too little signal to distinguish elite bowlers reliably, especially across different camera angles and clip quality.
+
+3. The hard filters are not operationally defined. Filtering by `action type` and `pace category` is not machine-safe as written. Pace cannot be inferred from a casual user clip, and labels like `side-on / front-on / sling / unique` are too loose.
+
+4. The user flow hides a major compute/product risk before payment. Running SAM2 propagation, pose extraction, comparison, and likely rendering before charging only `$1` creates abuse risk and weak unit economics unless payment is taken earlier or the pre-pay pipeline is heavily capped.
+
+5. The pricing is probably too low for the amount of failure handling implied. Failed masks, bad clips, re-uploads, support, and payment friction will likely eat the modeled margin fast.
+
+6. The comparison output overclaims coaching precision. Statements like “This alone could add 5-10 km/h” are too strong and not supportable from this pipeline.
+
+7. The international bowler database schema is inconsistent and not build-ready. It mixes partial phase keys, placeholder objects, and a flat `angle_vector` without defining exact vector order, normalization, or missing-value handling.
+
+8. The target bowler list contains obvious taxonomy mistakes, which is a bad sign for downstream ontology quality. Examples in the spec itself show category confusion.
+
+9. Side 1 and Side 2 are mixed together but have different truth standards. The content side can tolerate more editorial interpretation; the paid comparison side cannot. The spec should separate these products more clearly.
+
+10. The phase model is not aligned with what current clip quality reliably supports. The spec assumes more stable phase anchors than recent 30 fps findings justify.
+
+11. Language support is underspecified operationally. English/Tamil/Hindi are listed, but there is no review policy, fallback behavior, or quality threshold for multilingual coaching text.
+
+12. Camera angle variation is treated too lightly. It is not a small mitigation issue; it is one of the core validity risks for angle-based comparison.
+
+13. The spec has no explicit clip acceptance contract. There is no minimum input standard for frame rate, camera angle, body visibility, final steps, lighting, or camera stability.
+
+14. “Manual override to any bowler” weakens the credibility of the match system unless the product clearly distinguishes system-ranked nearest match from user-forced comparison.
+
+15. The cost model is optimistic and omits moderation, retries, failed jobs, storage, and support.
+
+Overall verdict: good direction, but not ready as a paid product spec. The biggest problem is that it jumps from a promising content/comparison concept to an overconfident paid measurement product without tightening the claims, ontology, input contract, and matching model first.
+
+## codex: review comments v2
+
+1. The current v2 still overclaims what a 30 fps, 5-angle comparison can support. This should be framed as archetype-style comparison, not strong DNA-style similarity.
+
+2. The matching model is still too thin. `front_knee, hip_shoulder_sep, trunk_lean, stride_pct, arm_slot` plus cosine similarity is not enough for robust elite-bowler matching.
+
+3. The hard filters are still not operationally defined. `action type` and `pace category` are not machine-safe for amateur user clips as written.
+
+4. Payment is still too late in the flow. The pipeline does expensive work before charging only `$1`, which is risky operationally and financially.
+
+5. The comparison card still overstates coaching precision. Claims like “This alone could add 5-10 km/h” are not supportable from this method.
+
+6. The bowler database section is still not build-ready. It uses placeholders, undefined vector ordering, and inconsistent phase records.
+
+7. The ontology is still visibly unstable. The target bowler list contains taxonomy mistakes, which means the categorization layer is not yet trustworthy.
+
+8. Content and paid comparison are still mixed under one truth standard. The content side can be more interpretive; the paid side cannot.
+
+9. The spec still lacks a real clip acceptance contract. Minimum requirements for frame rate, angle, body visibility, lighting, and delivery-window coverage should be explicit.
+
+10. Camera-angle variation remains one of the biggest validity risks and is still under-addressed.
+
+11. The unit economics are still optimistic. Retries, failed jobs, support, moderation, and storage are not accounted for.
+
+Overall verdict: promising concept, but still not ready as a paid product spec. The biggest remaining issue is overconfidence in the comparison validity relative to the actual signal available.
