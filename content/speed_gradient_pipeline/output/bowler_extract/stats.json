@@ -1,0 +1,17 @@
+{
+  "input": "/Users/kanarupan/workspace/wellbowled.ai/resources/samples/steyn_sa_vs_eng_broadcast_5sec.mp4",
+  "resolution": "640x360",
+  "fps": 30.0,
+  "total_frames": 150,
+  "frames_with_mask": 93,
+  "detection_rate": "62.0%",
+  "gemini_calls": 0,
+  "tech_stack": [
+    "Gemini Pro 3",
+    "MediaPipe PoseLandmarker",
+    "SAM 2.1 (large)",
+    "FFmpeg"
+  ],
+  "crop_resolution": "711x400",
+  "output": "/Users/kanarupan/workspace/wellbowled.ai/content/speed_gradient_pipeline/output/bowler_extract/bowler_only.mp4"
+}

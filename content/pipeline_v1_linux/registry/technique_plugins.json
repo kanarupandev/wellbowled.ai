@@ -1,0 +1,14 @@
+[
+  {
+    "technique_id": "speed_gradient",
+    "technique_version": "1.0.0",
+    "required_shared_stages": ["stage0", "stage1", "stage1_5", "stage2", "stage4", "stage5", "stage7", "stage8"],
+    "optional_stages": ["stage3", "stage6", "stage7_5"],
+    "supported_camera_angles": ["side-on", "behind", "elevated", "front-on", "mixed"],
+    "min_pose_quality": 0.80,
+    "segment_definition_id": "delivery_phases_v1",
+    "segment_definition_version": "1.0.0",
+    "render_template_id": "speed_gradient_v1",
+    "render_template_version": "1.0.0"
+  }
+]

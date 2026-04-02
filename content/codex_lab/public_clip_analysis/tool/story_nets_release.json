@@ -1,0 +1,69 @@
+{
+  "project_name": "nets_release_window",
+  "input_video": "/Users/kanarupan/workspace/wellbowled.ai/resources/samples/3_sec_1_delivery_nets.mp4",
+  "output_dir": "/Users/kanarupan/workspace/wellbowled.ai/content/codex_lab/public_clip_analysis/output/nets_release_window",
+  "segment": {
+    "start": 0.0,
+    "end": 2.4
+  },
+  "arm_hint": "right",
+  "pose_crop": {
+    "x": 0.0,
+    "y": 0.12,
+    "w": 0.62,
+    "h": 0.88
+  },
+  "phase_hints": {
+    "load": 0.65,
+    "release": 1.0,
+    "freeze": 1.5,
+    "freeze_window": 0.12,
+    "finish": 1.7
+  },
+  "editorial": {
+    "series": "Human-in-the-Loop Breakdown",
+    "title": "CHASE THE HIGH RELEASE",
+    "subtitle": "Single-bowler pose draft with shaped freeze timing",
+    "freeze_label": "FOLLOW-THROUGH FRAME",
+    "freeze_title": "CHEST THROUGH THE TARGET",
+    "callout_left": "torso drives forward",
+    "callout_right": "front-side finish",
+    "fallback_insight": "The release peaks high, then the body folds hard through follow-through.",
+    "fallback_takeaway": "Keep the release tall before you collapse forward.",
+    "fallback_release_note": "Freeze frame: the torso is still driving after the ball has gone.",
+    "fallback_finish_note": "Follow-through: chest drops and the trail leg swings across quickly."
+  },
+  "style": {
+    "accent": [
+      75,
+      224,
+      255
+    ],
+    "accent_secondary": [
+      255,
+      186,
+      64
+    ],
+    "accent_tertiary": [
+      142,
+      242,
+      92
+    ],
+    "accent_quaternary": [
+      255,
+      102,
+      163
+    ],
+    "background": [
+      10,
+      14,
+      20
+    ]
+  },
+  "render": {
+    "slow_factor": 4,
+    "intro_hold": 6,
+    "freeze_hold": 16,
+    "end_hold": 20
+  }
+}

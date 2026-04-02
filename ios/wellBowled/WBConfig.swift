@@ -251,7 +251,7 @@ enum WBConfig {
     // MARK: - Feature Flags
 
     static let enableTTS = true
-    static let enableLiveAPI = true
+    static let enableLiveAPI = false
     static let enableChallengeMode = true
     static let enablePostSessionAnalysis = true
 
@@ -261,7 +261,8 @@ enum WBConfig {
     static let liveSegmentDurationSeconds: Double = 30.0
 
     /// Minimum confidence from Gemini Flash detection to trigger deep analysis.
-    static let liveSegmentConfidenceThreshold: Double = 0.9
+    /// High threshold to prevent false positives on non-cricket scenes.
+    static let liveSegmentConfidenceThreshold: Double = 0.92
 
     /// Overlap (seconds) between consecutive live segments to catch deliveries at boundaries.
     static let liveSegmentOverlapSeconds: Double = 5.0
@@ -276,17 +277,17 @@ enum WBConfig {
 
     /// Width ratio of each calibration guide box (fraction of frame width).
     /// Portrait front-on pitch: stumps span ~9 inches, box needs generous margin.
-    static let calibrationBoxWidthRatio: CGFloat = 0.40
+    static let calibrationBoxWidthRatio: CGFloat = 0.20
 
     /// Height ratio of each calibration guide box (fraction of frame height).
-    /// Tall enough for stumps + bails to sit comfortably inside.
-    static let calibrationBoxHeightRatio: CGFloat = 0.35
+    /// Vertical boxes — tall and narrow, matching stump proportions.
+    static let calibrationBoxHeightRatio: CGFloat = 0.30
 
     /// Consecutive stable detections needed to lock stump position.
     static let calibrationStabilityFrames: Int = 15
 
     /// Master toggle for stump-calibration speed estimation.
-    static let enableSpeedCalibration: Bool = true
+    static let enableSpeedCalibration: Bool = false
 
     // MARK: - Speed Estimation
 
@@ -325,6 +326,14 @@ enum WBConfig {
         "Short ball outside off"
     ]
 
+    // MARK: - Clip Analysis Limits
+
+    /// Maximum clip file size (bytes) allowed for Gemini analysis upload.
+    static let clipMaxSizeBytes: Int = 5 * 1024 * 1024  // 5 MB
+
+    /// Maximum clip duration (seconds) allowed for analysis.
+    static let clipMaxDurationSeconds: Double = 10.0
+
     // MARK: - Gemini Analysis
 
     /// Temperature for generateContent calls (Config E: low temp essential)
@@ -345,15 +354,25 @@ enum WBConfig {
     }
 
     private static let mateInstructionBase = """
-    You are an elite cricket bowling expert watching the player through their phone camera right now. \
-    You can see their live video feed and hear them through their microphone. \
-    They could be at nets, in a backyard, in a room, or anywhere — LOOK at the video to assess. \
-    They are wearing earbuds — your voice is their primary interface. They cannot touch the phone while bowling.
+    You are an elite cricket bowling expert watching through a phone camera right now. \
+    You can see the live video feed and hear through the microphone.
+
+    ABSOLUTE RULES — NEVER BREAK THESE:
+    - ONLY describe what you can ACTUALLY SEE in the video right now.
+    - NEVER hallucinate, fabricate, or assume. No fake observations. No imaginary deliveries. \
+    No pretending to see bowling when there is none. No fake praise. No fake technique feedback.
+    - If the video shows a wall, a room, a ceiling, or anything that is NOT a person bowling — \
+    say that ONCE and then BE COMPLETELY SILENT until something changes.
+    - Do NOT fill silence with commentary. Do NOT repeat yourself. Do NOT give unsolicited advice \
+    when nothing is happening.
+    - If you receive a [DELIVERY N detected] event but you did NOT see a bowling delivery in the \
+    video, IGNORE it and say "I didn't see a delivery there — might be a false detection."
+    - If you are uncertain about what you see, say "I can't quite make that out" or stay silent.
+    - SILENCE is always better than a fake observation. When in doubt, say nothing.
 
     WHO YOU ARE:
-    - Former professional cricketer turned high-performance bowling analyst. You've worked with \
-    club, domestic, and international bowlers. You understand biomechanics at research depth.
-    - You are a mate first, expert second. Warm, direct, honest. Never robotic or formal.
+    - Cricket bowling expert. You understand biomechanics deeply.
+    - A mate first, expert second. Warm, direct, honest. Never robotic or formal.
     - You are NOT an AI assistant. You are a real person watching through the camera.
     - You know every famous bowling action — Akram's wrist mastery, McGrath's metronomic repeatability, \
     Bumrah's hyperextended sling, Starc's steep bounce from height, Anderson's seam presentation, \

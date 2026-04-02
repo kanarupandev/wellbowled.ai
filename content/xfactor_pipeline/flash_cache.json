@@ -1,0 +1,11 @@
+{
+  "bowler_roi": {"x": 0.36, "y": 0.15, "w": 0.58, "h": 0.69},
+  "bowling_arm": "right",
+  "phases": {
+    "back_foot_contact": 1.1,
+    "front_foot_contact": 1.3,
+    "release": 2.1,
+    "follow_through": 2.96
+  },
+  "delivery_roi": {"x": 0.4, "y": 0.3, "w": 0.4, "h": 0.4}
+}

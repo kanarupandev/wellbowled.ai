@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import os
 
@@ -15,11 +16,13 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
     // MARK: - Analysis Prompt
 
     private static let analysisPrompt = """
-    You are an elite cricket biomechanics analyst reviewing a 5-second bowling delivery clip.
+    You are analyzing a 5-second video clip.
 
-    Watch the FULL action sequence — run-up through follow-through — before classifying.
+    FIRST: Does this clip show an actual cricket bowling delivery (overarm action, ball released)?
+    If NOT — return: { "pace_estimate": "none", "length": "unknown", "line": "unknown", "type": "unknown", \
+    "observation": "No bowling delivery visible in this clip.", "confidence": 0.0 }
 
-    Respond with STRICT JSON only:
+    If YES — watch the FULL action before classifying. Respond with STRICT JSON only:
     {
       "pace_estimate": "medium pace",
       "length": "good_length",
@@ -55,10 +58,14 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
     // MARK: - Deep Analysis Prompt (On-Demand)
 
     private static let deepAnalysisPromptBase = """
-    You are an elite cricket bowling biomechanics expert analyzing a single 5-second delivery clip.
+    You are analyzing a 5-second video clip for cricket bowling biomechanics.
 
-    Watch the ENTIRE clip first — run-up entry through follow-through completion — before writing any analysis. \
-    Pay close attention to the transition between phases, not just static positions.
+    FIRST: Does this clip show an actual cricket bowling delivery? If you cannot see a bowler \
+    delivering a ball with an overarm action, return: \
+    { "pace_estimate": "none", "summary": "No bowling delivery visible in this clip.", "phases": [] }
+
+    If a genuine delivery IS visible: watch the ENTIRE clip first — run-up through follow-through — \
+    before writing any analysis. Only describe what you actually see. Do NOT fabricate observations.
 
     Return STRICT JSON only:
     {
@@ -71,6 +78,14 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
           "observation": "What you actually see — reference specific body positions.",
           "tip": "One concrete drill or cue the bowler can try next ball.",
           "clip_ts": 0.8
+        }
+      ],
+      "drills": [
+        {
+          "name": "Front arm pull-down",
+          "why": "Your front arm is flying out — leaking energy and pulling your head off-line.",
+          "how": "Stand at the crease, no run-up. Bowl 5 balls focusing ONLY on pulling the front arm straight down to your hip pocket at release. Exaggerate it.",
+          "reps": "5 balls"
         }
       ],
       "expert_analysis": {
@@ -207,6 +222,15 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
     - 0.3–0.4: Beginner — obvious technical gaps, uncoordinated timing
     - 0.1–0.2: Raw novice — no discernible technique in this phase
     Be HONEST. Most recreational bowlers should score 0.3–0.6. Do not flatter.
+
+    DRILLS — include 1-2 immediate high-ROI drills in the "drills" array:
+    Pick the 1-2 phases marked "NEEDS WORK" that would give the biggest improvement if fixed. \
+    For each, give a specific, actionable drill:
+    - "name": short name (e.g. "Standing start release", "Front arm pull-down")
+    - "why": one sentence — what's wrong and why this drill fixes it
+    - "how": exact instructions the bowler can follow right now (reps, setup, focus point)
+    - "reps": how many (e.g. "5 balls", "3 sets of 5")
+    If all phases are GOOD, return an empty drills array. Do NOT invent drills for things that are fine.
     """
 
     /// Build the deep analysis prompt, optionally injecting measured speed context.
@@ -269,10 +293,16 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
     // MARK: - Segment Delivery Detection Prompt
 
     private static let segmentDeliveryDetectionPrompt = """
-    You are analyzing one cricket bowling video segment.
-    Detect each bowling RELEASE instant (the ball leaving the hand).
+    You are analyzing a video segment. Your job: detect cricket bowling deliveries ONLY.
 
-    Return STRICT JSON only:
+    FIRST: Is there actual cricket bowling happening in this video?
+    - Is there a bowler with a ball running in and delivering with an overarm action?
+    - Is there a cricket pitch, stumps, or net visible?
+    - If NO cricket bowling is visible — return { "deliveries": [] } immediately.
+    - Do NOT hallucinate deliveries. A person walking, waving, or any non-bowling motion is NOT a delivery.
+    - A wall, empty room, backyard without bowling, or static scene = ZERO deliveries.
+
+    IF genuine cricket bowling IS happening, detect each RELEASE instant (ball leaving the hand):
     {
       "deliveries": [
         {
@@ -283,19 +313,21 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
     }
 
     Rules:
-    - `release_time_sec` is seconds from segment start.
-    - Keep times sorted ascending.
-    - Ignore non-bowling motion and partial run-ups without release.
-    - Use confidence in [0, 1].
+    - `release_time_sec` is seconds from segment start, sorted ascending.
+    - confidence 0.0-1.0: only report 0.8+ for clear, unambiguous overarm bowling releases.
+    - Ignore partial run-ups without a release, throws, catches, or practice swings.
+    - When in doubt, do NOT report it. False positives are worse than missed detections.
     - If none found, return { "deliveries": [] }.
     """
 
     private static let segmentDeliveryDetectionHighRecallPrompt = """
-    You are analyzing one cricket bowling video segment in HIGH-RECALL mode.
-    Detect each likely bowling RELEASE instant (ball leaving the hand) from an overarm bowling action.
-    Prefer recall over precision: include plausible releases with lower confidence instead of dropping them.
+    You are analyzing a video segment in HIGH-RECALL mode for cricket bowling deliveries.
 
-    Return STRICT JSON only:
+    FIRST: Is there actual cricket bowling happening? If not, return { "deliveries": [] }.
+    Do NOT hallucinate. A static scene, empty room, or non-cricket activity = ZERO deliveries.
+
+    IF genuine bowling IS happening, detect each likely RELEASE (ball leaving hand, overarm action).
+    Include plausible releases with lower confidence — prefer recall over precision.
     {
       "deliveries": [
         {
@@ -306,11 +338,9 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
     }
 
     Rules:
-    - `release_time_sec` is seconds from segment start.
-    - Keep times sorted ascending.
-    - Ignore obvious non-bowling movement.
-    - If uncertain, still include the candidate with lower confidence.
-    - Use confidence in [0, 1].
+    - `release_time_sec` seconds from segment start, sorted ascending.
+    - confidence 0.0-1.0. Include uncertain candidates at 0.5+.
+    - Ignore obvious non-bowling motion (walking, waving, throwing).
     - If none found, return { "deliveries": [] }.
     """
 
@@ -323,6 +353,15 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
 
     func analyzeDelivery(clipURL: URL) async throws -> DeliveryAnalysis {
         let videoData = try Data(contentsOf: clipURL)
+        if videoData.count > WBConfig.clipMaxSizeBytes {
+            log.warning("Clip too large for analysis: \(videoData.count) bytes > \(WBConfig.clipMaxSizeBytes)")
+            throw AnalysisError.clipTooLarge(videoData.count)
+        }
+        let duration = try await clipDuration(url: clipURL)
+        if duration > WBConfig.clipMaxDurationSeconds {
+            log.warning("Clip too long for analysis: \(duration)s > \(WBConfig.clipMaxDurationSeconds)s")
+            throw AnalysisError.clipTooLong(duration)
+        }
         let base64Video = videoData.base64EncodedString()
         log.debug("Starting standard delivery analysis: clip=\(clipURL.lastPathComponent, privacy: .public)")
 
@@ -362,6 +401,15 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
 
     func analyzeDeliveryDeep(clipURL: URL, speedContext: SpeedContext? = nil) async throws -> DeliveryDeepAnalysisResult {
         let videoData = try Data(contentsOf: clipURL)
+        if videoData.count > WBConfig.clipMaxSizeBytes {
+            log.warning("Clip too large for deep analysis: \(videoData.count) bytes > \(WBConfig.clipMaxSizeBytes)")
+            throw AnalysisError.clipTooLarge(videoData.count)
+        }
+        let duration = try await clipDuration(url: clipURL)
+        if duration > WBConfig.clipMaxDurationSeconds {
+            log.warning("Clip too long for deep analysis: \(duration)s > \(WBConfig.clipMaxDurationSeconds)s")
+            throw AnalysisError.clipTooLong(duration)
+        }
         let base64Video = videoData.base64EncodedString()
         log.debug("Starting deep delivery analysis: clip=\(clipURL.lastPathComponent, privacy: .public), hasSpeed=\(speedContext != nil)")
 
@@ -437,18 +485,25 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
         log.debug("Starting challenge evaluation: clip=\(clipURL.lastPathComponent, privacy: .public), target=\(target, privacy: .public)")
 
         let prompt = """
-        You are evaluating a cricket bowling delivery against a target.
+        You are evaluating a video clip of a cricket bowling delivery against a target.
+
+        FIRST: Does this clip show an actual cricket bowling delivery? \
+        If NOT — return: { "matches_target": false, "confidence": 0.0, \
+        "explanation": "No bowling delivery visible", "detected_length": "unknown", "detected_line": "unknown" }
 
         TARGET: "\(target)"
 
-        Did the bowler achieve the target? Respond with JSON:
+        If a genuine delivery IS visible, evaluate honestly:
         {
           "matches_target": true,
           "confidence": 0.7,
-          "explanation": "Good yorker on off stump, right on target",
+          "explanation": "What you actually observed about where the ball pitched and its line",
           "detected_length": "yorker",
           "detected_line": "off"
         }
+
+        Only claim a match if you genuinely see the ball achieving the target. \
+        If uncertain, set confidence low and matches_target false.
         """
 
         let payload: [String: Any] = [
@@ -670,13 +725,26 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
         // Parse Gemini's visual speed confidence (0.0-1.0)
         let speedConfidence = (result["speed_confidence"] as? Double).flatMap { min(max($0, 0), 1.0) }
 
+        // Parse drills
+        let drills: [Drill]? = {
+            guard let drillsArray = result["drills"] as? [[String: Any]] else { return nil }
+            return drillsArray.compactMap { d in
+                guard let name = d["name"] as? String,
+                      let why = d["why"] as? String,
+                      let how = d["how"] as? String,
+                      let reps = d["reps"] as? String else { return nil }
+                return Drill(name: name, why: why, how: how, reps: reps)
+            }
+        }()
+
         return DeliveryDeepAnalysisResult(
             paceEstimate: paceEstimate,
             summary: summary,
             phases: phases,
             expertAnalysis: expertAnalysis,
             dna: dna,
-            speedConfidence: speedConfidence
+            speedConfidence: speedConfidence,
+            drills: drills
         )
     }
 
@@ -864,16 +932,29 @@ final class GeminiAnalysisService: DeliveryAnalyzing {
             .sorted(by: { $0.start < $1.start })
         return ExpertAnalysis(phases: normalizedPhases)
     }
+
+    // MARK: - Clip Validation
+
+    /// Returns the duration of a video clip in seconds.
+    private func clipDuration(url: URL) async throws -> Double {
+        let asset = AVURLAsset(url: url)
+        let duration = try await asset.load(.duration)
+        return CMTimeGetSeconds(duration)
+    }
 }
 
 enum AnalysisError: LocalizedError {
     case apiError(Int)
     case parseError
+    case clipTooLarge(Int)
+    case clipTooLong(Double)
 
     var errorDescription: String? {
         switch self {
         case .apiError(let code): return "Gemini API error (HTTP \(code))"
         case .parseError: return "Failed to parse analysis response"
+        case .clipTooLarge(let bytes): return "Clip too large (\(bytes / 1024)KB, max \(WBConfig.clipMaxSizeBytes / 1024 / 1024)MB)"
+        case .clipTooLong(let secs): return "Clip too long (\(String(format: "%.1f", secs))s, max \(String(format: "%.0f", WBConfig.clipMaxDurationSeconds))s)"
         }
     }
 }

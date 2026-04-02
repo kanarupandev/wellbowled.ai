@@ -1,0 +1,48 @@
+[
+  {
+    "segment_definition_id": "delivery_phases_v1",
+    "version": "1.0.0",
+    "window": {
+      "start_key": "back_foot_contact",
+      "end_key": "follow_through"
+    },
+    "segments": [
+      {
+        "segment_id": "hips",
+        "joint_source": "fixed",
+        "joint_indices": [23, 24],
+        "aggregation": "max"
+      },
+      {
+        "segment_id": "trunk",
+        "joint_source": "fixed",
+        "joint_indices": [11, 12],
+        "aggregation": "max"
+      },
+      {
+        "segment_id": "arm",
+        "joint_source": "bowling_arm",
+        "joint_indices_by_arm": {
+          "right": [14, 16],
+          "left": [13, 15]
+        },
+        "aggregation": "max"
+      },
+      {
+        "segment_id": "wrist",
+        "joint_source": "bowling_arm",
+        "joint_indices_by_arm": {
+          "right": [16],
+          "left": [15]
+        },
+        "aggregation": "max"
+      }
+    ],
+    "transitions": [
+      ["hips", "trunk"],
+      ["trunk", "arm"],
+      ["arm", "wrist"]
+    ],
+    "expected_peak_order": ["hips", "trunk", "arm", "wrist"]
+  }
+]

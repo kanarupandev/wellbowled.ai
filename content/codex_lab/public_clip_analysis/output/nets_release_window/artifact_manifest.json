@@ -1,0 +1,17 @@
+{
+  "config": "/Users/kanarupan/workspace/wellbowled.ai/content/codex_lab/public_clip_analysis/output/nets_release_window/auto_story_config.json",
+  "segment": "/Users/kanarupan/workspace/wellbowled.ai/content/codex_lab/public_clip_analysis/output/nets_release_window/segment.mp4",
+  "hero_frame": "/Users/kanarupan/workspace/wellbowled.ai/content/codex_lab/public_clip_analysis/output/nets_release_window/hero_release_frame.jpg",
+  "storyboard": "/Users/kanarupan/workspace/wellbowled.ai/content/codex_lab/public_clip_analysis/output/nets_release_window/storyboard.jpg",
+  "video": "/Users/kanarupan/workspace/wellbowled.ai/content/codex_lab/public_clip_analysis/output/nets_release_window/annotated_analysis.mp4",
+  "gemini_draft": "/Users/kanarupan/workspace/wellbowled.ai/content/codex_lab/public_clip_analysis/output/nets_release_window/gemini_draft.json",
+  "metadata": {
+    "fps": 30.0,
+    "width": 480,
+    "height": 848,
+    "frames": 73
+  },
+  "release_time_hint": 1.2,
+  "freeze_time": 1.967,
+  "finish_time": 2.1
+}

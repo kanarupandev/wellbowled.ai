@@ -55,6 +55,7 @@ final class SessionViewModel: ObservableObject {
     @Published private(set) var deepAnalysisArtifactsByDelivery: [UUID: DeliveryDeepAnalysisArtifacts] = [:]
     @Published private(set) var lastSessionRecordingURL: URL?
     @Published private(set) var sessionVideoSaveStatus: SessionVideoSaveStatus = .idle
+    @Published private(set) var compositedExportStatus: SessionVideoSaveStatus = .idle
     @Published private(set) var cameraFlipDisabled: Bool = false
 
     // Persistent voice mate state
@@ -63,6 +64,14 @@ final class SessionViewModel: ObservableObject {
 
     // Stump calibration state (published for CalibrationOverlayView)
     @Published private(set) var calibrationState: StumpDetectionService.CalibrationState = .idle
+
+    // Stump marking + monitoring
+    @Published var sessionInstruction: String?
+    @Published var isMarkingStumps: Bool = false
+    @Published var showSpeedSetup: Bool = false
+    @Published var speedDistanceMetres: Double = 18.9
+    @Published private(set) var cliffState: CliffDetector.State = .monitoring
+    @Published private(set) var stumpMonitoringActive: Bool = false
 
     // Agent playback commands (review agent controls video replay)
     struct PlaybackCommand: Equatable {
@@ -98,6 +107,13 @@ final class SessionViewModel: ObservableObject {
     private let analysisService = GeminiAnalysisService()
     private let clipPoseExtractor = ClipPoseExtractor()
     private let speedEstimationService = SpeedEstimationService()
+    private let cliffDetector = CliffDetector(fps: Double(WBConfig.speedCalibrationFPS))
+    // nonisolated(unsafe) because these are accessed from the video callback thread.
+    // Thread safety: only written from one thread at a time (camera callback is serial).
+    nonisolated(unsafe) private var cliffFrameCounter: Int = 0
+    nonisolated(unsafe) private var cliffPrevGray: [UInt8]?
+    nonisolated(unsafe) private var cliffROI: CGRect?
+    private var cliffTimestamps: [Double] = []
 
     private var cancellables = Set<AnyCancellable>()
     private let ciContext = CIContext()  // Reuse — creating per frame is expensive
@@ -203,27 +219,20 @@ final class SessionViewModel: ObservableObject {
         reconnectAttempts = 0
         startSessionTimer()
 
-        // 1. Configure audio session
-        do {
-            audioManager.stopPlaybackEngine()
-            try audioManager.configure()
-            try audioManager.startPlaybackEngine()
-            let liveService = self.liveService
-            useCameraAudioFallback = !audioManager.startLiveInputCapture { pcmData in
-                liveService.sendAudio(pcmData)
+        // 1. Configure audio session (only for live mate)
+        if WBConfig.enableLiveAPI {
+            do {
+                audioManager.stopPlaybackEngine()
+                try audioManager.configure()
+                try audioManager.startPlaybackEngine()
+                let liveService = self.liveService
+                useCameraAudioFallback = !audioManager.startLiveInputCapture { pcmData in
+                    liveService.sendAudio(pcmData)
+                }
+                log.debug("Audio configured for live mate")
+            } catch {
+                log.warning("Audio setup failed (continuing without live mate): \(error.localizedDescription)")
             }
-            if useCameraAudioFallback {
-                log.warning("Primary audio tap unavailable; using camera audio fallback")
-            } else {
-                log.debug("Primary live mic uplink using AudioSession tap")
-            }
-            log.debug("Audio configured")
-            let routeSummary = audioManager.currentRouteSummary()
-            debugLog += "Audio route: \(routeSummary)\n"
-            log.debug("Audio route after configure: \(routeSummary, privacy: .public)")
-        } catch {
-            rollbackSessionStartFailure(reason: "Audio setup failed: \(error.localizedDescription)")
-            return
         }
 
         // 2. Start camera
@@ -239,28 +248,32 @@ final class SessionViewModel: ObservableObject {
             log.debug("Recording start failed (session continues without clip extraction): \(error.localizedDescription, privacy: .public)")
         }
 
-        // 3b. Start live segment detection queues (Gemini Flash is the sole delivery detector)
-        startLiveSegmentDetection()
+        // 3b. Start live segment detection (only with live API)
+        if WBConfig.enableLiveAPI {
+            startLiveSegmentDetection()
+        }
 
         // 4. Wire camera outputs
         wireCameraOutputs()
         log.debug("Camera outputs wired")
 
-        // 6. Connect to Gemini Live API
-        do {
-            debugLog += "Connecting...\n"
-            debugLog += "Key: \(WBConfig.hasAPIKey ? "YES" : "NO")\n"
-            try await liveService.connect()
-            debugLog += "Connected!\n"
-            matePhase = .liveBowling
-            await maybeSendProactiveGreetingIfNeeded()
-        } catch {
-            debugLog += "FAIL: \(error.localizedDescription)\n"
-            errorMessage = "Connection failed: \(error.localizedDescription)"
-            // Session continues — detection + TTS still work without Live API
+        // 6. Connect to Gemini Live API (only if enabled)
+        if WBConfig.enableLiveAPI {
+            do {
+                debugLog += "Connecting...\n"
+                try await liveService.connect()
+                debugLog += "Connected!\n"
+                matePhase = .liveBowling
+                await maybeSendProactiveGreetingIfNeeded()
+            } catch {
+                debugLog += "FAIL: \(error.localizedDescription)\n"
+                errorMessage = "Connection failed: \(error.localizedDescription)"
+            }
         }
 
-        // 7. Stump calibration is mate-driven via show_alignment_boxes tool call
+        // 7. Session is now active — short instruction (voiced + subtitled)
+        sessionInstruction = "Point camera at stumps, tap Mark Stumps"
+        tts.speak("Point your camera at the stumps and tap Mark Stumps")
     }
 
     func endSession() async {
@@ -282,6 +295,7 @@ final class SessionViewModel: ObservableObject {
         cameraService.onAudioSample = nil
 
         tts.stop()
+        stopCliffDetection()
         stopLiveSegmentDetection()
 
         // Stop recording + camera (but keep audio alive for voice mate)
@@ -368,7 +382,7 @@ final class SessionViewModel: ObservableObject {
         analysisProgress = 0
         isPreparingClips = false
         clipPreparationProgress = 0
-        clipPreparationStatusMessage = "Scanning uploaded recording for deliveries..."
+        clipPreparationStatusMessage = "Preparing clip for analysis..."
         livePreviewImage = nil
         cameraFlipDisabled = false
         sessionVideoSaveStatus = .idle
@@ -382,7 +396,60 @@ final class SessionViewModel: ObservableObject {
         }
 
         lastSessionRecordingURL = recordingURL
-        startClipPreparation(recordingURL: recordingURL)
+
+        // Validate clip size and duration limits
+        do {
+            let fileSize = try FileManager.default.attributesOfItem(atPath: recordingURL.path)[.size] as? Int ?? 0
+            if fileSize > WBConfig.clipMaxSizeBytes {
+                clipPreparationStatusMessage = "Clip too large (\(fileSize / 1024 / 1024)MB). Max \(WBConfig.clipMaxSizeBytes / 1024 / 1024)MB."
+                log.warning("Imported clip rejected: \(fileSize) bytes > \(WBConfig.clipMaxSizeBytes)")
+                return
+            }
+        } catch {
+            log.warning("Could not check file size: \(error.localizedDescription)")
+        }
+
+        let asset = AVURLAsset(url: recordingURL)
+        let durationTime = (try? await asset.load(.duration)) ?? .zero
+        let durationSecs = CMTimeGetSeconds(durationTime)
+
+        if durationSecs > WBConfig.clipMaxDurationSeconds {
+            clipPreparationStatusMessage = "Clip too long (\(String(format: "%.0f", durationSecs))s). Max \(String(format: "%.0f", WBConfig.clipMaxDurationSeconds))s."
+            log.warning("Imported clip rejected: \(durationSecs)s > \(WBConfig.clipMaxDurationSeconds)s")
+            return
+        }
+
+        // Short clip → treat as single delivery, skip segment scanning entirely
+        log.info("Imported clip accepted: \(String(format: "%.1f", durationSecs))s — treating as single delivery")
+        clipPreparationStatusMessage = "Generating thumbnail..."
+        clipPreparationProgress = 0.3
+
+        // Generate thumbnail from midpoint
+        let thumbnail = ClipThumbnailGenerator.releaseThumbnail(
+            from: recordingURL,
+            releaseOffset: durationSecs / 2.0
+        )
+
+        // Create a single delivery with the clip already attached
+        let delivery = Delivery(
+            timestamp: 0,
+            releaseTimestamp: durationSecs / 2.0,
+            status: .queued,
+            videoURL: recordingURL,
+            thumbnail: thumbnail,
+            sequence: 1
+        )
+        session.addDelivery(delivery)
+        clipPreparationProgress = 0.6
+        clipPreparationStatusMessage = "Analyzing delivery..."
+
+        refreshSessionSummary()
+        isPreparingClips = false
+        clipPreparationProgress = 1.0
+
+        // Auto-trigger deep analysis on the single delivery
+        log.info("Auto-triggering deep analysis for imported clip")
+        await runDeepAnalysisIfNeeded(for: delivery.id)
     }
 
     /// Fully disconnect the voice mate. Called when the user exits to home.
@@ -722,13 +789,21 @@ final class SessionViewModel: ObservableObject {
         let minFrameInterval = 1.0 / WBConfig.liveAPIFrameRate
         var lastEncodedFrameTime: CFAbsoluteTime = 0
 
-        // Video frames → Live API (Gemini Flash segment detection handles delivery detection)
+        // Video frames → Live API + cliff detection
         let ciCtx = self.ciContext  // capture to avoid accessing MainActor self from bg
         cameraService.onVideoFrame = { [weak self] sampleBuffer, timestamp in
             guard let self else { return }
 
             // Track recording start time for clip extraction offset
             self.recordingOffsetStore.markIfNeeded(timestamp)
+
+            // Cliff detection: process every 8th frame for stump ROI energy (~15μs per frame)
+            if let roi = self.cliffROI {
+                self.cliffFrameCounter += 1
+                if self.cliffFrameCounter % 8 == 0 {
+                    self.processCliffFrame(sampleBuffer, roi: roi)
+                }
+            }
 
             // Feed Live API at configured rate only; avoid expensive frame encoding on every camera frame.
             let now = CFAbsoluteTimeGetCurrent()
@@ -800,31 +875,10 @@ final class SessionViewModel: ObservableObject {
         let recordingDurationTime = (try? await recordingAsset.load(.duration)) ?? .zero
         let recordingDuration = max(CMTimeGetSeconds(recordingDurationTime), 0)
 
-        // Skip post-session Gemini segment scan if live scanning already found deliveries
-        let liveFoundDeliveries = session.deliveries.contains { $0.videoURL != nil }
-        if liveFoundDeliveries {
-            log.info("Post-session scan skipped: live segment detection already found \(self.session.deliveryCount) deliveries with clips")
-            clipPreparationProgress = 0.5
-        } else {
-            let batchCandidates = await detectDeliveryCandidatesWithGemini(
-                recordingURL: recordingURL,
-                recordingDuration: recordingDuration,
-                sourceSessionStart: sourceSessionStart
-            )
-            if Task.isCancelled || session.startedAt != sourceSessionStart {
-                log.debug("Clip preparation stopped after segment scan: task cancelled or session changed")
-                isPreparingClips = false
-                return
-            }
-
-            clipPreparationStatusMessage = "Merging live and batch detections..."
-            clipPreparationProgress = 0.5
-            rebuildDeliveriesFromDetectionCandidates(
-                batchCandidates: batchCandidates,
-                recordingOffset: recordingOffset,
-                recordingDuration: recordingDuration
-            )
-        }
+        // No segment-based Gemini scanning — deliveries are detected on-device during the session.
+        // Post-session just clips already-detected deliveries.
+        clipPreparationProgress = 0.5
+        log.info("Post-session clip prep: \(self.session.deliveryCount) deliveries to clip (on-device detected)")
 
         guard !session.deliveries.isEmpty else {
             clipPreparationProgress = 1
@@ -1201,6 +1255,52 @@ final class SessionViewModel: ObservableObject {
         return result
     }
 
+    // MARK: - Composited Video Export
+
+    func exportComposited(for deliveryID: UUID) async {
+        guard compositedExportStatus != .saving else { return }
+        compositedExportStatus = .saving
+
+        guard let delivery = session.deliveries.first(where: { $0.id == deliveryID }),
+              let clipURL = delivery.videoURL else {
+            log.error("Export composited: no clip URL for delivery \(deliveryID.uuidString.prefix(8), privacy: .public)")
+            compositedExportStatus = .failed("No clip available")
+            return
+        }
+
+        let artifacts = deepAnalysisArtifactsByDelivery[deliveryID]
+        guard let poseFrames = artifacts?.poseFrames, !poseFrames.isEmpty else {
+            log.error("Export composited: no pose frames for delivery \(deliveryID.uuidString.prefix(8), privacy: .public)")
+            compositedExportStatus = .failed("Run deep analysis first")
+            return
+        }
+
+        let input = VideoCompositor.Input(
+            clipURL: clipURL,
+            poseFrames: poseFrames,
+            expertAnalysis: artifacts?.expertAnalysis,
+            phases: delivery.phases ?? [],
+            speedKph: delivery.speedKph,
+            dnaMatch: delivery.dnaMatches?.first
+        )
+
+        do {
+            let compositor = VideoCompositor()
+            let outputURL = try await compositor.composite(input)
+            log.info("Composited export complete: \(outputURL.lastPathComponent, privacy: .public)")
+
+            // Save to Photos
+            try await PHPhotoLibrary.shared().performChanges {
+                PHAssetCreationRequest.forAsset().addResource(with: .video, fileURL: outputURL, options: nil)
+            }
+            compositedExportStatus = .saved
+            log.info("Composited video saved to Photos")
+        } catch {
+            log.error("Composited export failed: \(error.localizedDescription, privacy: .public)")
+            compositedExportStatus = .failed(error.localizedDescription)
+        }
+    }
+
     func runDeepAnalysisIfNeeded(for deliveryID: UUID) async {
         if deepAnalysisTasksByDelivery[deliveryID] != nil {
             log.debug("Deep analysis already running: deliveryID=\(deliveryID.uuidString, privacy: .public)")
@@ -1487,14 +1587,12 @@ final class SessionViewModel: ObservableObject {
             if let challengeText {
                 feedbackParts.append("Challenge result: \(challengeText)")
             }
+            if let drills = detailedResult.drills, !drills.isEmpty {
+                let drillSummary = drills.map { "\($0.name): \($0.why)" }.joined(separator: ". ")
+                feedbackParts.append("Drills: \(drillSummary)")
+            }
 
-            feedbackParts.append("""
-            INSTRUCTION: Give ONE specific, technical point for the next ball. \
-            Be biomechanical — reference body parts (knee, hip, shoulder, wrist, front arm). \
-            Example: "Brace that front knee harder at delivery stride — it's collapsing 10 degrees." \
-            or "Hold the non-bowling arm up a fraction longer through the crease." \
-            Keep it to one sentence. The bowler is about to bowl again.
-            """)
+            feedbackParts.append("Give ONE specific cue for the next ball. One sentence. Be real.")
             await liveService.sendContext(feedbackParts.joined(separator: " "))
 
             // Rotate to next challenge target after evaluation
@@ -1764,9 +1862,9 @@ final class SessionViewModel: ObservableObject {
         }()
 
         return """
-        You are an elite cricket bowling expert. The bowler just finished a session and you're \
-        now sitting with them looking at the results screen together. You can see the delivery clips, \
-        the analysis data, and you have tools to navigate between deliveries and control video playback.
+        You are the same bowling mate — the session just ended and now you're looking at the \
+        results together. Do NOT re-greet or re-introduce yourself. Do NOT say "welcome back" or \
+        "let's review." Just continue naturally as if you're still in the same conversation.
 
         The bowler is wearing earbuds. They cannot touch the phone. Everything is voice. \
         You are their expert mate — not a presenter reading slides.
@@ -1915,7 +2013,7 @@ final class SessionViewModel: ObservableObject {
             } else {
                 situationContext += " Analysis is still running — results will arrive as each delivery is processed."
             }
-            situationContext += " The bowler is listening."
+            situationContext += " Continue naturally — no greeting, no re-introduction."
             await liveService.sendContext(situationContext)
 
             // 10-minute review agent timeout
@@ -2076,10 +2174,10 @@ final class SessionViewModel: ObservableObject {
         // .detecting already set by the delegate before this task started
         log.info("Stump alignment scanning started")
 
-        // Scan every 3 seconds for up to 20 seconds (7 attempts)
-        let maxAttempts = 7
+        // Scan every 1.5s for up to 15 seconds (10 attempts) — fast for demo responsiveness
+        let maxAttempts = 10
         for attempt in 1...maxAttempts {
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
             guard session.isActive, calibrationState == .detecting else { return }
 
             guard let snapshot = captureCurrentFrame() else {
@@ -2099,6 +2197,7 @@ final class SessionViewModel: ObservableObject {
                     session.calibration = cal
                     calibrationState = .locked(cal)
                     cameraService.setSpeedMode(true)
+                    showSpeedSetup = true  // show setup overlay — user confirms distance, then monitoring starts
                     log.info("Stump alignment locked at attempt \(attempt)")
 
                     if liveService.isConnected {
@@ -2138,6 +2237,163 @@ final class SessionViewModel: ObservableObject {
         let renderer = UIGraphicsImageRenderer(size: size)
         return renderer.image { ctx in
             layer.render(in: ctx.cgContext)
+        }
+    }
+
+    // MARK: - Cliff Detection (Real-Time Speed)
+
+    /// Called when user taps "Start Monitoring" after confirming distance.
+    func confirmSpeedSetup() {
+        showSpeedSetup = false
+        if let cal = session.calibration {
+            startCliffDetection(calibration: cal)
+        }
+    }
+
+    /// User tapped a point on the camera view to mark the stumps.
+    /// Creates a striker-end ROI around that point and starts cliff detection.
+    /// User positioned a box over the stumps. Center + size are normalized (0-1).
+    func markStumpsAt(normalizedPoint: CGPoint, normalizedSize: CGSize = CGSize(width: 0.18, height: 0.22)) {
+        isMarkingStumps = false
+        sessionInstruction = nil
+
+        // Get camera frame dimensions
+        let fw = cameraService.previewLayer.bounds.width * UIScreen.main.scale
+        let fh = cameraService.previewLayer.bounds.height * UIScreen.main.scale
+        guard fw > 0, fh > 0 else {
+            log.warning("Cannot mark stumps: invalid frame dimensions (\(fw)x\(fh))")
+            return
+        }
+
+        let frameW = Int(fw)
+        let frameH = Int(fh)
+
+        // Build ROI directly from the user's box (pixel coordinates)
+        let roiX = max((normalizedPoint.x - normalizedSize.width / 2), 0) * CGFloat(frameW)
+        let roiY = max((normalizedPoint.y - normalizedSize.height / 2), 0) * CGFloat(frameH)
+        let roiW = normalizedSize.width * CGFloat(frameW)
+        let roiH = normalizedSize.height * CGFloat(frameH)
+
+        cliffROI = CGRect(x: roiX, y: roiY, width: roiW, height: roiH)
+        cliffDetector.reset()
+        cliffFrameCounter = 0
+        cliffPrevGray = nil
+
+        cliffDetector.onStateChange = { [weak self] newState in
+            Task { @MainActor [weak self] in
+                self?.handleCliffStateChange(newState)
+            }
+        }
+
+        stumpMonitoringActive = true
+        tts.speak("Monitoring")
+        let roiDesc = String(describing: cliffROI!)
+        log.info("Stumps marked: center=(\(String(format: "%.2f", normalizedPoint.x)),\(String(format: "%.2f", normalizedPoint.y))) ROI=\(roiDesc, privacy: .public)")
+    }
+
+    /// Activate cliff detection after calibration locks.
+    private func startCliffDetection(calibration: StumpCalibration) {
+        let strikerROINorm = calibration.strikerROI
+        cliffROI = CGRect(
+            x: strikerROINorm.origin.x * CGFloat(calibration.frameWidth),
+            y: strikerROINorm.origin.y * CGFloat(calibration.frameHeight),
+            width: strikerROINorm.width * CGFloat(calibration.frameWidth),
+            height: strikerROINorm.height * CGFloat(calibration.frameHeight)
+        )
+        cliffDetector.reset()
+        cliffFrameCounter = 0
+        cliffPrevGray = nil
+
+        cliffDetector.onStateChange = { [weak self] newState in
+            Task { @MainActor [weak self] in
+                self?.handleCliffStateChange(newState)
+            }
+        }
+
+        stumpMonitoringActive = true
+        tts.speak("Monitoring")
+        log.info("Cliff detection started — monitoring striker ROI at (\(String(format: "%.2f", calibration.strikerStumpCenter.x)), \(String(format: "%.2f", calibration.strikerStumpCenter.y)))")
+    }
+
+    private func stopCliffDetection() {
+        cliffROI = nil
+        cliffPrevGray = nil
+        cliffDetector.onStateChange = nil
+        cliffDetector.reset()
+        stumpMonitoringActive = false
+        isMarkingStumps = false
+    }
+
+    /// Process a single frame for cliff detection. Called every 8th frame from the video callback.
+    /// Extracts grayscale ROI, computes energy, feeds to CliffDetector.
+    nonisolated private func processCliffFrame(_ sampleBuffer: CMSampleBuffer, roi: CGRect) {
+        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
+
+        // Get Y plane (grayscale) from the biplanar YCbCr buffer
+        guard let baseAddress = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 0) else { return }
+        let bytesPerRow = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0)
+        let frameHeight = CVPixelBufferGetHeightOfPlane(pixelBuffer, 0)
+        let frameWidth = CVPixelBufferGetWidthOfPlane(pixelBuffer, 0)
+
+        // Clamp ROI to frame bounds
+        let roiMinX = max(Int(roi.minX), 0)
+        let roiMaxX = min(Int(roi.maxX), frameWidth)
+        let roiMinY = max(Int(roi.minY), 0)
+        let roiMaxY = min(Int(roi.maxY), frameHeight)
+        let roiW = roiMaxX - roiMinX
+        let roiH = roiMaxY - roiMinY
+        guard roiW > 0, roiH > 0 else { return }
+
+        // Extract grayscale ROI crop
+        let src = baseAddress.assumingMemoryBound(to: UInt8.self)
+        var crop = [UInt8](repeating: 0, count: roiW * roiH)
+        for y in 0..<roiH {
+            let srcRow = src.advanced(by: (roiMinY + y) * bytesPerRow + roiMinX)
+            crop.replaceSubrange(y * roiW ..< (y + 1) * roiW,
+                                 with: UnsafeBufferPointer(start: srcRow, count: roiW))
+        }
+
+        // Compute energy: mean absolute difference from previous frame's ROI
+        let energy: Double
+        if let prev = cliffPrevGray, prev.count == crop.count {
+            var sum: Int = 0
+            for i in 0..<crop.count {
+                let d = Int(crop[i]) - Int(prev[i])
+                sum += d < 0 ? -d : d
+            }
+            energy = Double(sum) / Double(crop.count)
+        } else {
+            energy = 0
+        }
+        cliffPrevGray = crop
+
+        // Feed to cliff detector
+        let frameIdx = cliffFrameCounter
+        if let detection = cliffDetector.feedEnergy(energy, atFrame: frameIdx) {
+            Task { @MainActor in
+                self.handleCliffDetection(detection)
+            }
+        }
+    }
+
+    private func handleCliffDetection(_ detection: CliffDetection) {
+        log.info("CLIFF DETECTED at frame \(detection.meetFrame), energy=\(detection.meetEnergy), ratio=\(detection.cliffRatio)")
+        // Save timestamp for clip extraction later
+        let timestamp = Double(detection.meetFrame) / cliffDetector.fps
+        cliffTimestamps.append(timestamp)
+    }
+
+    private func handleCliffStateChange(_ newState: CliffDetector.State) {
+        cliffState = newState
+        switch newState {
+        case .stumpsHit:
+            tts.speak("Well bowled!")
+        case .rearranging:
+            tts.speak("Fix the stumps")
+        case .monitoring:
+            tts.speak("Ready")
         }
     }
 

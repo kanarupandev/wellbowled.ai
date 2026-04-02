@@ -1,0 +1,361 @@
+{
+  "project_name": "nets_release_window",
+  "input_video": "/Users/kanarupan/workspace/wellbowled.ai/resources/samples/3_sec_1_delivery_nets.mp4",
+  "output_dir": "/Users/kanarupan/workspace/wellbowled.ai/content/codex_lab/public_clip_analysis/output/nets_release_window",
+  "segment": {
+    "start": 0.0,
+    "end": 2.4
+  },
+  "arm_hint": "right",
+  "pose_crop": {
+    "x": 0.0,
+    "y": 0.45,
+    "w": 1.0,
+    "h": 0.55
+  },
+  "phase_hints": {
+    "load": 0.9,
+    "release": 1.2,
+    "freeze": 1.5,
+    "freeze_window": 0.12,
+    "finish": 2.1
+  },
+  "editorial": {
+    "series": "Human-in-the-Loop Breakdown",
+    "title": "Side-On Bowling Mechanics Analysis",
+    "subtitle": "Evaluating release height and follow-through extension in outdoor nets.",
+    "freeze_label": "FOLLOW-THROUGH FRAME",
+    "freeze_title": "Point of Release",
+    "callout_left": "Stable front foot landing",
+    "callout_right": "Full arm extension",
+    "fallback_insight": "The bowler maintains a low center of gravity through the crease, aiding in directional stability during the delivery phase.",
+    "fallback_takeaway": "Focus on maintaining head height to ensure consistent release points across the spell.",
+    "fallback_release_note": "The arm is fully extended at release, maximizing the leverage and potential pace generated from the run-up.",
+    "fallback_finish_note": "The follow-through shows good deceleration, though the bowler exits the frame quickly, suggesting high momentum."
+  },
+  "style": {
+    "accent": [
+      75,
+      224,
+      255
+    ],
+    "accent_secondary": [
+      255,
+      186,
+      64
+    ],
+    "accent_tertiary": [
+      142,
+      242,
+      92
+    ],
+    "accent_quaternary": [
+      255,
+      102,
+      163
+    ],
+    "background": [
+      10,
+      14,
+      20
+    ]
+  },
+  "render": {
+    "slow_factor": 4,
+    "intro_hold": 6,
+    "freeze_hold": 16,
+    "end_hold": 20
+  },
+  "flash_analysis": {
+    "clip_summary": {
+      "camera_angle": "side-on",
+      "primary_subject_label": "bowler",
+      "primary_subject_description": "Right-arm medium-fast bowler in a black shirt and dark green trousers.",
+      "distractor_people_count_estimate": 1,
+      "bowling_arm": "right",
+      "confidence": 0.95
+    },
+    "subject_strategy": {
+      "ignore_background_people": true,
+      "selection_reason": "The subject in black/green enters the frame from the left and completes a full bowling action, whereas the person in red remains stationary in the background.",
+      "global_bowler_crop": {
+        "x": 0.0,
+        "y": 0.45,
+        "w": 1.0,
+        "h": 0.55
+      },
+      "frame_crop_padding": 0.1
+    },
+    "phase_hints": {
+      "load": 0.9,
+      "release": 1.2,
+      "freeze": 1.5,
+      "finish": 2.1
+    },
+    "phase_frames": {
+      "load_frame": "F2",
+      "release_frame": "F3",
+      "freeze_frame": "F4",
+      "finish_frame": "F5"
+    },
+    "frame_analysis": [
+      {
+        "frame_id": "F1",
+        "timestamp_s": 0.0,
+        "phase": "setup",
+        "bowler_visible": false,
+        "primary_subject_bbox": null,
+        "ignore_regions": [
+          {
+            "label": "background person",
+            "x": 0.105,
+            "y": 0.252,
+            "w": 0.035,
+            "h": 0.045
+          }
+        ],
+        "body_parts_visible": [],
+        "body_part_points": {},
+        "ball_visible": false,
+        "ball_bbox": null,
+        "confidence": 1.0
+      },
+      {
+        "frame_id": "F2",
+        "timestamp_s": 0.6,
+        "phase": "load",
+        "bowler_visible": false,
+        "primary_subject_bbox": null,
+        "ignore_regions": [
+          {
+            "label": "background person",
+            "x": 0.625,
+            "y": 0.255,
+            "w": 0.045,
+            "h": 0.045
+          }
+        ],
+        "body_parts_visible": [],
+        "body_part_points": {},
+        "ball_visible": false,
+        "ball_bbox": null,
+        "confidence": 1.0
+      },
+      {
+        "frame_id": "F3",
+        "timestamp_s": 1.2,
+        "phase": "release",
+        "bowler_visible": true,
+        "primary_subject_bbox": {
+          "x": 0.165,
+          "y": 0.525,
+          "w": 0.215,
+          "h": 0.095
+        },
+        "ignore_regions": [
+          {
+            "label": "background person",
+            "x": 0.205,
+            "y": 0.525,
+            "w": 0.045,
+            "h": 0.025
+          }
+        ],
+        "body_parts_visible": [
+          "head",
+          "bowling_shoulder",
+          "bowling_wrist",
+          "front_knee"
+        ],
+        "body_part_points": {
+          "head": {
+            "x": 0.185,
+            "y": 0.545
+          },
+          "bowling_shoulder": {
+            "x": 0.225,
+            "y": 0.545
+          },
+          "non_bowling_shoulder": {
+            "x": 0.245,
+            "y": 0.555
+          },
+          "bowling_elbow": {
+            "x": 0.285,
+            "y": 0.545
+          },
+          "bowling_wrist": {
+            "x": 0.355,
+            "y": 0.555
+          },
+          "hip_center": {
+            "x": 0.295,
+            "y": 0.565
+          },
+          "front_knee": {
+            "x": 0.315,
+            "y": 0.595
+          },
+          "front_ankle": {
+            "x": 0.305,
+            "y": 0.615
+          }
+        },
+        "ball_visible": true,
+        "ball_bbox": {
+          "x": 0.365,
+          "y": 0.555,
+          "w": 0.015,
+          "h": 0.015
+        },
+        "confidence": 0.85
+      },
+      {
+        "frame_id": "F4",
+        "timestamp_s": 1.8,
+        "phase": "freeze",
+        "bowler_visible": true,
+        "primary_subject_bbox": {
+          "x": 0.575,
+          "y": 0.525,
+          "w": 0.115,
+          "h": 0.085
+        },
+        "ignore_regions": [
+          {
+            "label": "background person",
+            "x": 0.745,
+            "y": 0.525,
+            "w": 0.045,
+            "h": 0.045
+          }
+        ],
+        "body_parts_visible": [
+          "head",
+          "bowling_shoulder",
+          "front_knee",
+          "front_ankle"
+        ],
+        "body_part_points": {
+          "head": {
+            "x": 0.595,
+            "y": 0.535
+          },
+          "bowling_shoulder": {
+            "x": 0.615,
+            "y": 0.545
+          },
+          "non_bowling_shoulder": {
+            "x": 0.635,
+            "y": 0.545
+          },
+          "bowling_elbow": {
+            "x": 0.655,
+            "y": 0.565
+          },
+          "bowling_wrist": {
+            "x": 0.675,
+            "y": 0.585
+          },
+          "hip_center": {
+            "x": 0.645,
+            "y": 0.565
+          },
+          "front_knee": {
+            "x": 0.655,
+            "y": 0.585
+          },
+          "front_ankle": {
+            "x": 0.675,
+            "y": 0.605
+          }
+        },
+        "ball_visible": true,
+        "ball_bbox": {
+          "x": 0.685,
+          "y": 0.595,
+          "w": 0.01,
+          "h": 0.01
+        },
+        "confidence": 0.9
+      },
+      {
+        "frame_id": "F5",
+        "timestamp_s": 2.4,
+        "phase": "finish",
+        "bowler_visible": true,
+        "primary_subject_bbox": {
+          "x": 0.045,
+          "y": 0.795,
+          "w": 0.095,
+          "h": 0.065
+        },
+        "ignore_regions": [
+          {
+            "label": "background person",
+            "x": 0.315,
+            "y": 0.805,
+            "w": 0.045,
+            "h": 0.045
+          }
+        ],
+        "body_parts_visible": [
+          "head",
+          "hip_center"
+        ],
+        "body_part_points": {
+          "head": {
+            "x": 0.085,
+            "y": 0.805
+          },
+          "bowling_shoulder": {
+            "x": 0.095,
+            "y": 0.815
+          },
+          "non_bowling_shoulder": null,
+          "bowling_elbow": null,
+          "bowling_wrist": null,
+          "hip_center": {
+            "x": 0.105,
+            "y": 0.835
+          },
+          "front_knee": {
+            "x": 0.115,
+            "y": 0.845
+          },
+          "front_ankle": {
+            "x": 0.115,
+            "y": 0.855
+          }
+        },
+        "ball_visible": true,
+        "ball_bbox": {
+          "x": 0.365,
+          "y": 0.855,
+          "w": 0.01,
+          "h": 0.01
+        },
+        "confidence": 0.8
+      }
+    ],
+    "editorial": {
+      "title": "Side-On Bowling Mechanics Analysis",
+      "subtitle": "Evaluating release height and follow-through extension in outdoor nets.",
+      "freeze_title": "Point of Release",
+      "callout_left": "Stable front foot landing",
+      "callout_right": "Full arm extension",
+      "fallback_insight": "The bowler maintains a low center of gravity through the crease, aiding in directional stability during the delivery phase.",
+      "fallback_takeaway": "Focus on maintaining head height to ensure consistent release points across the spell.",
+      "fallback_release_note": "The arm is fully extended at release, maximizing the leverage and potential pace generated from the run-up.",
+      "fallback_finish_note": "The follow-through shows good deceleration, though the bowler exits the frame quickly, suggesting high momentum."
+    },
+    "review_flags": {
+      "background_risk": "medium",
+      "crop_risk": "low",
+      "pose_risk": "medium",
+      "notes": [
+        "Background person in red is close to the bowler's line in F3. Bowler moves very fast across the frame."
+      ]
+    }
+  }
+}

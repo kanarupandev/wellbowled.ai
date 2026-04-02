@@ -165,14 +165,14 @@ final class StumpDetectionService {
     static func defaultBowlerGuideRect() -> CGRect {
         let w = Double(WBConfig.calibrationBoxWidthRatio)
         let h = Double(WBConfig.calibrationBoxHeightRatio)
-        return CGRect(x: 0.5 - w / 2, y: 0.03, width: w, height: h)
+        return CGRect(x: 0.5 - w / 2, y: 0.18, width: w, height: h)
     }
 
     /// Default striker-end guide box (bottom of frame in portrait).
     static func defaultStrikerGuideRect() -> CGRect {
         let w = Double(WBConfig.calibrationBoxWidthRatio)
         let h = Double(WBConfig.calibrationBoxHeightRatio)
-        return CGRect(x: 0.5 - w / 2, y: 0.62, width: w, height: h)
+        return CGRect(x: 0.5 - w / 2, y: 0.52, width: w, height: h)
     }
 
     // MARK: - Gemini API
