@@ -588,7 +588,10 @@ def _apply_pulse_timing(
     fade-in/out curve. Calls render_pulse_glow from the renderer for
     the visual per-frame.
     """
-    from .overlay_renderer import render_pulse_glow
+    try:
+        from .overlay_renderer import render_pulse_glow
+    except ImportError:
+        from overlay_renderer import render_pulse_glow
 
     total = len(base_frames)
     pulse_start = int(total * pulse_start_frac)
