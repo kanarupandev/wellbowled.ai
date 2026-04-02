@@ -10,6 +10,8 @@ struct ReviewView: View {
     @State private var arrivalFrame: Int?
     @State private var distanceMeters: Double
     @State private var distanceText: String
+    @State private var showDistanceEditor = false
+    @FocusState private var distanceFieldFocused: Bool
     @AppStorage("savedDistance") private var savedDistance: Double = SpeedCalc.defaultDistanceMeters
 
     init(delivery: Delivery, onSave: @escaping (Int, Int, Double) -> Void, onDismiss: @escaping () -> Void) {
@@ -26,7 +28,7 @@ struct ReviewView: View {
         let dist = delivery.releaseFrame != nil ? delivery.distanceMeters :
             UserDefaults.standard.double(forKey: "savedDistance").nonZero ?? SpeedCalc.defaultDistanceMeters
         self._distanceMeters = State(initialValue: dist)
-        self._distanceText = State(initialValue: String(format: "%.2f", dist))
+        self._distanceText = State(initialValue: Self.formattedDistanceText(for: dist))
     }
 
     private var step: Step {
@@ -68,6 +70,24 @@ struct ReviewView: View {
             }
         }
         .onAppear { extractor.loadFirstFrame() }
+        .onChange(of: distanceFieldFocused) { focused in
+            if !focused {
+                showDistanceEditor = false
+            }
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") {
+                    dismissDistanceEditor()
+                }
+            }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if showDistanceEditor {
+                distanceEditor
+            }
+        }
     }
 
     // MARK: - Frame View
@@ -83,6 +103,10 @@ struct ReviewView: View {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            dismissDistanceEditor()
         }
         .overlay(alignment: .topLeading) {
             VStack(alignment: .leading, spacing: 4) {
@@ -106,22 +130,25 @@ struct ReviewView: View {
                 Image(systemName: "ruler")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                TextField("17.68", text: $distanceText)
-                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                    .foregroundColor(.white)
-                    .keyboardType(.decimalPad)
-                    .frame(width: 54)
-                    .multilineTextAlignment(.center)
-                    .padding(.vertical, 4)
-                    .background(Color.white.opacity(0.1))
-                    .cornerRadius(6)
-                    .onChange(of: distanceText) { newVal in
-                        if let d = Double(newVal), d > 0 {
-                            distanceMeters = d
-                        }
-                    }
+                Button {
+                    presentDistanceEditor()
+                } label: {
+                    Text(distanceText)
+                        .font(.system(size: 18, weight: .semibold, design: .monospaced))
+                        .foregroundColor(.white)
+                        .frame(minWidth: 92)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(Color.white.opacity(0.1))
+                        .cornerRadius(8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(showDistanceEditor ? Color.white.opacity(0.35) : Color.clear, lineWidth: 1)
+                        )
+                }
                 Text("m")
-                    .font(.system(size: 11))
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundColor(.secondary)
 
                 // Save as default button
@@ -213,6 +240,10 @@ struct ReviewView: View {
 
             // Done button
             Button {
+                dismissDistanceEditor()
+                if let r = releaseFrame, let a = arrivalFrame {
+                    onSave(r, a, distanceMeters)
+                }
                 onDismiss()
             } label: {
                 Text("Done")
@@ -228,6 +259,82 @@ struct ReviewView: View {
         }
         .padding(.top, 10)
         .background(.ultraThinMaterial)
+    }
+
+    private var distanceEditor: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Distance to impact")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(.white)
+
+            HStack(alignment: .center, spacing: 10) {
+                TextField("17.68", text: Binding(
+                    get: { distanceText },
+                    set: { applyDistanceInput($0) }
+                ))
+                    .font(.system(size: 28, weight: .bold, design: .monospaced))
+                    .foregroundColor(.white)
+                    .keyboardType(.numberPad)
+                    .focused($distanceFieldFocused)
+                    .frame(width: 150)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .background(Color.white.opacity(0.12))
+                    .cornerRadius(12)
+
+                Text("m")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.secondary)
+
+                Spacer()
+
+                Button {
+                    dismissDistanceEditor()
+                } label: {
+                    Text("Done")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.black)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(Color.white)
+                        .cornerRadius(12)
+                }
+            }
+
+            HStack(spacing: 10) {
+                Button {
+                    savedDistance = distanceMeters
+                } label: {
+                    Label(
+                        distanceMeters == savedDistance ? "Saved default" : "Save as default",
+                        systemImage: distanceMeters == savedDistance ? "checkmark.circle.fill" : "checkmark.circle"
+                    )
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(distanceMeters == savedDistance ? .green : .white)
+                }
+
+                Spacer()
+
+                Text("4 digits only. Dot is inserted automatically.")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(16)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18)
+                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+        )
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .onAppear {
+            DispatchQueue.main.async {
+                distanceFieldFocused = true
+            }
+        }
     }
 
     // MARK: - Speed Result
@@ -346,5 +453,41 @@ struct ReviewView: View {
                 .cornerRadius(10)
         }
         .padding(.horizontal)
+    }
+
+    private func presentDistanceEditor() {
+        showDistanceEditor = true
+        DispatchQueue.main.async {
+            distanceFieldFocused = true
+        }
+    }
+
+    private func dismissDistanceEditor() {
+        distanceFieldFocused = false
+        showDistanceEditor = false
+    }
+
+    private func applyDistanceInput(_ rawValue: String) {
+        let digits = String(rawValue.filter(\.isNumber).prefix(4))
+        let formatted = Self.formattedDistanceText(fromDigits: digits)
+        if distanceText != formatted {
+            distanceText = formatted
+        }
+        if let value = Double(formatted), value > 0 {
+            distanceMeters = value
+        }
+    }
+
+    private static func formattedDistanceText(for distance: Double) -> String {
+        let scaled = max(0, min(Int((distance * 100).rounded()), 9999))
+        return formattedDistanceText(fromDigits: String(format: "%04d", scaled))
+    }
+
+    private static func formattedDistanceText(fromDigits digits: String) -> String {
+        let sanitized = String(digits.filter(\.isNumber).prefix(4))
+        let padded = String(repeating: "0", count: max(0, 4 - sanitized.count)) + sanitized
+        let whole = String(padded.prefix(2))
+        let fraction = String(padded.suffix(2))
+        return "\(whole).\(fraction)"
     }
 }
