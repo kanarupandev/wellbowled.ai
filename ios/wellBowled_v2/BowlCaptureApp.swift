@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct BowlCaptureApp: App {
+struct wellBowledApp: App {
     var body: some Scene {
         WindowGroup {
             CaptureView()

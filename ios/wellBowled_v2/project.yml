@@ -1,4 +1,4 @@
-name: BowlCapture
+name: wellBowled
 options:
   bundleIdPrefix: com.wellbowled
   deploymentTarget:
@@ -6,7 +6,7 @@ options:
   xcodeVersion: "16.0"
 
 targets:
-  BowlCapture:
+  wellBowled:
     type: application
     platform: iOS
     sources:
@@ -18,10 +18,12 @@ targets:
       base:
         DEVELOPMENT_TEAM: 8WBHQ6NP68
         CODE_SIGN_STYLE: Automatic
-        PRODUCT_BUNDLE_IDENTIFIER: com.wellbowled.BowlCapture
+        PRODUCT_BUNDLE_IDENTIFIER: com.wellbowled.app
+        PRODUCT_NAME: wellBowled
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         MARKETING_VERSION: "1.0"
         CURRENT_PROJECT_VERSION: "1"
-        INFOPLIST_KEY_NSCameraUsageDescription: "BowlCapture needs camera access to record bowling deliveries at high frame rate for speed analysis."
+        INFOPLIST_KEY_NSCameraUsageDescription: "wellBowled needs camera access to record bowling deliveries at high frame rate for speed analysis."
         INFOPLIST_KEY_UILaunchScreen_Generation: true
         INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait"
         INFOPLIST_KEY_UIStatusBarStyle: "UIStatusBarStyleLightContent"
