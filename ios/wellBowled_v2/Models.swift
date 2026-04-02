@@ -41,13 +41,26 @@ enum SpeedCategory: String {
 // MARK: - Speed Calculation (pure, testable)
 
 enum SpeedCalc {
-    /// Bowling crease to batting stumps (58 ft / 17.68m)
+    /// Default training distance, editable per clip.
     static let defaultDistanceMeters: Double = 18.90
 
     static func kmh(releaseFrame: Int, arrivalFrame: Int, fps: Double, distanceMeters: Double) -> Double? {
         guard arrivalFrame > releaseFrame, fps > 0, distanceMeters > 0 else { return nil }
         let seconds = Double(arrivalFrame - releaseFrame) / fps
         return (distanceMeters / seconds) * 3.6
+    }
+
+    static func kmhFrameVariance(releaseFrame: Int, arrivalFrame: Int, fps: Double, distanceMeters: Double) -> Double? {
+        let frameDiff = arrivalFrame - releaseFrame
+        guard frameDiff > 1,
+              let measured = kmh(releaseFrame: releaseFrame, arrivalFrame: arrivalFrame, fps: fps, distanceMeters: distanceMeters)
+        else { return nil }
+
+        guard let faster = kmh(releaseFrame: 0, arrivalFrame: frameDiff - 1, fps: fps, distanceMeters: distanceMeters),
+              let slower = kmh(releaseFrame: 0, arrivalFrame: frameDiff + 1, fps: fps, distanceMeters: distanceMeters)
+        else { return nil }
+
+        return max(faster - measured, measured - slower)
     }
 
     static func mph(kmh: Double) -> Double { kmh / 1.609 }
@@ -58,6 +71,43 @@ enum SpeedCalc {
 
     static func timeSeconds(frame: Int, fps: Double) -> Double {
         Double(frame) / fps
+    }
+}
+
+struct FrameMarkers: Equatable {
+    var releaseFrame: Int?
+    var arrivalFrame: Int?
+
+    var frameDiff: Int? {
+        guard let releaseFrame, let arrivalFrame else { return nil }
+        return arrivalFrame - releaseFrame
+    }
+
+    var isComplete: Bool {
+        releaseFrame != nil && arrivalFrame != nil
+    }
+
+    mutating func setRelease(_ frame: Int) {
+        releaseFrame = frame
+        if let arrivalFrame, arrivalFrame <= frame {
+            self.arrivalFrame = nil
+        }
+    }
+
+    @discardableResult
+    mutating func setArrival(_ frame: Int) -> Bool {
+        guard let releaseFrame, frame > releaseFrame else { return false }
+        arrivalFrame = frame
+        return true
+    }
+
+    mutating func clearRelease() {
+        releaseFrame = nil
+        arrivalFrame = nil
+    }
+
+    mutating func clearArrival() {
+        arrivalFrame = nil
     }
 }
 
@@ -73,6 +123,14 @@ struct Delivery: Identifiable {
     var arrivalFrame: Int?
     var distanceMeters: Double = SpeedCalc.defaultDistanceMeters
 
+    var markers: FrameMarkers {
+        get { FrameMarkers(releaseFrame: releaseFrame, arrivalFrame: arrivalFrame) }
+        set {
+            releaseFrame = newValue.releaseFrame
+            arrivalFrame = newValue.arrivalFrame
+        }
+    }
+
     var speedKMH: Double? {
         guard let r = releaseFrame, let a = arrivalFrame else { return nil }
         return SpeedCalc.kmh(releaseFrame: r, arrivalFrame: a, fps: fps, distanceMeters: distanceMeters)
@@ -81,6 +139,11 @@ struct Delivery: Identifiable {
     var speedMPH: Double? {
         guard let kmh = speedKMH else { return nil }
         return SpeedCalc.mph(kmh: kmh)
+    }
+
+    var speedErrorKMH: Double? {
+        guard let r = releaseFrame, let a = arrivalFrame else { return nil }
+        return SpeedCalc.kmhFrameVariance(releaseFrame: r, arrivalFrame: a, fps: fps, distanceMeters: distanceMeters)
     }
 
     var category: SpeedCategory? {

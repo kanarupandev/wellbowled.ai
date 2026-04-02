@@ -45,6 +45,16 @@ final class SpeedCalcTests: XCTestCase {
         XCTAssertEqual(speed!, 144.864, accuracy: 0.01)
     }
 
+    func test_frameVariance_typicalDelivery_120fps() {
+        let variance = SpeedCalc.kmhFrameVariance(releaseFrame: 0, arrivalFrame: 60, fps: 120, distanceMeters: dist)
+        XCTAssertNotNil(variance)
+        XCTAssertEqual(variance!, 2.3064, accuracy: 0.001)
+    }
+
+    func test_frameVariance_returnsNil_whenOnlyOneFrameApart() {
+        XCTAssertNil(SpeedCalc.kmhFrameVariance(releaseFrame: 0, arrivalFrame: 1, fps: 120, distanceMeters: dist))
+    }
+
     func test_returnsNil_whenArrivalBeforeRelease() {
         XCTAssertNil(SpeedCalc.kmh(releaseFrame: 50, arrivalFrame: 30, fps: 120, distanceMeters: dist))
     }

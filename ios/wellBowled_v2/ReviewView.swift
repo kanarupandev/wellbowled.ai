@@ -2,19 +2,39 @@ import SwiftUI
 
 struct ReviewView: View {
     let delivery: Delivery
-    let onSave: (Int, Int, Double) -> Void   // (releaseFrame, arrivalFrame, distanceMeters)
+    let onSave: (FrameMarkers, Double) -> Void
     let onDismiss: () -> Void
 
     @StateObject private var extractor: FrameExtractor
-    @State private var releaseFrame: Int?
-    @State private var arrivalFrame: Int?
+    @State private var markers: FrameMarkers
     @State private var distanceMeters: Double
     @State private var distanceText: String
     @State private var showDistanceEditor = false
+    @State private var activeTarget: MarkerTarget?
+    @State private var markerMessage: String?
     @FocusState private var distanceFieldFocused: Bool
     @AppStorage("savedDistance") private var savedDistance: Double = SpeedCalc.defaultDistanceMeters
 
-    init(delivery: Delivery, onSave: @escaping (Int, Int, Double) -> Void, onDismiss: @escaping () -> Void) {
+    private enum MarkerTarget {
+        case release
+        case arrival
+
+        var title: String {
+            switch self {
+            case .release: return "Release"
+            case .arrival: return "End"
+            }
+        }
+
+        var color: Color {
+            switch self {
+            case .release: return .orange
+            case .arrival: return .green
+            }
+        }
+    }
+
+    init(delivery: Delivery, onSave: @escaping (FrameMarkers, Double) -> Void, onDismiss: @escaping () -> Void) {
         self.delivery = delivery
         self.onSave = onSave
         self.onDismiss = onDismiss
@@ -22,26 +42,17 @@ struct ReviewView: View {
             url: delivery.videoURL, fps: delivery.fps,
             duration: delivery.duration, totalFrames: delivery.totalFrames
         ))
-        self._releaseFrame = State(initialValue: delivery.releaseFrame)
-        self._arrivalFrame = State(initialValue: delivery.arrivalFrame)
-        // Use saved distance for new deliveries, keep existing for re-reviews
-        let dist = delivery.releaseFrame != nil ? delivery.distanceMeters :
+        let initialMarkers = delivery.markers
+        self._markers = State(initialValue: initialMarkers)
+        let dist = initialMarkers.releaseFrame != nil ? delivery.distanceMeters :
             UserDefaults.standard.double(forKey: "savedDistance").nonZero ?? SpeedCalc.defaultDistanceMeters
         self._distanceMeters = State(initialValue: dist)
         self._distanceText = State(initialValue: Self.formattedDistanceText(for: dist))
+        self._activeTarget = State(initialValue: initialMarkers.releaseFrame == nil ? .release : (initialMarkers.arrivalFrame == nil ? .arrival : nil))
     }
 
-    private var step: Step {
-        if releaseFrame != nil && arrivalFrame != nil { return .done }
-        if releaseFrame != nil { return .pickArrival }
-        return .scrubbing
-    }
-
-    private enum Step { case scrubbing, pickArrival, done }
-
-    // Speed computed from local state using shared SpeedCalc
     private var speedKMH: Double? {
-        guard let r = releaseFrame, let a = arrivalFrame else { return nil }
+        guard let r = markers.releaseFrame, let a = markers.arrivalFrame else { return nil }
         return SpeedCalc.kmh(releaseFrame: r, arrivalFrame: a, fps: delivery.fps, distanceMeters: distanceMeters)
     }
 
@@ -50,14 +61,68 @@ struct ReviewView: View {
         return SpeedCalc.mph(kmh: kmh)
     }
 
+    private var speedErrorKMH: Double? {
+        guard let r = markers.releaseFrame, let a = markers.arrivalFrame else { return nil }
+        return SpeedCalc.kmhFrameVariance(releaseFrame: r, arrivalFrame: a, fps: delivery.fps, distanceMeters: distanceMeters)
+    }
+
     private var category: SpeedCategory? {
         guard let kmh = speedKMH else { return nil }
         return .from(kmh: kmh)
     }
 
     private var frameDiff: Int? {
-        guard let r = releaseFrame, let a = arrivalFrame else { return nil }
-        return a - r
+        markers.frameDiff
+    }
+
+    private var currentTarget: MarkerTarget? {
+        activeTarget ?? defaultTarget
+    }
+
+    private var defaultTarget: MarkerTarget? {
+        if markers.releaseFrame == nil { return .release }
+        if markers.arrivalFrame == nil { return .arrival }
+        return nil
+    }
+
+    private var primaryActionTitle: String? {
+        guard let currentTarget else { return nil }
+        switch currentTarget {
+        case .release:
+            return markers.releaseFrame == nil ? "Mark Release Frame" : "Move Release Frame"
+        case .arrival:
+            return markers.arrivalFrame == nil ? "Mark End Frame" : "Move End Frame"
+        }
+    }
+
+    private var primaryActionColor: Color {
+        currentTarget?.color ?? .white
+    }
+
+    private var markerHint: String {
+        switch currentTarget {
+        case .release:
+            return "Scrub to the exact release frame, then tap below."
+        case .arrival:
+            if let releaseFrame = markers.releaseFrame,
+               extractor.currentFrameIndex <= releaseFrame {
+                return "End must be after the release frame."
+            }
+            return "Scrub to the end frame, then tap below."
+        case nil:
+            return "Distance/results are live. Jump to a marker to adjust it."
+        }
+    }
+
+    private var canApplyCurrentTarget: Bool {
+        guard let currentTarget else { return false }
+        switch currentTarget {
+        case .release:
+            return true
+        case .arrival:
+            guard let releaseFrame = markers.releaseFrame else { return false }
+            return extractor.currentFrameIndex > releaseFrame
+        }
     }
 
     var body: some View {
@@ -70,7 +135,7 @@ struct ReviewView: View {
             }
         }
         .onAppear { extractor.loadFirstFrame() }
-        .onChange(of: distanceFieldFocused) { focused in
+        .onChange(of: distanceFieldFocused) { _, focused in
             if !focused {
                 showDistanceEditor = false
             }
@@ -90,8 +155,6 @@ struct ReviewView: View {
         }
     }
 
-    // MARK: - Frame View
-
     private var frameView: some View {
         Group {
             if let image = extractor.currentFrame {
@@ -110,22 +173,21 @@ struct ReviewView: View {
         }
         .overlay(alignment: .topLeading) {
             VStack(alignment: .leading, spacing: 4) {
-                if let r = releaseFrame, extractor.currentFrameIndex == r {
+                if let releaseFrame = markers.releaseFrame,
+                   extractor.currentFrameIndex == releaseFrame {
                     badge("RELEASE", color: .orange)
                 }
-                if let a = arrivalFrame, extractor.currentFrameIndex == a {
-                    badge("ARRIVAL", color: .green)
+                if let arrivalFrame = markers.arrivalFrame,
+                   extractor.currentFrameIndex == arrivalFrame {
+                    badge("END", color: .green)
                 }
             }
             .padding(8)
         }
     }
 
-    // MARK: - Controls
-
     private var controlsView: some View {
         VStack(spacing: 10) {
-            // Distance + frame info
             HStack(spacing: 8) {
                 Image(systemName: "ruler")
                     .font(.caption)
@@ -151,7 +213,6 @@ struct ReviewView: View {
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(.secondary)
 
-                // Save as default button
                 Button {
                     savedDistance = distanceMeters
                 } label: {
@@ -176,7 +237,6 @@ struct ReviewView: View {
             }
             .padding(.horizontal)
 
-            // Scrubber
             HStack(spacing: 16) {
                 Button { extractor.advance(by: -10) } label: {
                     Image(systemName: "gobackward.10")
@@ -204,46 +264,15 @@ struct ReviewView: View {
             .foregroundColor(.white)
             .padding(.horizontal)
 
-            // Action area
-            switch step {
-            case .scrubbing:
-                actionButton("Mark Release Frame", color: .orange) {
-                    releaseFrame = extractor.currentFrameIndex
-                }
+            markerControls
 
-            case .pickArrival:
-                VStack(spacing: 8) {
-                    HStack {
-                        badge("Release @ \(releaseFrame! + 1)", color: .orange)
-                        Spacer()
-                        Button("Reset") {
-                            releaseFrame = nil
-                            arrivalFrame = nil
-                        }
-                        .font(.caption)
-                        .foregroundColor(.red)
-                    }
-                    .padding(.horizontal)
-
-                    actionButton("Mark Arrival Frame", color: .green) {
-                        arrivalFrame = extractor.currentFrameIndex
-                        // Save back to parent
-                        if let r = releaseFrame, let a = arrivalFrame {
-                            onSave(r, a, distanceMeters)
-                        }
-                    }
-                }
-
-            case .done:
+            if markers.isComplete {
                 speedResultView
             }
 
-            // Done button
             Button {
                 dismissDistanceEditor()
-                if let r = releaseFrame, let a = arrivalFrame {
-                    onSave(r, a, distanceMeters)
-                }
+                persistCurrentSelection()
                 onDismiss()
             } label: {
                 Text("Done")
@@ -261,6 +290,59 @@ struct ReviewView: View {
         .background(.ultraThinMaterial)
     }
 
+    private var markerControls: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 8) {
+                markerJumpButton(title: markers.releaseFrame.map { "Release @ \($0 + 1)" } ?? "Release not set", color: .orange, frame: markers.releaseFrame, isActive: currentTarget == .release)
+                markerJumpButton(title: markers.arrivalFrame.map { "End @ \($0 + 1)" } ?? "End not set", color: .green, frame: markers.arrivalFrame, isActive: currentTarget == .arrival)
+
+                if markers.releaseFrame != nil {
+                    Menu {
+                        Button("Adjust Release") {
+                            selectTarget(.release)
+                        }
+
+                        if markers.releaseFrame != nil {
+                            Button(markers.arrivalFrame == nil ? "Set End" : "Adjust End") {
+                                selectTarget(.arrival)
+                            }
+                        }
+
+                        if markers.arrivalFrame != nil {
+                            Button("Clear End", role: .destructive) {
+                                clearArrival()
+                            }
+                        }
+
+                        Button(markers.arrivalFrame == nil ? "Clear Release" : "Reset All", role: .destructive) {
+                            clearRelease()
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .font(.title3.weight(.semibold))
+                            .foregroundColor(.white)
+                            .frame(width: 36, height: 36)
+                            .background(Color.white.opacity(0.08))
+                            .clipShape(Circle())
+                    }
+                }
+            }
+            .padding(.horizontal)
+
+            Text(markerMessage ?? markerHint)
+                .font(.system(size: 12))
+                .foregroundColor(markerMessage == nil ? .secondary : .orange)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal)
+
+            if let title = primaryActionTitle {
+                actionButton(title, color: primaryActionColor, disabled: !canApplyCurrentTarget) {
+                    applyCurrentTarget()
+                }
+            }
+        }
+    }
+
     private var distanceEditor: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Distance to impact")
@@ -268,7 +350,7 @@ struct ReviewView: View {
                 .foregroundColor(.white)
 
             HStack(alignment: .center, spacing: 10) {
-                TextField("17.68", text: Binding(
+                TextField("18.90", text: Binding(
                     get: { distanceText },
                     set: { applyDistanceInput($0) }
                 ))
@@ -337,9 +419,6 @@ struct ReviewView: View {
         }
     }
 
-    // MARK: - Speed Result
-
-    // Target speed baked in
     private static let targetKMH: Double = 120.0
 
     private var targetFrames: Int? {
@@ -351,14 +430,18 @@ struct ReviewView: View {
     private var speedResultView: some View {
         VStack(spacing: 8) {
             if let kmh = speedKMH, let cat = category {
-                // Main speed display
                 HStack(spacing: 16) {
                     VStack(spacing: 2) {
                         Text(String(format: "%.1f", kmh))
                             .font(.system(size: 32, weight: .bold, design: .monospaced))
                             .foregroundColor(cat.color)
-                        Text("km/h")
-                            .font(.caption)
+                        if let error = speedErrorKMH {
+                            Text("±\(String(format: "%.1f", error)) km/h")
+                                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                                .foregroundColor(.secondary)
+                        }
+                        Text("frame-pick variance")
+                            .font(.system(size: 10))
                             .foregroundColor(.secondary)
                     }
 
@@ -387,7 +470,6 @@ struct ReviewView: View {
                 .background(cat.color.opacity(0.1))
                 .cornerRadius(12)
 
-                // Target comparison
                 if let target = targetFrames, let diff = frameDiff {
                     HStack(spacing: 6) {
                         Image(systemName: diff <= target ? "checkmark.circle.fill" : "arrow.down.circle.fill")
@@ -408,29 +490,9 @@ struct ReviewView: View {
                     }
                     .padding(.horizontal)
                 }
-
-                // Frame markers + redo
-                HStack(spacing: 12) {
-                    Button { extractor.seekToFrame(releaseFrame!) } label: {
-                        badge("Release @ \(releaseFrame! + 1)", color: .orange)
-                    }
-                    Button { extractor.seekToFrame(arrivalFrame!) } label: {
-                        badge("Arrival @ \(arrivalFrame! + 1)", color: .green)
-                    }
-                    Spacer()
-                    Button("Redo") {
-                        releaseFrame = nil
-                        arrivalFrame = nil
-                    }
-                    .font(.caption)
-                    .foregroundColor(.red)
-                }
-                .padding(.horizontal)
             }
         }
     }
-
-    // MARK: - Helpers
 
     private func badge(_ text: String, color: Color) -> some View {
         Text(text)
@@ -442,17 +504,92 @@ struct ReviewView: View {
             .cornerRadius(4)
     }
 
-    private func actionButton(_ title: String, color: Color, action: @escaping () -> Void) -> some View {
+    private func markerJumpButton(title: String, color: Color, frame: Int?, isActive: Bool) -> some View {
+        Button {
+            if let frame {
+                extractor.seekToFrame(frame)
+            }
+        } label: {
+            Text(title)
+                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                .foregroundColor(frame == nil ? .secondary : .black)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(frame == nil ? Color.white.opacity(0.08) : color)
+                .cornerRadius(6)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(isActive ? Color.white.opacity(0.5) : Color.clear, lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(frame == nil)
+        .opacity(frame == nil ? 0.7 : 1.0)
+    }
+
+    private func actionButton(_ title: String, color: Color, disabled: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
                 .font(.headline)
                 .foregroundColor(.black)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
-                .background(color)
+                .background(color.opacity(disabled ? 0.5 : 1.0))
                 .cornerRadius(10)
         }
+        .disabled(disabled)
         .padding(.horizontal)
+    }
+
+    private func selectTarget(_ target: MarkerTarget) {
+        dismissDistanceEditor()
+        markerMessage = nil
+        activeTarget = target
+    }
+
+    private func applyCurrentTarget() {
+        guard let currentTarget else { return }
+        markerMessage = nil
+
+        switch currentTarget {
+        case .release:
+            let previousArrival = markers.arrivalFrame
+            markers.setRelease(extractor.currentFrameIndex)
+            if previousArrival != nil, markers.arrivalFrame == nil {
+                markerMessage = "End cleared because it must stay after release."
+                activeTarget = .arrival
+            } else {
+                activeTarget = markers.arrivalFrame == nil ? .arrival : nil
+            }
+        case .arrival:
+            guard markers.setArrival(extractor.currentFrameIndex) else {
+                markerMessage = "End must be after the release frame."
+                return
+            }
+            activeTarget = nil
+            presentDistanceEditor()
+        }
+
+        persistCurrentSelection()
+    }
+
+    private func clearRelease() {
+        markers.clearRelease()
+        markerMessage = nil
+        activeTarget = .release
+        persistCurrentSelection()
+    }
+
+    private func clearArrival() {
+        markers.clearArrival()
+        markerMessage = nil
+        activeTarget = .arrival
+        persistCurrentSelection()
+    }
+
+    private func persistCurrentSelection() {
+        onSave(markers, distanceMeters)
     }
 
     private func presentDistanceEditor() {
@@ -475,6 +612,7 @@ struct ReviewView: View {
         }
         if let value = Double(formatted), value > 0 {
             distanceMeters = value
+            persistCurrentSelection()
         }
     }
 
