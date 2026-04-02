@@ -265,12 +265,15 @@ Run `compose_frame_battle()` with:
 
 Output: draft MP4 at 1080x1920.
 
-### Step 4.5: Add sound (optional for v1)
+### Step 4.5: Sound
 
+**v1 ships silent.** The current `_reencode_for_youtube()` helper always injects silent audio via `anullsrc` (video_composer.py line 377). This is correct for v1 — YouTube/Reels accept silent uploads without issues.
+
+Adding real music requires an audio-aware encode path that replaces `anullsrc` with an actual audio input. That is out of scope for v1. If the silent version performs well, audio integration becomes a v1.1 task:
 - Source royalty-free minimal bass beat.
 - Align beat drops to hook (0:00), Steyn hard cut (0:10), real-time replay (0:22).
 - Silence on close card.
-- If no suitable track found quickly → ship silent.
+- Update `_reencode_for_youtube()` or add a new encode function that accepts an audio file input.
 
 ---
 
