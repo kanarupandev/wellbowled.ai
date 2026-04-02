@@ -16,6 +16,13 @@ SHOULDER_COLOR_RGBA = (0, 206, 209, 255)  # dark turquoise
 WHITE = (255, 255, 255)
 BG_DARK = (10, 14, 20)
 
+# Comparison mode colors — muted, ~70% saturation, broadcast-style
+COMP_HIP_BGR = (51, 133, 204)         # muted amber in BGR (204, 133, 51 RGB)
+COMP_SHOULDER_BGR = (179, 179, 51)    # muted cyan in BGR (51, 179, 179 RGB)
+COMP_KNEE_BGR = (102, 179, 102)       # muted green in BGR
+COMP_ARM_BGR = (220, 220, 220)        # off-white in BGR
+COMP_SPINE_BGR = (160, 150, 140)      # muted warm grey in BGR
+
 # Skeleton connections (upper body + legs)
 POSE_CONNECTIONS = [
     (11, 12), (11, 13), (13, 15), (12, 14), (14, 16),
@@ -25,8 +32,16 @@ PRIMARY_JOINTS = [11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28]
 
 LEFT_SHOULDER = 11
 RIGHT_SHOULDER = 12
+LEFT_ELBOW = 13
+RIGHT_ELBOW = 14
+LEFT_WRIST = 15
+RIGHT_WRIST = 16
 LEFT_HIP = 23
 RIGHT_HIP = 24
+LEFT_KNEE = 25
+RIGHT_KNEE = 26
+LEFT_ANKLE = 27
+RIGHT_ANKLE = 28
 
 
 def _load_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
@@ -74,6 +89,173 @@ def _separation_color(separation: float) -> tuple[int, int, int]:
         return (int(100 * (1 - t) + 255 * t), int(255 * (1 - t) + 220 * t), int(100 * (1 - t)))
     else:
         return (255, 80, 60)
+
+
+def render_comparison_overlay(
+    frame_bgr: np.ndarray,
+    landmarks: list[tuple[float, float, float]] | None,
+    draw_knee: bool = True,
+    draw_arm: bool = True,
+    draw_spine: bool = False,
+    bowling_side: str = "left",
+) -> np.ndarray:
+    """Render clean comparison overlay — no pills, no legend, no numbers.
+
+    Args:
+        frame_bgr: source frame (BGR).
+        landmarks: pose landmarks from extractor.
+        draw_knee: draw front knee triangle.
+        draw_arm: draw bowling arm path.
+        draw_spine: draw spine line (mid-shoulder to mid-hip).
+        bowling_side: "left" or "right" — which side landmarks represent
+                      the bowling arm in this side-on view.
+
+    Returns BGR frame with overlay.
+    """
+    h, w = frame_bgr.shape[:2]
+    out = frame_bgr.copy()
+
+    if landmarks is None:
+        return out
+
+    def px(idx: int, min_vis: float = 0.3) -> tuple[int, int] | None:
+        p = landmarks[idx]
+        if p[2] < min_vis:
+            return None
+        return (int(p[0] * w), int(p[1] * h))
+
+    # Gate: core joints must be visible
+    core = [LEFT_SHOULDER, RIGHT_SHOULDER, LEFT_HIP, RIGHT_HIP]
+    if not all(landmarks[j][2] > 0.4 for j in core):
+        return out
+
+    # Faded skeleton background — very subtle, 25% opacity
+    overlay_skel = out.copy()
+    for a, b in POSE_CONNECTIONS:
+        pa, pb = px(a), px(b)
+        if pa and pb:
+            cv2.line(overlay_skel, pa, pb, (140, 140, 140), 1, cv2.LINE_AA)
+    cv2.addWeighted(overlay_skel, 0.25, out, 0.75, 0, out)
+
+    # Hip line — muted amber
+    lh, rh = px(LEFT_HIP), px(RIGHT_HIP)
+    if lh and rh:
+        ext_a, ext_b = _extend_line(lh, rh, 0.2)
+        cv2.line(out, ext_a, ext_b, COMP_HIP_BGR, 3, cv2.LINE_AA)
+        cv2.circle(out, lh, 5, COMP_HIP_BGR, -1, cv2.LINE_AA)
+        cv2.circle(out, rh, 5, COMP_HIP_BGR, -1, cv2.LINE_AA)
+
+    # Shoulder line — muted cyan
+    ls, rs = px(LEFT_SHOULDER), px(RIGHT_SHOULDER)
+    if ls and rs:
+        ext_a, ext_b = _extend_line(ls, rs, 0.2)
+        cv2.line(out, ext_a, ext_b, COMP_SHOULDER_BGR, 3, cv2.LINE_AA)
+        cv2.circle(out, ls, 5, COMP_SHOULDER_BGR, -1, cv2.LINE_AA)
+        cv2.circle(out, rs, 5, COMP_SHOULDER_BGR, -1, cv2.LINE_AA)
+
+    # Front knee triangle
+    if draw_knee:
+        # Draw both legs, let the viewer see which is the front leg
+        for hip_idx, knee_idx, ankle_idx in [
+            (LEFT_HIP, LEFT_KNEE, LEFT_ANKLE),
+            (RIGHT_HIP, RIGHT_KNEE, RIGHT_ANKLE),
+        ]:
+            ph = px(hip_idx, 0.4)
+            pk = px(knee_idx, 0.4)
+            pa = px(ankle_idx, 0.4)
+            if ph and pk and pa:
+                cv2.line(out, ph, pk, COMP_KNEE_BGR, 2, cv2.LINE_AA)
+                cv2.line(out, pk, pa, COMP_KNEE_BGR, 2, cv2.LINE_AA)
+                cv2.circle(out, pk, 4, COMP_KNEE_BGR, -1, cv2.LINE_AA)
+
+    # Bowling arm path
+    if draw_arm:
+        if bowling_side == "left":
+            s_idx, e_idx, w_idx = LEFT_SHOULDER, LEFT_ELBOW, LEFT_WRIST
+        else:
+            s_idx, e_idx, w_idx = RIGHT_SHOULDER, RIGHT_ELBOW, RIGHT_WRIST
+        ps = px(s_idx, 0.4)
+        pe = px(e_idx, 0.4)
+        pw = px(w_idx, 0.4)
+        if ps and pe:
+            cv2.line(out, ps, pe, COMP_ARM_BGR, 2, cv2.LINE_AA)
+            cv2.circle(out, pe, 4, COMP_ARM_BGR, -1, cv2.LINE_AA)
+        if pe and pw:
+            cv2.line(out, pe, pw, COMP_ARM_BGR, 2, cv2.LINE_AA)
+            cv2.circle(out, pw, 4, COMP_ARM_BGR, -1, cv2.LINE_AA)
+
+    # Spine line — mid-shoulder to mid-hip
+    if draw_spine and ls and rs and lh and rh:
+        mid_s = ((ls[0] + rs[0]) // 2, (ls[1] + rs[1]) // 2)
+        mid_h = ((lh[0] + rh[0]) // 2, (lh[1] + rh[1]) // 2)
+        cv2.line(out, mid_s, mid_h, COMP_SPINE_BGR, 2, cv2.LINE_AA)
+
+    return out
+
+
+def render_pulse_glow(
+    frame_bgr: np.ndarray,
+    landmarks: list[tuple[float, float, float]] | None,
+    opacity: float = 0.4,
+    bowling_side: str = "left",
+) -> np.ndarray:
+    """Apply a glow emphasis on the skeleton lines that differ most.
+
+    This function owns the VISUAL STYLE only — which lines glow, what colour,
+    what radius, what opacity for a single frame. The composer controls timing
+    by calling this with varying opacity values across frames.
+
+    Args:
+        frame_bgr: frame with comparison overlay already rendered.
+        landmarks: pose landmarks.
+        opacity: glow intensity (0.0 = invisible, 1.0 = full).
+        bowling_side: which side is the bowling arm.
+
+    Returns BGR frame with glow applied.
+    """
+    if landmarks is None or opacity <= 0:
+        return frame_bgr
+
+    h, w = frame_bgr.shape[:2]
+    glow_layer = np.zeros_like(frame_bgr)
+
+    def px(idx: int) -> tuple[int, int] | None:
+        p = landmarks[idx]
+        if p[2] < 0.3:
+            return None
+        return (int(p[0] * w), int(p[1] * h))
+
+    # Glow on hip and shoulder lines — these show the X-Factor difference most
+    for p1_idx, p2_idx, color in [
+        (LEFT_HIP, RIGHT_HIP, COMP_HIP_BGR),
+        (LEFT_SHOULDER, RIGHT_SHOULDER, COMP_SHOULDER_BGR),
+    ]:
+        p1, p2 = px(p1_idx), px(p2_idx)
+        if p1 and p2:
+            ext_a, ext_b = _extend_line(p1, p2, 0.2)
+            cv2.line(glow_layer, ext_a, ext_b, color, 8, cv2.LINE_AA)
+
+    # Glow on bowling arm path
+    if bowling_side == "left":
+        s_idx, e_idx, w_idx = LEFT_SHOULDER, LEFT_ELBOW, LEFT_WRIST
+    else:
+        s_idx, e_idx, w_idx = RIGHT_SHOULDER, RIGHT_ELBOW, RIGHT_WRIST
+    ps, pe, pw = px(s_idx), px(e_idx), px(w_idx)
+    if ps and pe:
+        cv2.line(glow_layer, ps, pe, COMP_ARM_BGR, 6, cv2.LINE_AA)
+    if pe and pw:
+        cv2.line(glow_layer, pe, pw, COMP_ARM_BGR, 6, cv2.LINE_AA)
+
+    # Blur for glow effect
+    glow_layer = cv2.GaussianBlur(glow_layer, (0, 0), sigmaX=6)
+
+    # Blend at requested opacity
+    out = frame_bgr.copy()
+    mask = glow_layer.astype(np.float32) / 255.0 * opacity
+    out = (out.astype(np.float32) + glow_layer.astype(np.float32) * opacity)
+    out = np.clip(out, 0, 255).astype(np.uint8)
+
+    return out
 
 
 def render_frame_overlay(
