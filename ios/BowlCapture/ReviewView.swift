@@ -9,6 +9,8 @@ struct ReviewView: View {
     @State private var activePhase: DeliveryPhase? = nil
     @State private var measureMode = false
     @State private var calibrateMode = false
+    @State private var speedMode = false
+    @State private var releaseFrame: Int?
     @State private var measurePoint1: CGPoint?
     @State private var frameSize: CGSize = .zero
 
@@ -271,18 +273,36 @@ struct ReviewView: View {
             }
             .padding(.horizontal, 4)
 
-            // Measure + Calibrate
-            HStack(spacing: 12) {
+            // Tools: Speed + Calibrate + Measure
+            HStack(spacing: 8) {
+                // Speed measurement
                 Button {
                     activePhase = nil
                     measureMode = false
+                    calibrateMode = false
+                    speedMode.toggle()
+                    releaseFrame = nil
+                } label: {
+                    Label("Speed", systemImage: "speedometer")
+                        .font(.caption.bold())
+                        .foregroundColor(speedMode ? .black : .white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(speedMode ? .white : .white.opacity(0.15))
+                        .cornerRadius(8)
+                }
+
+                Button {
+                    activePhase = nil
+                    measureMode = false
+                    speedMode = false
                     calibrateMode.toggle()
                     measurePoint1 = nil
                 } label: {
                     Label("Calibrate", systemImage: "ruler")
                         .font(.caption.bold())
                         .foregroundColor(calibrateMode ? .black : .yellow)
-                        .padding(.horizontal, 12)
+                        .padding(.horizontal, 10)
                         .padding(.vertical, 8)
                         .background(calibrateMode ? .yellow : .yellow.opacity(0.15))
                         .cornerRadius(8)
@@ -291,34 +311,141 @@ struct ReviewView: View {
                 Button {
                     activePhase = nil
                     calibrateMode = false
+                    speedMode = false
                     measureMode.toggle()
                     measurePoint1 = nil
                 } label: {
                     Label("Measure", systemImage: "arrow.left.and.right")
                         .font(.caption.bold())
                         .foregroundColor(measureMode ? .black : .cyan)
-                        .padding(.horizontal, 12)
+                        .padding(.horizontal, 10)
                         .padding(.vertical, 8)
                         .background(measureMode ? .cyan : .cyan.opacity(0.15))
                         .cornerRadius(8)
                 }
 
+                Spacer()
+
                 if session.isCalibrated {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(.green)
                         .font(.caption)
-                    Text("Ref set")
-                        .font(.caption2)
-                        .foregroundColor(.green)
                 }
-
-                Spacer()
             }
             .padding(.horizontal)
-            .padding(.bottom, 8)
+
+            // Speed measurement controls (when active)
+            if speedMode {
+                speedMeasurementView
+            }
+
+            // Speed result display
+            if let speed = delivery.speed {
+                speedResultView(speed)
+            }
+
+            Spacer().frame(height: 8)
         }
         .padding(.top, 8)
         .background(.ultraThinMaterial)
+    }
+
+    // MARK: - Speed Measurement
+
+    private var speedMeasurementView: some View {
+        VStack(spacing: 8) {
+            if releaseFrame == nil {
+                HStack {
+                    Image(systemName: "1.circle.fill").foregroundColor(.orange)
+                    Text("Navigate to the **release** frame, then tap:")
+                        .font(.caption)
+                    Spacer()
+                    Button("Mark Release") {
+                        releaseFrame = extractor.currentFrameIndex
+                    }
+                    .font(.caption.bold())
+                    .foregroundColor(.black)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(.orange)
+                    .cornerRadius(6)
+                }
+            } else {
+                HStack {
+                    Image(systemName: "2.circle.fill").foregroundColor(.green)
+                    Text("Navigate to the **arrival** frame, then tap:")
+                        .font(.caption)
+                    Spacer()
+                    Button("Mark Arrival") {
+                        let speed = SpeedMeasurement(
+                            releaseFrame: releaseFrame!,
+                            arrivalFrame: extractor.currentFrameIndex,
+                            fps: delivery.fps,
+                            arrivalPoint: session.arrivalPoint
+                        )
+                        delivery.speed = speed
+                        speedMode = false
+                        releaseFrame = nil
+                    }
+                    .font(.caption.bold())
+                    .foregroundColor(.black)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(.green)
+                    .cornerRadius(6)
+
+                    Button("Reset") {
+                        releaseFrame = nil
+                    }
+                    .font(.caption)
+                    .foregroundColor(.red)
+                }
+
+                Text("Release marked at frame \(releaseFrame! + 1)")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.orange)
+            }
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 6)
+        .background(Color.white.opacity(0.05))
+    }
+
+    private func speedResultView(_ speed: SpeedMeasurement) -> some View {
+        HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(String(format: "%.1f km/h", speed.speedKMH))
+                    .font(.system(size: 22, weight: .bold, design: .monospaced))
+                    .foregroundColor(speed.category.color)
+                Text(speed.category.rawValue)
+                    .font(.caption)
+                    .foregroundColor(speed.category.color)
+            }
+
+            Divider().frame(height: 30)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(String(format: "%.1f mph", speed.speedMPH))
+                    .font(.system(.body, design: .monospaced))
+                Text("\(speed.frameDiff) frames @ \(Int(speed.fps))fps")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
+
+            Spacer()
+
+            Button {
+                delivery.speed = nil
+            } label: {
+                Image(systemName: "xmark.circle")
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .background(speed.category.color.opacity(0.1))
+        .cornerRadius(8)
+        .padding(.horizontal)
     }
 
     // MARK: - Tap Handling
