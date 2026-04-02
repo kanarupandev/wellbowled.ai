@@ -6,19 +6,17 @@ struct CaptureView: View {
     @State private var deliveries: [Delivery] = []
     @State private var recordingSeconds: Double = 0
     @State private var timer: Timer?
-    @State private var reviewDelivery: Delivery?
+    @State private var showReview = false
+    @State private var reviewIndex: Int?
 
     var body: some View {
         ZStack {
-            // Camera preview — always behind everything
             CameraPreviewView(session: camera.captureSession)
                 .ignoresSafeArea()
 
             VStack {
-                // Top: FPS + clip count
                 topBar
                 Spacer()
-                // Bottom: record button + stats
                 bottomBar
             }
 
@@ -30,8 +28,17 @@ struct CaptureView: View {
             camera.configure()
             camera.startSession()
         }
-        .fullScreenCover(item: $reviewDelivery) { delivery in
-            ReviewView(delivery: binding(for: delivery))
+        .fullScreenCover(isPresented: $showReview) {
+            if let idx = reviewIndex, idx < deliveries.count {
+                ReviewView(
+                    delivery: deliveries[idx],
+                    onSave: { release, arrival in
+                        deliveries[idx].releaseFrame = release
+                        deliveries[idx].arrivalFrame = arrival
+                    },
+                    onDismiss: { showReview = false }
+                )
+            }
         }
     }
 
@@ -77,7 +84,6 @@ struct CaptureView: View {
 
     private var bottomBar: some View {
         VStack(spacing: 16) {
-            // Speed stats from measured deliveries
             if let best = bestSpeed {
                 HStack(spacing: 20) {
                     statLabel("Top", value: String(format: "%.1f", best), unit: "km/h")
@@ -94,12 +100,15 @@ struct CaptureView: View {
 
             HStack(spacing: 40) {
                 // Review last clip
-                if let last = deliveries.last {
-                    Button { reviewDelivery = last } label: {
+                if !deliveries.isEmpty {
+                    Button {
+                        reviewIndex = deliveries.count - 1
+                        showReview = true
+                    } label: {
                         VStack(spacing: 2) {
                             Image(systemName: "play.fill")
                                 .font(.title3)
-                            if let kmh = last.speedKMH {
+                            if let kmh = deliveries.last?.speedKMH {
                                 Text(String(format: "%.0f", kmh))
                                     .font(.system(size: 10, design: .monospaced))
                             } else {
@@ -172,7 +181,8 @@ struct CaptureView: View {
         camera.startRecording { url, fps, duration, frames in
             let delivery = Delivery(videoURL: url, fps: fps, duration: duration, totalFrames: frames)
             deliveries.append(delivery)
-            reviewDelivery = delivery
+            reviewIndex = deliveries.count - 1
+            showReview = true
         }
     }
 
@@ -180,13 +190,6 @@ struct CaptureView: View {
         timer?.invalidate()
         timer = nil
         camera.stopRecording()
-    }
-
-    private func binding(for delivery: Delivery) -> Binding<Delivery> {
-        guard let i = deliveries.firstIndex(where: { $0.id == delivery.id }) else {
-            return .constant(delivery)
-        }
-        return $deliveries[i]
     }
 
     private func errorBanner(_ msg: String) -> some View {

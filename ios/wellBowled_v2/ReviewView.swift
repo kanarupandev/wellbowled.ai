@@ -1,24 +1,54 @@
 import SwiftUI
 
 struct ReviewView: View {
-    @Binding var delivery: Delivery
+    let delivery: Delivery
+    let onSave: (Int, Int) -> Void   // (releaseFrame, arrivalFrame)
+    let onDismiss: () -> Void
+
     @StateObject private var extractor: FrameExtractor
-    @Environment(\.dismiss) var dismiss
+    @State private var releaseFrame: Int?
+    @State private var arrivalFrame: Int?
 
-    @State private var step: Step = .scrubbing
-
-    enum Step {
-        case scrubbing      // free scrub, pick release
-        case pickArrival    // release set, pick arrival
-        case done           // both set, show speed
+    init(delivery: Delivery, onSave: @escaping (Int, Int) -> Void, onDismiss: @escaping () -> Void) {
+        self.delivery = delivery
+        self.onSave = onSave
+        self.onDismiss = onDismiss
+        self._extractor = StateObject(wrappedValue: FrameExtractor(
+            url: delivery.videoURL, fps: delivery.fps,
+            duration: delivery.duration, totalFrames: delivery.totalFrames
+        ))
+        self._releaseFrame = State(initialValue: delivery.releaseFrame)
+        self._arrivalFrame = State(initialValue: delivery.arrivalFrame)
     }
 
-    init(delivery: Binding<Delivery>) {
-        self._delivery = delivery
-        let d = delivery.wrappedValue
-        self._extractor = StateObject(wrappedValue: FrameExtractor(
-            url: d.videoURL, fps: d.fps, duration: d.duration, totalFrames: d.totalFrames
-        ))
+    private var step: Step {
+        if releaseFrame != nil && arrivalFrame != nil { return .done }
+        if releaseFrame != nil { return .pickArrival }
+        return .scrubbing
+    }
+
+    private enum Step { case scrubbing, pickArrival, done }
+
+    // Speed computed from local state
+    private var speedKMH: Double? {
+        guard let r = releaseFrame, let a = arrivalFrame, a > r else { return nil }
+        let seconds = Double(a - r) / delivery.fps
+        return (Delivery.pitchMeters / seconds) * 3.6
+    }
+
+    private var speedMPH: Double? {
+        guard let kmh = speedKMH else { return nil }
+        return kmh / 1.609
+    }
+
+    private var category: SpeedCategory? {
+        guard let kmh = speedKMH else { return nil }
+        return .from(kmh: kmh)
+    }
+
+    private var frameDiff: Int? {
+        guard let r = releaseFrame, let a = arrivalFrame else { return nil }
+        return a - r
     }
 
     var body: some View {
@@ -26,21 +56,11 @@ struct ReviewView: View {
             Color.black.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Frame image
                 frameView
-                // Controls
                 controlsView
             }
         }
-        .onAppear {
-            extractor.loadFirstFrame()
-            // Resume state if already marked
-            if delivery.releaseFrame != nil && delivery.arrivalFrame != nil {
-                step = .done
-            } else if delivery.releaseFrame != nil {
-                step = .pickArrival
-            }
-        }
+        .onAppear { extractor.loadFirstFrame() }
     }
 
     // MARK: - Frame View
@@ -58,30 +78,16 @@ struct ReviewView: View {
             }
         }
         .overlay(alignment: .topLeading) {
-            frameMarkerOverlay
-        }
-    }
-
-    private var frameMarkerOverlay: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            if let r = delivery.releaseFrame, extractor.currentFrameIndex == r {
-                markerBadge("RELEASE", color: .orange)
+            VStack(alignment: .leading, spacing: 4) {
+                if let r = releaseFrame, extractor.currentFrameIndex == r {
+                    badge("RELEASE", color: .orange)
+                }
+                if let a = arrivalFrame, extractor.currentFrameIndex == a {
+                    badge("ARRIVAL", color: .green)
+                }
             }
-            if let a = delivery.arrivalFrame, extractor.currentFrameIndex == a {
-                markerBadge("ARRIVAL", color: .green)
-            }
+            .padding(8)
         }
-        .padding(8)
-    }
-
-    private func markerBadge(_ text: String, color: Color) -> some View {
-        Text(text)
-            .font(.system(size: 11, weight: .bold, design: .monospaced))
-            .foregroundColor(.black)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(color)
-            .cornerRadius(4)
     }
 
     // MARK: - Controls
@@ -91,15 +97,13 @@ struct ReviewView: View {
             // Frame info
             HStack {
                 Text("Frame \(extractor.currentFrameIndex + 1) / \(extractor.totalFrames)")
-                    .font(.system(.caption, design: .monospaced))
                 Spacer()
                 Text(extractor.currentTimeString)
-                    .font(.system(.caption, design: .monospaced))
                 Spacer()
                 Text("\(Int(delivery.fps)) fps")
-                    .font(.system(.caption, design: .monospaced))
                     .foregroundColor(.secondary)
             }
+            .font(.system(.caption, design: .monospaced))
             .foregroundColor(.gray)
             .padding(.horizontal)
 
@@ -131,23 +135,21 @@ struct ReviewView: View {
             .foregroundColor(.white)
             .padding(.horizontal)
 
-            // Action area — depends on step
+            // Action area
             switch step {
             case .scrubbing:
                 actionButton("Mark Release Frame", color: .orange) {
-                    delivery.releaseFrame = extractor.currentFrameIndex
-                    step = .pickArrival
+                    releaseFrame = extractor.currentFrameIndex
                 }
 
             case .pickArrival:
                 VStack(spacing: 8) {
                     HStack {
-                        markerBadge("Release @ \(delivery.releaseFrame! + 1)", color: .orange)
+                        badge("Release @ \(releaseFrame! + 1)", color: .orange)
                         Spacer()
                         Button("Reset") {
-                            delivery.releaseFrame = nil
-                            delivery.arrivalFrame = nil
-                            step = .scrubbing
+                            releaseFrame = nil
+                            arrivalFrame = nil
                         }
                         .font(.caption)
                         .foregroundColor(.red)
@@ -155,8 +157,11 @@ struct ReviewView: View {
                     .padding(.horizontal)
 
                     actionButton("Mark Arrival Frame", color: .green) {
-                        delivery.arrivalFrame = extractor.currentFrameIndex
-                        step = .done
+                        arrivalFrame = extractor.currentFrameIndex
+                        // Save back to parent
+                        if let r = releaseFrame, let a = arrivalFrame {
+                            onSave(r, a)
+                        }
                     }
                 }
 
@@ -166,7 +171,7 @@ struct ReviewView: View {
 
             // Done button
             Button {
-                dismiss()
+                onDismiss()
             } label: {
                 Text("Done")
                     .font(.headline)
@@ -187,7 +192,7 @@ struct ReviewView: View {
 
     private var speedResultView: some View {
         VStack(spacing: 8) {
-            if let kmh = delivery.speedKMH, let cat = delivery.category {
+            if let kmh = speedKMH, let cat = category {
                 HStack(spacing: 20) {
                     VStack(spacing: 2) {
                         Text(String(format: "%.1f", kmh))
@@ -199,7 +204,7 @@ struct ReviewView: View {
                     }
 
                     VStack(spacing: 2) {
-                        Text(String(format: "%.1f", delivery.speedMPH ?? 0))
+                        Text(String(format: "%.1f", speedMPH ?? 0))
                             .font(.system(size: 20, weight: .semibold, design: .monospaced))
                         Text("mph")
                             .font(.caption)
@@ -210,7 +215,7 @@ struct ReviewView: View {
                         Text(cat.rawValue)
                             .font(.system(size: 14, weight: .bold))
                             .foregroundColor(cat.color)
-                        Text("\(delivery.frameDiff ?? 0)f @ \(Int(delivery.fps))fps")
+                        Text("\(frameDiff ?? 0)f @ \(Int(delivery.fps))fps")
                             .font(.system(size: 10, design: .monospaced))
                             .foregroundColor(.secondary)
                     }
@@ -220,26 +225,17 @@ struct ReviewView: View {
                 .background(cat.color.opacity(0.1))
                 .cornerRadius(12)
 
-                // Jump to marked frames
                 HStack(spacing: 12) {
-                    Button {
-                        if let r = delivery.releaseFrame { extractor.seekToFrame(r) }
-                    } label: {
-                        markerBadge("Release @ \(delivery.releaseFrame! + 1)", color: .orange)
+                    Button { extractor.seekToFrame(releaseFrame!) } label: {
+                        badge("Release @ \(releaseFrame! + 1)", color: .orange)
                     }
-
-                    Button {
-                        if let a = delivery.arrivalFrame { extractor.seekToFrame(a) }
-                    } label: {
-                        markerBadge("Arrival @ \(delivery.arrivalFrame! + 1)", color: .green)
+                    Button { extractor.seekToFrame(arrivalFrame!) } label: {
+                        badge("Arrival @ \(arrivalFrame! + 1)", color: .green)
                     }
-
                     Spacer()
-
                     Button("Redo") {
-                        delivery.releaseFrame = nil
-                        delivery.arrivalFrame = nil
-                        step = .scrubbing
+                        releaseFrame = nil
+                        arrivalFrame = nil
                     }
                     .font(.caption)
                     .foregroundColor(.red)
@@ -249,7 +245,17 @@ struct ReviewView: View {
         }
     }
 
-    // MARK: - Action Button
+    // MARK: - Helpers
+
+    private func badge(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(.system(size: 11, weight: .bold, design: .monospaced))
+            .foregroundColor(.black)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(color)
+            .cornerRadius(4)
+    }
 
     private func actionButton(_ title: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
