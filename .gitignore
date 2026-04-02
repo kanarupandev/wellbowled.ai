@@ -28,6 +28,11 @@ experiments/**/*.mp3
 .DS_Store
 Thumbs.db
 
+# Xcode generated
+*.xcodeproj/
+*.xcworkspace/
+DerivedData/
+
 # IDE
 .vscode/
 .idea/
