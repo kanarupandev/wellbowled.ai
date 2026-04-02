@@ -8,28 +8,30 @@ struct ReviewView: View {
     @StateObject private var extractor: FrameExtractor
     @State private var markers: FrameMarkers
     @State private var distanceMeters: Double
-    @State private var distanceText: String
+    @State private var distanceDigits: String
     @State private var showDistanceEditor = false
-    @State private var activeTarget: MarkerTarget?
+    @State private var activeEditor: EditorTarget
     @State private var markerMessage: String?
-    @FocusState private var distanceFieldFocused: Bool
     @AppStorage("savedDistance") private var savedDistance: Double = SpeedCalc.defaultDistanceMeters
 
-    private enum MarkerTarget {
+    private enum EditorTarget {
         case release
-        case arrival
+        case end
+        case distance
 
         var title: String {
             switch self {
             case .release: return "Release"
-            case .arrival: return "End"
+            case .end: return "End"
+            case .distance: return "Distance"
             }
         }
 
         var color: Color {
             switch self {
             case .release: return .orange
-            case .arrival: return .green
+            case .end: return .green
+            case .distance: return Color(red: 0, green: 0.427, blue: 0.467)
             }
         }
     }
@@ -39,21 +41,30 @@ struct ReviewView: View {
         self.onSave = onSave
         self.onDismiss = onDismiss
         self._extractor = StateObject(wrappedValue: FrameExtractor(
-            url: delivery.videoURL, fps: delivery.fps,
-            duration: delivery.duration, totalFrames: delivery.totalFrames
+            url: delivery.videoURL,
+            fps: delivery.fps,
+            duration: delivery.duration,
+            totalFrames: delivery.totalFrames
         ))
+
         let initialMarkers = delivery.markers
+        let initialDistance = initialMarkers.releaseFrame != nil
+            ? delivery.distanceMeters
+            : (UserDefaults.standard.double(forKey: "savedDistance").nonZero ?? SpeedCalc.defaultDistanceMeters)
+
         self._markers = State(initialValue: initialMarkers)
-        let dist = initialMarkers.releaseFrame != nil ? delivery.distanceMeters :
-            UserDefaults.standard.double(forKey: "savedDistance").nonZero ?? SpeedCalc.defaultDistanceMeters
-        self._distanceMeters = State(initialValue: dist)
-        self._distanceText = State(initialValue: Self.formattedDistanceText(for: dist))
-        self._activeTarget = State(initialValue: initialMarkers.releaseFrame == nil ? .release : (initialMarkers.arrivalFrame == nil ? .arrival : nil))
+        self._distanceMeters = State(initialValue: initialDistance)
+        self._distanceDigits = State(initialValue: Self.digitsText(for: initialDistance))
+        self._activeEditor = State(initialValue: initialMarkers.releaseFrame == nil ? .release : (initialMarkers.arrivalFrame == nil ? .end : .distance))
+    }
+
+    private var distanceText: String {
+        Self.formattedDistanceText(fromDigits: distanceDigits)
     }
 
     private var speedKMH: Double? {
-        guard let r = markers.releaseFrame, let a = markers.arrivalFrame else { return nil }
-        return SpeedCalc.kmh(releaseFrame: r, arrivalFrame: a, fps: delivery.fps, distanceMeters: distanceMeters)
+        guard let releaseFrame = markers.releaseFrame, let endFrame = markers.arrivalFrame else { return nil }
+        return SpeedCalc.kmh(releaseFrame: releaseFrame, arrivalFrame: endFrame, fps: delivery.fps, distanceMeters: distanceMeters)
     }
 
     private var speedMPH: Double? {
@@ -62,8 +73,8 @@ struct ReviewView: View {
     }
 
     private var speedErrorKMH: Double? {
-        guard let r = markers.releaseFrame, let a = markers.arrivalFrame else { return nil }
-        return SpeedCalc.kmhFrameVariance(releaseFrame: r, arrivalFrame: a, fps: delivery.fps, distanceMeters: distanceMeters)
+        guard let releaseFrame = markers.releaseFrame, let endFrame = markers.arrivalFrame else { return nil }
+        return SpeedCalc.kmhFrameVariance(releaseFrame: releaseFrame, arrivalFrame: endFrame, fps: delivery.fps, distanceMeters: distanceMeters)
     }
 
     private var category: SpeedCategory? {
@@ -75,54 +86,65 @@ struct ReviewView: View {
         markers.frameDiff
     }
 
-    private var currentTarget: MarkerTarget? {
-        activeTarget ?? defaultTarget
-    }
-
-    private var defaultTarget: MarkerTarget? {
-        if markers.releaseFrame == nil { return .release }
-        if markers.arrivalFrame == nil { return .arrival }
-        return nil
-    }
-
-    private var primaryActionTitle: String? {
-        guard let currentTarget else { return nil }
-        switch currentTarget {
+    private var currentEditor: EditorTarget {
+        switch activeEditor {
         case .release:
-            return markers.releaseFrame == nil ? "Mark Release Frame" : "Move Release Frame"
-        case .arrival:
-            return markers.arrivalFrame == nil ? "Mark End Frame" : "Move End Frame"
+            return .release
+        case .end:
+            return markers.releaseFrame == nil ? .release : .end
+        case .distance:
+            if markers.releaseFrame == nil { return .release }
+            if markers.arrivalFrame == nil { return .end }
+            return .distance
         }
     }
 
-    private var primaryActionColor: Color {
-        currentTarget?.color ?? .white
+    private var primaryActionTitle: String {
+        switch currentEditor {
+        case .release:
+            return markers.releaseFrame == nil ? "Set Release Here" : "Move Release Here"
+        case .end:
+            return markers.arrivalFrame == nil ? "Set End Here" : "Move End Here"
+        case .distance:
+            return "Edit Distance"
+        }
     }
 
-    private var markerHint: String {
-        switch currentTarget {
+    private var helperText: String {
+        switch currentEditor {
         case .release:
-            return "Scrub to the exact release frame, then tap below."
-        case .arrival:
-            if let releaseFrame = markers.releaseFrame,
-               extractor.currentFrameIndex <= releaseFrame {
+            return markers.releaseFrame == nil
+                ? "First pass: choose the release frame."
+                : "Release can be changed at any time."
+        case .end:
+            guard let releaseFrame = markers.releaseFrame else {
+                return "Set release before choosing the end frame."
+            }
+            if extractor.currentFrameIndex <= releaseFrame {
                 return "End must be after the release frame."
             }
-            return "Scrub to the end frame, then tap below."
-        case nil:
-            return "Distance/results are live. Jump to a marker to adjust it."
+            return markers.arrivalFrame == nil
+                ? "First pass: choose the end frame."
+                : "End can be changed independently, but must stay after release."
+        case .distance:
+            return "Distance is independent. Change it anytime and the calculations update immediately."
         }
     }
 
-    private var canApplyCurrentTarget: Bool {
-        guard let currentTarget else { return false }
-        switch currentTarget {
+    private var canApplyCurrentEditor: Bool {
+        switch currentEditor {
         case .release:
             return true
-        case .arrival:
+        case .end:
             guard let releaseFrame = markers.releaseFrame else { return false }
             return extractor.currentFrameIndex > releaseFrame
+        case .distance:
+            return true
         }
+    }
+
+    private var canFinishReview: Bool {
+        !markers.isComplete || distanceMeters > 0
     }
 
     var body: some View {
@@ -134,19 +156,8 @@ struct ReviewView: View {
                 controlsView
             }
         }
-        .onAppear { extractor.loadFirstFrame() }
-        .onChange(of: distanceFieldFocused) { _, focused in
-            if !focused {
-                showDistanceEditor = false
-            }
-        }
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Done") {
-                    dismissDistanceEditor()
-                }
-            }
+        .onAppear {
+            extractor.loadFirstFrame()
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if showDistanceEditor {
@@ -169,16 +180,16 @@ struct ReviewView: View {
         }
         .contentShape(Rectangle())
         .onTapGesture {
-            dismissDistanceEditor()
+            if showDistanceEditor {
+                dismissDistanceEditor()
+            }
         }
         .overlay(alignment: .topLeading) {
             VStack(alignment: .leading, spacing: 4) {
-                if let releaseFrame = markers.releaseFrame,
-                   extractor.currentFrameIndex == releaseFrame {
+                if let releaseFrame = markers.releaseFrame, extractor.currentFrameIndex == releaseFrame {
                     badge("RELEASE", color: .orange)
                 }
-                if let arrivalFrame = markers.arrivalFrame,
-                   extractor.currentFrameIndex == arrivalFrame {
+                if let endFrame = markers.arrivalFrame, extractor.currentFrameIndex == endFrame {
                     badge("END", color: .green)
                 }
             }
@@ -189,40 +200,6 @@ struct ReviewView: View {
     private var controlsView: some View {
         VStack(spacing: 10) {
             HStack(spacing: 8) {
-                Image(systemName: "ruler")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Button {
-                    presentDistanceEditor()
-                } label: {
-                    Text(distanceText)
-                        .font(.system(size: 18, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.white)
-                        .frame(minWidth: 92)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .background(Color.white.opacity(0.1))
-                        .cornerRadius(8)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(showDistanceEditor ? Color.white.opacity(0.35) : Color.clear, lineWidth: 1)
-                        )
-                }
-                Text("m")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.secondary)
-
-                Button {
-                    savedDistance = distanceMeters
-                } label: {
-                    Image(systemName: distanceMeters == savedDistance ? "checkmark.circle.fill" : "checkmark.circle")
-                        .font(.caption)
-                        .foregroundColor(distanceMeters == savedDistance ? .green : .secondary)
-                }
-
-                Spacer()
-
                 Text("F\(extractor.currentFrameIndex + 1)/\(extractor.totalFrames)")
                     .font(.system(.caption, design: .monospaced))
                     .foregroundColor(.gray)
@@ -230,6 +207,8 @@ struct ReviewView: View {
                 Text(extractor.currentTimeString)
                     .font(.system(.caption, design: .monospaced))
                     .foregroundColor(.gray)
+
+                Spacer()
 
                 Text("\(Int(delivery.fps))fps")
                     .font(.system(.caption, design: .monospaced))
@@ -264,14 +243,13 @@ struct ReviewView: View {
             .foregroundColor(.white)
             .padding(.horizontal)
 
-            markerControls
+            editorControls
 
             if markers.isComplete {
                 speedResultView
             }
 
             Button {
-                dismissDistanceEditor()
                 persistCurrentSelection()
                 onDismiss()
             } label: {
@@ -280,9 +258,10 @@ struct ReviewView: View {
                     .foregroundColor(.black)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
-                    .background(Color(red: 0, green: 0.427, blue: 0.467))
+                    .background(Color(red: 0, green: 0.427, blue: 0.467).opacity(canFinishReview ? 1 : 0.5))
                     .cornerRadius(10)
             }
+            .disabled(!canFinishReview)
             .padding(.horizontal)
             .padding(.bottom, 12)
         }
@@ -290,27 +269,55 @@ struct ReviewView: View {
         .background(.ultraThinMaterial)
     }
 
-    private var markerControls: some View {
+    private var editorControls: some View {
         VStack(spacing: 10) {
             HStack(spacing: 8) {
-                markerJumpButton(title: markers.releaseFrame.map { "Release @ \($0 + 1)" } ?? "Release not set", color: .orange, frame: markers.releaseFrame, isActive: currentTarget == .release)
-                markerJumpButton(title: markers.arrivalFrame.map { "End @ \($0 + 1)" } ?? "End not set", color: .green, frame: markers.arrivalFrame, isActive: currentTarget == .arrival)
+                editorChip(
+                    title: markers.releaseFrame.map { "Release \($0 + 1)" } ?? "Release",
+                    color: .orange,
+                    isActive: currentEditor == .release,
+                    enabled: true
+                ) {
+                    selectEditor(.release)
+                }
+
+                editorChip(
+                    title: markers.arrivalFrame.map { "End \($0 + 1)" } ?? "End",
+                    color: .green,
+                    isActive: currentEditor == .end,
+                    enabled: markers.releaseFrame != nil
+                ) {
+                    selectEditor(.end)
+                }
+
+                editorChip(
+                    title: "\(distanceText)m",
+                    color: Color(red: 0, green: 0.427, blue: 0.467),
+                    isActive: currentEditor == .distance,
+                    enabled: markers.isComplete
+                ) {
+                    selectEditor(.distance)
+                }
 
                 if markers.releaseFrame != nil {
                     Menu {
-                        Button("Adjust Release") {
-                            selectTarget(.release)
+                        if let releaseFrame = markers.releaseFrame {
+                            Button("Go to Release") {
+                                extractor.seekToFrame(releaseFrame)
+                                selectEditor(.release)
+                            }
                         }
 
-                        if markers.releaseFrame != nil {
-                            Button(markers.arrivalFrame == nil ? "Set End" : "Adjust End") {
-                                selectTarget(.arrival)
+                        if let endFrame = markers.arrivalFrame {
+                            Button("Go to End") {
+                                extractor.seekToFrame(endFrame)
+                                selectEditor(.end)
                             }
                         }
 
                         if markers.arrivalFrame != nil {
                             Button("Clear End", role: .destructive) {
-                                clearArrival()
+                                clearEnd()
                             }
                         }
 
@@ -329,45 +336,34 @@ struct ReviewView: View {
             }
             .padding(.horizontal)
 
-            Text(markerMessage ?? markerHint)
+            Text(markerMessage ?? helperText)
                 .font(.system(size: 12))
                 .foregroundColor(markerMessage == nil ? .secondary : .orange)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal)
 
-            if let title = primaryActionTitle {
-                actionButton(title, color: primaryActionColor, disabled: !canApplyCurrentTarget) {
-                    applyCurrentTarget()
-                }
+            Button {
+                applyCurrentEditor()
+            } label: {
+                Text(primaryActionTitle)
+                    .font(.headline)
+                    .foregroundColor(.black)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(currentEditor.color.opacity(canApplyCurrentEditor ? 1 : 0.5))
+                    .cornerRadius(10)
             }
+            .disabled(!canApplyCurrentEditor)
+            .padding(.horizontal)
         }
     }
 
     private var distanceEditor: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Distance to impact")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(.white)
-
-            HStack(alignment: .center, spacing: 10) {
-                TextField("18.90", text: Binding(
-                    get: { distanceText },
-                    set: { applyDistanceInput($0) }
-                ))
-                    .font(.system(size: 28, weight: .bold, design: .monospaced))
+            HStack {
+                Text("Distance")
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(.white)
-                    .keyboardType(.numberPad)
-                    .focused($distanceFieldFocused)
-                    .frame(width: 150)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
-                    .background(Color.white.opacity(0.12))
-                    .cornerRadius(12)
-
-                Text("m")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.secondary)
 
                 Spacer()
 
@@ -375,13 +371,23 @@ struct ReviewView: View {
                     dismissDistanceEditor()
                 } label: {
                     Text("Done")
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.system(size: 15, weight: .bold))
                         .foregroundColor(.black)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
                         .background(Color.white)
-                        .cornerRadius(12)
+                        .cornerRadius(10)
                 }
+            }
+
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(distanceText)
+                    .font(.system(size: 34, weight: .bold, design: .monospaced))
+                    .foregroundColor(.white)
+                Text("m")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.secondary)
+                Spacer()
             }
 
             HStack(spacing: 10) {
@@ -398,9 +404,35 @@ struct ReviewView: View {
 
                 Spacer()
 
-                Text("4 digits only. Dot is inserted automatically.")
+                Text("4 digits. Format is xy.ab")
                     .font(.system(size: 12))
                     .foregroundColor(.secondary)
+            }
+
+            VStack(spacing: 10) {
+                ForEach([["1", "2", "3"], ["4", "5", "6"], ["7", "8", "9"]], id: \.self) { row in
+                    HStack(spacing: 10) {
+                        ForEach(row, id: \.self) { digit in
+                            keypadButton(title: digit) {
+                                appendDistanceDigit(digit)
+                            }
+                        }
+                    }
+                }
+
+                HStack(spacing: 10) {
+                    Color.clear
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 48)
+
+                    keypadButton(title: "0") {
+                        appendDistanceDigit("0")
+                    }
+
+                    keypadButton(systemName: "delete.left.fill") {
+                        deleteDistanceDigit()
+                    }
+                }
             }
         }
         .padding(16)
@@ -412,11 +444,6 @@ struct ReviewView: View {
         )
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .onAppear {
-            DispatchQueue.main.async {
-                distanceFieldFocused = true
-            }
-        }
     }
 
     private static let targetKMH: Double = 120.0
@@ -429,12 +456,12 @@ struct ReviewView: View {
 
     private var speedResultView: some View {
         VStack(spacing: 8) {
-            if let kmh = speedKMH, let cat = category {
+            if let kmh = speedKMH, let category = category {
                 HStack(spacing: 16) {
                     VStack(spacing: 2) {
                         Text(String(format: "%.1f", kmh))
                             .font(.system(size: 32, weight: .bold, design: .monospaced))
-                            .foregroundColor(cat.color)
+                            .foregroundColor(category.color)
                         if let error = speedErrorKMH {
                             Text("±\(String(format: "%.1f", error)) km/h")
                                 .font(.system(size: 11, weight: .semibold, design: .monospaced))
@@ -448,15 +475,16 @@ struct ReviewView: View {
                     VStack(spacing: 2) {
                         Text(String(format: "%.1f", speedMPH ?? 0))
                             .font(.system(size: 20, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.white)
                         Text("mph")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
 
                     VStack(spacing: 2) {
-                        Text(cat.rawValue)
+                        Text(category.rawValue)
                             .font(.system(size: 14, weight: .bold))
-                            .foregroundColor(cat.color)
+                            .foregroundColor(category.color)
                         Text("\(frameDiff ?? 0) frames")
                             .font(.system(size: 10, design: .monospaced))
                             .foregroundColor(.secondary)
@@ -467,7 +495,7 @@ struct ReviewView: View {
                 }
                 .padding(.vertical, 10)
                 .padding(.horizontal)
-                .background(cat.color.opacity(0.1))
+                .background(category.color.opacity(0.1))
                 .cornerRadius(12)
 
                 if let target = targetFrames, let diff = frameDiff {
@@ -490,6 +518,17 @@ struct ReviewView: View {
                     }
                     .padding(.horizontal)
                 }
+
+                VStack(spacing: 4) {
+                    Text("Distance \(distanceText)m")
+                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                        .foregroundColor(.secondary)
+                    if let releaseFrame = markers.releaseFrame, let endFrame = markers.arrivalFrame {
+                        Text("Release \(releaseFrame + 1)  End \(endFrame + 1)")
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundColor(.secondary)
+                    }
+                }
             }
         }
     }
@@ -504,71 +543,101 @@ struct ReviewView: View {
             .cornerRadius(4)
     }
 
-    private func markerJumpButton(title: String, color: Color, frame: Int?, isActive: Bool) -> some View {
-        Button {
-            if let frame {
-                extractor.seekToFrame(frame)
-            }
-        } label: {
+    private func editorChip(title: String, color: Color, isActive: Bool, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
             Text(title)
                 .font(.system(size: 11, weight: .bold, design: .monospaced))
-                .foregroundColor(frame == nil ? .secondary : .black)
+                .foregroundColor(enabled ? (isActive ? .black : .white) : .secondary)
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 6)
-                .background(frame == nil ? Color.white.opacity(0.08) : color)
+                .background(enabled ? (isActive ? color : Color.white.opacity(0.08)) : Color.white.opacity(0.04))
                 .cornerRadius(6)
                 .overlay(
                     RoundedRectangle(cornerRadius: 6)
-                        .stroke(isActive ? Color.white.opacity(0.5) : Color.clear, lineWidth: 1)
+                        .stroke(isActive ? color.opacity(0.95) : color.opacity(enabled ? 0.35 : 0.15), lineWidth: 1)
                 )
         }
         .buttonStyle(.plain)
-        .disabled(frame == nil)
-        .opacity(frame == nil ? 0.7 : 1.0)
+        .disabled(!enabled)
+        .opacity(enabled ? 1.0 : 0.6)
     }
 
-    private func actionButton(_ title: String, color: Color, disabled: Bool = false, action: @escaping () -> Void) -> some View {
+    private func keypadButton(title: String? = nil, systemName: String? = nil, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(title)
-                .font(.headline)
-                .foregroundColor(.black)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(color.opacity(disabled ? 0.5 : 1.0))
-                .cornerRadius(10)
-        }
-        .disabled(disabled)
-        .padding(.horizontal)
-    }
-
-    private func selectTarget(_ target: MarkerTarget) {
-        dismissDistanceEditor()
-        markerMessage = nil
-        activeTarget = target
-    }
-
-    private func applyCurrentTarget() {
-        guard let currentTarget else { return }
-        markerMessage = nil
-
-        switch currentTarget {
-        case .release:
-            let previousArrival = markers.arrivalFrame
-            markers.setRelease(extractor.currentFrameIndex)
-            if previousArrival != nil, markers.arrivalFrame == nil {
-                markerMessage = "End cleared because it must stay after release."
-                activeTarget = .arrival
-            } else {
-                activeTarget = markers.arrivalFrame == nil ? .arrival : nil
+            Group {
+                if let title {
+                    Text(title)
+                        .font(.system(size: 22, weight: .bold, design: .monospaced))
+                } else if let systemName {
+                    Image(systemName: systemName)
+                        .font(.system(size: 18, weight: .bold))
+                }
             }
-        case .arrival:
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: 48)
+            .background(Color.white.opacity(0.08))
+            .cornerRadius(12)
+        }
+    }
+
+    private func selectEditor(_ editor: EditorTarget) {
+        markerMessage = nil
+        activeEditor = editor
+
+        switch editor {
+        case .release:
+            dismissDistanceEditor()
+            if let releaseFrame = markers.releaseFrame {
+                extractor.seekToFrame(releaseFrame)
+            }
+        case .end:
+            dismissDistanceEditor()
+            if let endFrame = markers.arrivalFrame {
+                extractor.seekToFrame(endFrame)
+            } else if let releaseFrame = markers.releaseFrame {
+                extractor.seekToFrame(min(releaseFrame + 1, extractor.totalFrames - 1))
+            }
+        case .distance:
+            if markers.isComplete {
+                presentDistanceEditor()
+            }
+        }
+    }
+
+    private func applyCurrentEditor() {
+        markerMessage = nil
+
+        switch currentEditor {
+        case .release:
+            let previousEnd = markers.arrivalFrame
+            markers.setRelease(extractor.currentFrameIndex)
+            if previousEnd != nil, markers.arrivalFrame == nil {
+                markerMessage = "End cleared because it must stay after release."
+                activeEditor = .end
+            } else if markers.arrivalFrame == nil {
+                activeEditor = .end
+            } else {
+                activeEditor = .release
+            }
+            dismissDistanceEditor()
+
+        case .end:
+            let wasUnset = markers.arrivalFrame == nil
             guard markers.setArrival(extractor.currentFrameIndex) else {
                 markerMessage = "End must be after the release frame."
                 return
             }
-            activeTarget = nil
-            presentDistanceEditor()
+            activeEditor = wasUnset ? .distance : .end
+            if wasUnset {
+                presentDistanceEditor()
+            }
+
+        case .distance:
+            if markers.isComplete {
+                presentDistanceEditor()
+            }
         }
 
         persistCurrentSelection()
@@ -577,14 +646,42 @@ struct ReviewView: View {
     private func clearRelease() {
         markers.clearRelease()
         markerMessage = nil
-        activeTarget = .release
+        activeEditor = .release
+        dismissDistanceEditor()
         persistCurrentSelection()
     }
 
-    private func clearArrival() {
+    private func clearEnd() {
         markers.clearArrival()
         markerMessage = nil
-        activeTarget = .arrival
+        activeEditor = .end
+        dismissDistanceEditor()
+        persistCurrentSelection()
+    }
+
+    private func presentDistanceEditor() {
+        showDistanceEditor = true
+    }
+
+    private func dismissDistanceEditor() {
+        showDistanceEditor = false
+    }
+
+    private func appendDistanceDigit(_ digit: String) {
+        guard distanceDigits.count < 4 else { return }
+        distanceDigits.append(digit)
+        syncDistanceFromDigits()
+    }
+
+    private func deleteDistanceDigit() {
+        guard !distanceDigits.isEmpty else { return }
+        distanceDigits.removeLast()
+        syncDistanceFromDigits()
+    }
+
+    private func syncDistanceFromDigits() {
+        let padded = Self.paddedDigits(from: distanceDigits)
+        distanceMeters = (Double(padded) ?? 0) / 100
         persistCurrentSelection()
     }
 
@@ -592,38 +689,17 @@ struct ReviewView: View {
         onSave(markers, distanceMeters)
     }
 
-    private func presentDistanceEditor() {
-        showDistanceEditor = true
-        DispatchQueue.main.async {
-            distanceFieldFocused = true
-        }
+    private static func digitsText(for distance: Double) -> String {
+        String(format: "%04d", max(0, min(Int((distance * 100).rounded()), 9999)))
     }
 
-    private func dismissDistanceEditor() {
-        distanceFieldFocused = false
-        showDistanceEditor = false
-    }
-
-    private func applyDistanceInput(_ rawValue: String) {
-        let digits = String(rawValue.filter(\.isNumber).prefix(4))
-        let formatted = Self.formattedDistanceText(fromDigits: digits)
-        if distanceText != formatted {
-            distanceText = formatted
-        }
-        if let value = Double(formatted), value > 0 {
-            distanceMeters = value
-            persistCurrentSelection()
-        }
-    }
-
-    private static func formattedDistanceText(for distance: Double) -> String {
-        let scaled = max(0, min(Int((distance * 100).rounded()), 9999))
-        return formattedDistanceText(fromDigits: String(format: "%04d", scaled))
+    private static func paddedDigits(from digits: String) -> String {
+        let sanitized = String(digits.filter(\.isNumber).prefix(4))
+        return String(repeating: "0", count: max(0, 4 - sanitized.count)) + sanitized
     }
 
     private static func formattedDistanceText(fromDigits digits: String) -> String {
-        let sanitized = String(digits.filter(\.isNumber).prefix(4))
-        let padded = String(repeating: "0", count: max(0, 4 - sanitized.count)) + sanitized
+        let padded = paddedDigits(from: digits)
         let whole = String(padded.prefix(2))
         let fraction = String(padded.suffix(2))
         return "\(whole).\(fraction)"
