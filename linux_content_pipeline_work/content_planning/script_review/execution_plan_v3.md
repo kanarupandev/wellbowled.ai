@@ -187,7 +187,7 @@ Execute the code changes identified in Phase 2. Strictly in this order:
    - Draw arm path (shoulder-elbow-wrist) in white.
    - Draw spine line (mid-shoulder to mid-hip) in muted warm grey — release frame only.
    - Skip numeric pill, phase pill, and legend.
-3. Add `render_pulse_glow()` function for the attention mark effect on the side-by-side.
+3. Add `render_pulse_glow()` function — responsible for the VISUAL STYLE of the attention mark only (glow colour, radius, opacity, which skeleton lines to emphasise). This function renders a single frame with the glow applied. It does NOT control timing or animation.
 
 ### Step 3.3: Build compose_frame_battle() in video_composer.py
 
@@ -199,7 +199,12 @@ New composition function for the Frame Battle format. Sub-functions needed:
 4. `_make_text_card()` — text on dark background (for Beat 4 payoff and Beat 5 close)
 5. `_apply_ken_burns()` — subtle zoom/pan drift on stills
 6. `_apply_colour_grade()` — desaturate, lift blacks, vignette (unifies source clips)
-7. `compose_frame_battle()` — orchestrates all beats into the final video
+7. `_apply_pulse_timing()` — controls WHEN and HOW LONG the pulse/glow appears during the side-by-side hold. Calls `render_pulse_glow()` from the renderer for the visual, but owns the timing: fade-in duration, hold duration, fade-out, and which output frames get the glow applied. One pulse only, not repeating.
+8. `compose_frame_battle()` — orchestrates all beats into the final video
+
+**Pulse/glow responsibility split:**
+- `overlay_renderer.py` → `render_pulse_glow()` owns the **look**: which lines glow, what colour, what radius, what opacity for a single frame.
+- `video_composer.py` → `_apply_pulse_timing()` owns the **behaviour**: when the glow starts, how many frames it spans, fade-in/out curve. It calls the renderer per-frame with an opacity parameter to create the animation.
 
 Typography:
 - One sans-serif font (LiberationSans already available in the font loader).
