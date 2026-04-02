@@ -31,7 +31,7 @@ class FrameExtractor: ObservableObject {
     func loadFirstFrame() { seekToFrame(0) }
 
     func seekToFrame(_ index: Int) {
-        let clamped = max(0, min(index, totalFrames - 1))
+        let clamped = SpeedCalc.clampedIndex(index, total: totalFrames)
         currentFrameIndex = clamped
         let time = CMTime(value: CMTimeValue(clamped), timescale: CMTimeScale(fps))
         if let cg = try? generator?.copyCGImage(at: time, actualTime: nil) {
@@ -43,6 +43,6 @@ class FrameExtractor: ObservableObject {
     func previousFrame() { seekToFrame(currentFrameIndex - 1) }
     func advance(by n: Int) { seekToFrame(currentFrameIndex + n) }
 
-    var currentTimeSeconds: Double { Double(currentFrameIndex) / fps }
+    var currentTimeSeconds: Double { SpeedCalc.timeSeconds(frame: currentFrameIndex, fps: fps) }
     var currentTimeString: String { String(format: "%.3fs", currentTimeSeconds) }
 }

@@ -29,16 +29,15 @@ struct ReviewView: View {
 
     private enum Step { case scrubbing, pickArrival, done }
 
-    // Speed computed from local state
+    // Speed computed from local state using shared SpeedCalc
     private var speedKMH: Double? {
-        guard let r = releaseFrame, let a = arrivalFrame, a > r else { return nil }
-        let seconds = Double(a - r) / delivery.fps
-        return (Delivery.pitchMeters / seconds) * 3.6
+        guard let r = releaseFrame, let a = arrivalFrame else { return nil }
+        return SpeedCalc.kmh(releaseFrame: r, arrivalFrame: a, fps: delivery.fps)
     }
 
     private var speedMPH: Double? {
         guard let kmh = speedKMH else { return nil }
-        return kmh / 1.609
+        return SpeedCalc.mph(kmh: kmh)
     }
 
     private var category: SpeedCategory? {

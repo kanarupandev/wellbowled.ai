@@ -14,6 +14,7 @@ targets:
         excludes:
           - project.yml
           - "*.xcodeproj/**"
+          - Tests/**
     settings:
       base:
         DEVELOPMENT_TEAM: 8WBHQ6NP68
@@ -24,9 +25,22 @@ targets:
         MARKETING_VERSION: "1.0"
         CURRENT_PROJECT_VERSION: "1"
         INFOPLIST_KEY_NSCameraUsageDescription: "wellBowled needs camera access to record bowling deliveries at high frame rate for speed analysis."
+        INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "wellBowled needs photo library access to import bowling videos for analysis."
         INFOPLIST_KEY_UILaunchScreen_Generation: true
         INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait"
         INFOPLIST_KEY_UIStatusBarStyle: "UIStatusBarStyleLightContent"
         SWIFT_VERSION: "5.9"
         TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: true
+
+  wellBowledTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: wellBowled
+    settings:
+      base:
+        SWIFT_VERSION: "5.9"
         GENERATE_INFOPLIST_FILE: true

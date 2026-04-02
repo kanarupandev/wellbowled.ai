@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFoundation
 
 // MARK: - Speed Category
 
@@ -33,6 +34,28 @@ enum SpeedCategory: String {
     }
 }
 
+// MARK: - Speed Calculation (pure, testable)
+
+enum SpeedCalc {
+    static let pitchMeters: Double = 20.12
+
+    static func kmh(releaseFrame: Int, arrivalFrame: Int, fps: Double) -> Double? {
+        guard arrivalFrame > releaseFrame, fps > 0 else { return nil }
+        let seconds = Double(arrivalFrame - releaseFrame) / fps
+        return (pitchMeters / seconds) * 3.6
+    }
+
+    static func mph(kmh: Double) -> Double { kmh / 1.609 }
+
+    static func clampedIndex(_ index: Int, total: Int) -> Int {
+        max(0, min(index, total - 1))
+    }
+
+    static func timeSeconds(frame: Int, fps: Double) -> Double {
+        Double(frame) / fps
+    }
+}
+
 // MARK: - Delivery
 
 struct Delivery: Identifiable {
@@ -44,18 +67,14 @@ struct Delivery: Identifiable {
     var releaseFrame: Int?
     var arrivalFrame: Int?
 
-    // Pitch distance: stump-to-stump = 20.12m
-    static let pitchMeters: Double = 20.12
-
     var speedKMH: Double? {
-        guard let r = releaseFrame, let a = arrivalFrame, a > r else { return nil }
-        let seconds = Double(a - r) / fps
-        return (Self.pitchMeters / seconds) * 3.6
+        guard let r = releaseFrame, let a = arrivalFrame else { return nil }
+        return SpeedCalc.kmh(releaseFrame: r, arrivalFrame: a, fps: fps)
     }
 
     var speedMPH: Double? {
         guard let kmh = speedKMH else { return nil }
-        return kmh / 1.609
+        return SpeedCalc.mph(kmh: kmh)
     }
 
     var category: SpeedCategory? {
@@ -66,5 +85,15 @@ struct Delivery: Identifiable {
     var frameDiff: Int? {
         guard let r = releaseFrame, let a = arrivalFrame else { return nil }
         return a - r
+    }
+
+    /// Create a Delivery from any video URL by loading metadata from the asset
+    static func from(url: URL) async -> Delivery? {
+        let asset = AVAsset(url: url)
+        guard let track = try? await asset.loadTracks(withMediaType: .video).first else { return nil }
+        let dur = (try? await asset.load(.duration))?.seconds ?? 0
+        let fr = Double((try? await track.load(.nominalFrameRate)) ?? 120)
+        let frames = Int(dur * fr)
+        return Delivery(videoURL: url, fps: fr, duration: dur, totalFrames: frames)
     }
 }
