@@ -5,6 +5,9 @@ class CameraManager: NSObject, ObservableObject {
     let captureSession = AVCaptureSession()
     private var movieOutput = AVCaptureMovieFileOutput()
     private var recordingCompletion: ((URL, Double, Double, Int) -> Void)?
+    private var maxDurationTimer: Timer?
+
+    static let maxRecordingSeconds: Double = 10.0
 
     @Published var isRecording = false
     @Published var achievedFPS: Double = 0
@@ -28,13 +31,6 @@ class CameraManager: NSObject, ObservableObject {
         }
 
         if captureSession.canAddInput(input) { captureSession.addInput(input) }
-
-        if let mic = AVCaptureDevice.default(for: .audio),
-           let audioIn = try? AVCaptureDeviceInput(device: mic),
-           captureSession.canAddInput(audioIn) {
-            captureSession.addInput(audioIn)
-        }
-
         if captureSession.canAddOutput(movieOutput) { captureSession.addOutput(movieOutput) }
 
         selectHighestFrameRate(device: device)
@@ -43,7 +39,6 @@ class CameraManager: NSObject, ObservableObject {
     }
 
     private func selectHighestFrameRate(device: AVCaptureDevice) {
-        // Find highest FPS format at 1080p+
         var bestFormat: AVCaptureDevice.Format?
         var bestFPS: Float64 = 0
 
@@ -98,11 +93,18 @@ class CameraManager: NSObject, ObservableObject {
         try? FileManager.default.removeItem(at: url)
         recordingCompletion = completion
         movieOutput.startRecording(to: url, recordingDelegate: self)
-        DispatchQueue.main.async { self.isRecording = true }
+        DispatchQueue.main.async {
+            self.isRecording = true
+            self.maxDurationTimer = Timer.scheduledTimer(withTimeInterval: Self.maxRecordingSeconds, repeats: false) { [weak self] _ in
+                self?.stopRecording()
+            }
+        }
     }
 
     func stopRecording() {
         guard isRecording else { return }
+        maxDurationTimer?.invalidate()
+        maxDurationTimer = nil
         movieOutput.stopRecording()
     }
 }

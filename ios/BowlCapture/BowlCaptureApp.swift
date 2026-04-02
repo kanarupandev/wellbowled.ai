@@ -4,10 +4,8 @@ import SwiftUI
 struct BowlCaptureApp: App {
     var body: some Scene {
         WindowGroup {
-            NavigationStack {
-                SessionSetupView()
-            }
-            .preferredColorScheme(.dark)
+            CaptureView()
+                .preferredColorScheme(.dark)
         }
     }
 }
