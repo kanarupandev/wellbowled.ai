@@ -42,7 +42,7 @@ enum SpeedCategory: String {
 
 enum SpeedCalc {
     /// Bowling crease to batting stumps (58 ft / 17.68m)
-    static let defaultDistanceMeters: Double = 17.68
+    static let defaultDistanceMeters: Double = 18.90
 
     static func kmh(releaseFrame: Int, arrivalFrame: Int, fps: Double, distanceMeters: Double) -> Double? {
         guard arrivalFrame > releaseFrame, fps > 0, distanceMeters > 0 else { return nil }
