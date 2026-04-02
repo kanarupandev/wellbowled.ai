@@ -189,10 +189,20 @@ struct ReviewView: View {
 
     // MARK: - Speed Result
 
+    // Target speed baked in
+    private static let targetKMH: Double = 120.0
+
+    private var targetFrames: Int? {
+        guard delivery.fps > 0 else { return nil }
+        let seconds = SpeedCalc.pitchMeters / (Self.targetKMH / 3.6)
+        return Int(ceil(seconds * delivery.fps))
+    }
+
     private var speedResultView: some View {
         VStack(spacing: 8) {
             if let kmh = speedKMH, let cat = category {
-                HStack(spacing: 20) {
+                // Main speed display
+                HStack(spacing: 16) {
                     VStack(spacing: 2) {
                         Text(String(format: "%.1f", kmh))
                             .font(.system(size: 32, weight: .bold, design: .monospaced))
@@ -214,16 +224,42 @@ struct ReviewView: View {
                         Text(cat.rawValue)
                             .font(.system(size: 14, weight: .bold))
                             .foregroundColor(cat.color)
-                        Text("\(frameDiff ?? 0)f @ \(Int(delivery.fps))fps")
+                        Text("\(frameDiff ?? 0) frames")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.secondary)
+                        Text("\(Int(delivery.fps)) fps")
                             .font(.system(size: 10, design: .monospaced))
                             .foregroundColor(.secondary)
                     }
                 }
-                .padding(.vertical, 12)
+                .padding(.vertical, 10)
                 .padding(.horizontal)
                 .background(cat.color.opacity(0.1))
                 .cornerRadius(12)
 
+                // Target comparison
+                if let target = targetFrames, let diff = frameDiff {
+                    HStack(spacing: 6) {
+                        Image(systemName: diff <= target ? "checkmark.circle.fill" : "arrow.down.circle.fill")
+                            .foregroundColor(diff <= target ? .green : .orange)
+                            .font(.caption)
+                        Text("Target: \(target) frames (\(Int(Self.targetKMH)) km/h)")
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundColor(.secondary)
+                        if diff > target {
+                            Text("need \(diff - target) fewer")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(.orange)
+                        } else {
+                            Text("hit!")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(.green)
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+
+                // Frame markers + redo
                 HStack(spacing: 12) {
                     Button { extractor.seekToFrame(releaseFrame!) } label: {
                         badge("Release @ \(releaseFrame! + 1)", color: .orange)

@@ -4,7 +4,7 @@ import SwiftUI
 struct wellBowledApp: App {
     var body: some Scene {
         WindowGroup {
-            CaptureView()
+            HomeView()
                 .preferredColorScheme(.dark)
         }
     }
