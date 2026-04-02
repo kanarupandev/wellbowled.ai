@@ -344,7 +344,7 @@ Phase 4: Asset render
   │  4.2 colour grading (BEFORE overlays)
   │  4.3 skeleton overlays (on graded frames)
   │  4.4 compose video
-  │  4.5 sound (optional)
+  │  4.5 silent v1 / audio deferred
   │
   ▼
 Phase 5: QC
