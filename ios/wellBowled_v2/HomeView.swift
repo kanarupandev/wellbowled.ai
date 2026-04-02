@@ -64,9 +64,10 @@ struct HomeView: View {
             if let idx = reviewIndex, idx < deliveries.count {
                 ReviewView(
                     delivery: deliveries[idx],
-                    onSave: { release, arrival in
+                    onSave: { release, arrival, distance in
                         deliveries[idx].releaseFrame = release
                         deliveries[idx].arrivalFrame = arrival
+                        deliveries[idx].distanceMeters = distance
                     },
                     onDismiss: { showReview = false }
                 )

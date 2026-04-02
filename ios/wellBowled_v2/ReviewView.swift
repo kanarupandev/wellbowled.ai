@@ -2,14 +2,17 @@ import SwiftUI
 
 struct ReviewView: View {
     let delivery: Delivery
-    let onSave: (Int, Int) -> Void   // (releaseFrame, arrivalFrame)
+    let onSave: (Int, Int, Double) -> Void   // (releaseFrame, arrivalFrame, distanceMeters)
     let onDismiss: () -> Void
 
     @StateObject private var extractor: FrameExtractor
     @State private var releaseFrame: Int?
     @State private var arrivalFrame: Int?
+    @State private var distanceMeters: Double
+    @State private var distanceText: String
+    @AppStorage("savedDistance") private var savedDistance: Double = SpeedCalc.defaultDistanceMeters
 
-    init(delivery: Delivery, onSave: @escaping (Int, Int) -> Void, onDismiss: @escaping () -> Void) {
+    init(delivery: Delivery, onSave: @escaping (Int, Int, Double) -> Void, onDismiss: @escaping () -> Void) {
         self.delivery = delivery
         self.onSave = onSave
         self.onDismiss = onDismiss
@@ -19,6 +22,11 @@ struct ReviewView: View {
         ))
         self._releaseFrame = State(initialValue: delivery.releaseFrame)
         self._arrivalFrame = State(initialValue: delivery.arrivalFrame)
+        // Use saved distance for new deliveries, keep existing for re-reviews
+        let dist = delivery.releaseFrame != nil ? delivery.distanceMeters :
+            UserDefaults.standard.double(forKey: "savedDistance").nonZero ?? SpeedCalc.defaultDistanceMeters
+        self._distanceMeters = State(initialValue: dist)
+        self._distanceText = State(initialValue: String(format: "%.2f", dist))
     }
 
     private var step: Step {
@@ -32,7 +40,7 @@ struct ReviewView: View {
     // Speed computed from local state using shared SpeedCalc
     private var speedKMH: Double? {
         guard let r = releaseFrame, let a = arrivalFrame else { return nil }
-        return SpeedCalc.kmh(releaseFrame: r, arrivalFrame: a, fps: delivery.fps)
+        return SpeedCalc.kmh(releaseFrame: r, arrivalFrame: a, fps: delivery.fps, distanceMeters: distanceMeters)
     }
 
     private var speedMPH: Double? {
@@ -93,17 +101,52 @@ struct ReviewView: View {
 
     private var controlsView: some View {
         VStack(spacing: 10) {
-            // Frame info
-            HStack {
-                Text("Frame \(extractor.currentFrameIndex + 1) / \(extractor.totalFrames)")
+            // Distance + frame info
+            HStack(spacing: 8) {
+                Image(systemName: "ruler")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                TextField("17.68", text: $distanceText)
+                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                    .foregroundColor(.white)
+                    .keyboardType(.decimalPad)
+                    .frame(width: 54)
+                    .multilineTextAlignment(.center)
+                    .padding(.vertical, 4)
+                    .background(Color.white.opacity(0.1))
+                    .cornerRadius(6)
+                    .onChange(of: distanceText) { newVal in
+                        if let d = Double(newVal), d > 0 {
+                            distanceMeters = d
+                        }
+                    }
+                Text("m")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+
+                // Save as default button
+                Button {
+                    savedDistance = distanceMeters
+                } label: {
+                    Image(systemName: distanceMeters == savedDistance ? "checkmark.circle.fill" : "checkmark.circle")
+                        .font(.caption)
+                        .foregroundColor(distanceMeters == savedDistance ? .green : .secondary)
+                }
+
                 Spacer()
+
+                Text("F\(extractor.currentFrameIndex + 1)/\(extractor.totalFrames)")
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundColor(.gray)
+
                 Text(extractor.currentTimeString)
-                Spacer()
-                Text("\(Int(delivery.fps)) fps")
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundColor(.gray)
+
+                Text("\(Int(delivery.fps))fps")
+                    .font(.system(.caption, design: .monospaced))
                     .foregroundColor(.secondary)
             }
-            .font(.system(.caption, design: .monospaced))
-            .foregroundColor(.gray)
             .padding(.horizontal)
 
             // Scrubber
@@ -159,7 +202,7 @@ struct ReviewView: View {
                         arrivalFrame = extractor.currentFrameIndex
                         // Save back to parent
                         if let r = releaseFrame, let a = arrivalFrame {
-                            onSave(r, a)
+                            onSave(r, a, distanceMeters)
                         }
                     }
                 }
@@ -193,8 +236,8 @@ struct ReviewView: View {
     private static let targetKMH: Double = 120.0
 
     private var targetFrames: Int? {
-        guard delivery.fps > 0 else { return nil }
-        let seconds = SpeedCalc.pitchMeters / (Self.targetKMH / 3.6)
+        guard delivery.fps > 0, distanceMeters > 0 else { return nil }
+        let seconds = distanceMeters / (Self.targetKMH / 3.6)
         return Int(ceil(seconds * delivery.fps))
     }
 

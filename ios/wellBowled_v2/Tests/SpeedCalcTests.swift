@@ -3,59 +3,75 @@ import XCTest
 
 final class SpeedCalcTests: XCTestCase {
 
+    private let dist = SpeedCalc.defaultDistanceMeters  // 17.68m
+
     // MARK: - Speed KMH
 
     func test_typicalDelivery_120fps() {
-        // 60 frames at 120fps = 0.5s transit = 20.12m / 0.5s = 40.24 m/s = 144.86 km/h
-        let speed = SpeedCalc.kmh(releaseFrame: 0, arrivalFrame: 60, fps: 120)
+        // 60 frames at 120fps = 0.5s transit = 17.68m / 0.5s * 3.6 = 127.30 km/h
+        let speed = SpeedCalc.kmh(releaseFrame: 0, arrivalFrame: 60, fps: 120, distanceMeters: dist)
         XCTAssertNotNil(speed)
-        XCTAssertEqual(speed!, 144.864, accuracy: 0.01)
+        XCTAssertEqual(speed!, 127.296, accuracy: 0.01)
     }
 
     func test_expressDelivery_120fps() {
-        // 45 frames at 120fps = 0.375s = 20.12/0.375*3.6 = 193.15 km/h
-        let speed = SpeedCalc.kmh(releaseFrame: 10, arrivalFrame: 55, fps: 120)
+        // 45 frames at 120fps = 0.375s = 17.68/0.375*3.6 = 169.73 km/h
+        let speed = SpeedCalc.kmh(releaseFrame: 10, arrivalFrame: 55, fps: 120, distanceMeters: dist)
         XCTAssertNotNil(speed)
-        XCTAssertEqual(speed!, 193.152, accuracy: 0.01)
+        XCTAssertEqual(speed!, 169.728, accuracy: 0.01)
     }
 
     func test_slowDelivery_120fps() {
-        // 100 frames at 120fps = 0.833s = 86.92 km/h
-        let speed = SpeedCalc.kmh(releaseFrame: 0, arrivalFrame: 100, fps: 120)
+        // 100 frames at 120fps = 0.833s = 76.38 km/h
+        let speed = SpeedCalc.kmh(releaseFrame: 0, arrivalFrame: 100, fps: 120, distanceMeters: dist)
         XCTAssertNotNil(speed)
-        XCTAssertEqual(speed!, 86.918, accuracy: 0.01)
+        XCTAssertEqual(speed!, 76.378, accuracy: 0.01)
     }
 
     func test_240fps_sameFrameDiff_differentSpeed() {
-        // 60 frames at 240fps = 0.25s = 289.73 km/h (double the 120fps result)
-        let speed120 = SpeedCalc.kmh(releaseFrame: 0, arrivalFrame: 60, fps: 120)!
-        let speed240 = SpeedCalc.kmh(releaseFrame: 0, arrivalFrame: 60, fps: 240)!
+        // 60 frames at 240fps = 0.25s vs 120fps = 0.5s -> double the speed
+        let speed120 = SpeedCalc.kmh(releaseFrame: 0, arrivalFrame: 60, fps: 120, distanceMeters: dist)!
+        let speed240 = SpeedCalc.kmh(releaseFrame: 0, arrivalFrame: 60, fps: 240, distanceMeters: dist)!
         XCTAssertEqual(speed240, speed120 * 2, accuracy: 0.01)
     }
 
     func test_240fps_typicalDelivery() {
-        // 120 frames at 240fps = 0.5s = 144.86 km/h (same as 60f@120fps)
-        let speed = SpeedCalc.kmh(releaseFrame: 0, arrivalFrame: 120, fps: 240)
+        // 120 frames at 240fps = 0.5s = same as 60f@120fps
+        let speed = SpeedCalc.kmh(releaseFrame: 0, arrivalFrame: 120, fps: 240, distanceMeters: dist)
+        XCTAssertEqual(speed!, 127.296, accuracy: 0.01)
+    }
+
+    func test_customDistance() {
+        // Full pitch stump-to-stump = 20.12m
+        let speed = SpeedCalc.kmh(releaseFrame: 0, arrivalFrame: 60, fps: 120, distanceMeters: 20.12)
         XCTAssertEqual(speed!, 144.864, accuracy: 0.01)
     }
 
     func test_returnsNil_whenArrivalBeforeRelease() {
-        XCTAssertNil(SpeedCalc.kmh(releaseFrame: 50, arrivalFrame: 30, fps: 120))
+        XCTAssertNil(SpeedCalc.kmh(releaseFrame: 50, arrivalFrame: 30, fps: 120, distanceMeters: dist))
     }
 
     func test_returnsNil_whenFramesEqual() {
-        XCTAssertNil(SpeedCalc.kmh(releaseFrame: 50, arrivalFrame: 50, fps: 120))
+        XCTAssertNil(SpeedCalc.kmh(releaseFrame: 50, arrivalFrame: 50, fps: 120, distanceMeters: dist))
     }
 
     func test_returnsNil_whenZeroFPS() {
-        XCTAssertNil(SpeedCalc.kmh(releaseFrame: 0, arrivalFrame: 60, fps: 0))
+        XCTAssertNil(SpeedCalc.kmh(releaseFrame: 0, arrivalFrame: 60, fps: 0, distanceMeters: dist))
+    }
+
+    func test_returnsNil_whenZeroDistance() {
+        XCTAssertNil(SpeedCalc.kmh(releaseFrame: 0, arrivalFrame: 60, fps: 120, distanceMeters: 0))
+    }
+
+    func test_returnsNil_whenNegativeDistance() {
+        XCTAssertNil(SpeedCalc.kmh(releaseFrame: 0, arrivalFrame: 60, fps: 120, distanceMeters: -5))
     }
 
     // MARK: - MPH conversion
 
     func test_mphConversion() {
-        let mph = SpeedCalc.mph(kmh: 144.864)
-        XCTAssertEqual(mph, 90.03, accuracy: 0.1)
+        let mph = SpeedCalc.mph(kmh: 127.296)
+        XCTAssertEqual(mph, 79.11, accuracy: 0.1)
     }
 
     // MARK: - Clamping

@@ -1,6 +1,10 @@
 import SwiftUI
 import AVFoundation
 
+extension Double {
+    var nonZero: Double? { self > 0 ? self : nil }
+}
+
 // MARK: - Speed Category
 
 enum SpeedCategory: String {
@@ -37,12 +41,13 @@ enum SpeedCategory: String {
 // MARK: - Speed Calculation (pure, testable)
 
 enum SpeedCalc {
-    static let pitchMeters: Double = 20.12
+    /// Bowling crease to batting stumps (58 ft / 17.68m)
+    static let defaultDistanceMeters: Double = 17.68
 
-    static func kmh(releaseFrame: Int, arrivalFrame: Int, fps: Double) -> Double? {
-        guard arrivalFrame > releaseFrame, fps > 0 else { return nil }
+    static func kmh(releaseFrame: Int, arrivalFrame: Int, fps: Double, distanceMeters: Double) -> Double? {
+        guard arrivalFrame > releaseFrame, fps > 0, distanceMeters > 0 else { return nil }
         let seconds = Double(arrivalFrame - releaseFrame) / fps
-        return (pitchMeters / seconds) * 3.6
+        return (distanceMeters / seconds) * 3.6
     }
 
     static func mph(kmh: Double) -> Double { kmh / 1.609 }
@@ -66,10 +71,11 @@ struct Delivery: Identifiable {
     let totalFrames: Int
     var releaseFrame: Int?
     var arrivalFrame: Int?
+    var distanceMeters: Double = SpeedCalc.defaultDistanceMeters
 
     var speedKMH: Double? {
         guard let r = releaseFrame, let a = arrivalFrame else { return nil }
-        return SpeedCalc.kmh(releaseFrame: r, arrivalFrame: a, fps: fps)
+        return SpeedCalc.kmh(releaseFrame: r, arrivalFrame: a, fps: fps, distanceMeters: distanceMeters)
     }
 
     var speedMPH: Double? {
@@ -87,7 +93,6 @@ struct Delivery: Identifiable {
         return a - r
     }
 
-    /// Create a Delivery from any video URL by loading metadata from the asset
     static func from(url: URL) async -> Delivery? {
         let asset = AVAsset(url: url)
         guard let track = try? await asset.loadTracks(withMediaType: .video).first else { return nil }
