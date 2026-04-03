@@ -727,10 +727,23 @@ private struct SessionDeliveryResultPage: View {
 
     @ViewBuilder
     private var saveButton: some View {
-        let status = viewModel.sessionVideoSaveStatus
-        Button {
-            liveViewLog.debug("Save button tapped: deliveryID=\(deliveryID.uuidString.prefix(8), privacy: .public), status=\(String(describing: status), privacy: .public)")
-            Task { await viewModel.saveLastSessionVideoToPhotos() }
+        let status = viewModel.clipSaveStatus
+        Menu {
+            Button {
+                liveViewLog.debug("Clip & Save tapped: deliveryID=\(deliveryID.uuidString.prefix(8), privacy: .public)")
+                Task { await viewModel.saveDeliveryClip(for: deliveryID) }
+            } label: {
+                Label("Clip & Save", systemImage: "scissors")
+            }
+            .disabled(status == .saving || status == .saved)
+
+            Button {
+                liveViewLog.debug("Save Full tapped: deliveryID=\(deliveryID.uuidString.prefix(8), privacy: .public)")
+                Task { await viewModel.saveFullSessionClip(for: deliveryID) }
+            } label: {
+                Label("Save Full Session", systemImage: "film")
+            }
+            .disabled(status == .saving || status == .saved)
         } label: {
             Group {
                 switch status {
@@ -740,8 +753,10 @@ private struct SessionDeliveryResultPage: View {
                     ProgressView().tint(.white).scaleEffect(0.7)
                 case .saved:
                     Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
                 case .failed:
                     Image(systemName: "exclamationmark.triangle")
+                        .foregroundColor(.orange)
                 }
             }
             .font(.system(size: 18, weight: .semibold))
@@ -749,7 +764,7 @@ private struct SessionDeliveryResultPage: View {
             .padding(10)
             .background(Circle().fill(Color.black.opacity(0.45)))
         }
-        .disabled(status == .saving || status == .saved)
+        .disabled(status == .saving)
     }
 
     @ViewBuilder

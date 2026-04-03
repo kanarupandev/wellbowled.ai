@@ -32,6 +32,7 @@ struct HomeView: View {
                             modeSelectionCard
                             startButton
                             recordingPickerButton
+                            clipsButton
 
                             if let recordingImportError {
                                 Text(recordingImportError)
@@ -249,6 +250,28 @@ struct HomeView: View {
             )
         }
         .disabled(isImportingRecording)
+    }
+
+    private var clipsButton: some View {
+        NavigationLink(destination: ClipsView()) {
+            HStack(spacing: 10) {
+                Image(systemName: "film.stack")
+                    .font(.headline)
+                Text("My Clips")
+                    .font(.headline.weight(.semibold))
+            }
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.white.opacity(0.12))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color.white.opacity(0.2), lineWidth: 1)
+            )
+        }
     }
 
     private var apiKeyCard: some View {

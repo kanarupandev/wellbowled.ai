@@ -55,6 +55,7 @@ final class SessionViewModel: ObservableObject {
     @Published private(set) var deepAnalysisArtifactsByDelivery: [UUID: DeliveryDeepAnalysisArtifacts] = [:]
     @Published private(set) var lastSessionRecordingURL: URL?
     @Published private(set) var sessionVideoSaveStatus: SessionVideoSaveStatus = .idle
+    @Published private(set) var clipSaveStatus: SessionVideoSaveStatus = .idle
     @Published private(set) var cameraFlipDisabled: Bool = false
 
     // Persistent voice mate state
@@ -657,6 +658,57 @@ final class SessionViewModel: ObservableObject {
                 }
             }
         }
+    }
+
+    // MARK: - Clip Save (release-to-end / full session)
+
+    func saveDeliveryClip(for deliveryID: UUID) async {
+        guard clipSaveStatus != .saving else { return }
+        guard let recordingURL = lastSessionRecordingURL else {
+            clipSaveStatus = .failed("No session recording available.")
+            return
+        }
+        guard let delivery = session.deliveries.first(where: { $0.id == deliveryID }) else {
+            clipSaveStatus = .failed("Delivery not found.")
+            return
+        }
+        clipSaveStatus = .saving
+        do {
+            _ = try await ClipStore.shared.saveDeliveryClip(
+                from: recordingURL,
+                delivery: delivery,
+                preRoll: 0.5,
+                postRoll: 2.0
+            )
+            clipSaveStatus = .saved
+        } catch {
+            clipSaveStatus = .failed("Clip save failed: \(error.localizedDescription)")
+            log.error("Clip save failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    func saveFullSessionClip(for deliveryID: UUID?) async {
+        guard clipSaveStatus != .saving else { return }
+        guard let recordingURL = lastSessionRecordingURL else {
+            clipSaveStatus = .failed("No session recording available.")
+            return
+        }
+        let delivery = deliveryID.flatMap { id in session.deliveries.first(where: { $0.id == id }) }
+        clipSaveStatus = .saving
+        do {
+            _ = try await ClipStore.shared.saveFullSession(
+                from: recordingURL,
+                delivery: delivery
+            )
+            clipSaveStatus = .saved
+        } catch {
+            clipSaveStatus = .failed("Save failed: \(error.localizedDescription)")
+            log.error("Full session save failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    func resetClipSaveStatus() {
+        clipSaveStatus = .idle
     }
 
     private func startSessionTimer() {
