@@ -26,6 +26,7 @@ targets:
         CURRENT_PROJECT_VERSION: "1"
         INFOPLIST_KEY_NSCameraUsageDescription: "wellBowled needs camera access to record bowling deliveries at high frame rate for speed analysis."
         INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "wellBowled needs photo library access to import bowling videos for analysis."
+        INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription: "wellBowled saves bowling clips to your photo library."
         INFOPLIST_KEY_UILaunchScreen_Generation: true
         INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait"
         INFOPLIST_KEY_UIStatusBarStyle: "UIStatusBarStyleLightContent"

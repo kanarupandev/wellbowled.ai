@@ -8,6 +8,7 @@ struct HomeView: View {
     @State private var reviewIndex: Int?
 
     var body: some View {
+        NavigationStack {
         ZStack {
             Color.black.ignoresSafeArea()
 
@@ -35,6 +36,18 @@ struct HomeView: View {
                 actionButtons
                     .padding(.bottom, 30)
             }
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink {
+                    ClipsView()
+                } label: {
+                    Image(systemName: "film.stack")
+                        .foregroundColor(Color(red: 0, green: 0.427, blue: 0.467))
+                }
+            }
+        }
+        .toolbarColorScheme(.dark, for: .navigationBar)
         }
         .fullScreenCover(isPresented: $showRecord) {
             RecordView { delivery in

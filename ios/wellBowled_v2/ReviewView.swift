@@ -11,8 +11,11 @@ struct ReviewView: View {
     @State private var distanceMeters: Double
     @State private var distanceText: String
     @State private var showDistanceEditor = false
+    @State private var clipSaveState: ClipSaveState = .idle
     @FocusState private var distanceFieldFocused: Bool
     @AppStorage("savedDistance") private var savedDistance: Double = SpeedCalc.defaultDistanceMeters
+
+    private enum ClipSaveState { case idle, saving, saved, failed(String) }
 
     init(delivery: Delivery, onSave: @escaping (Int, Int, Double) -> Void, onDismiss: @escaping () -> Void) {
         self.delivery = delivery
@@ -238,24 +241,10 @@ struct ReviewView: View {
                 speedResultView
             }
 
-            // Done button
-            Button {
-                dismissDistanceEditor()
-                if let r = releaseFrame, let a = arrivalFrame {
-                    onSave(r, a, distanceMeters)
-                }
-                onDismiss()
-            } label: {
-                Text("Done")
-                    .font(.headline)
-                    .foregroundColor(.black)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(Color(red: 0, green: 0.427, blue: 0.467))
-                    .cornerRadius(10)
-            }
-            .padding(.horizontal)
-            .padding(.bottom, 12)
+            // Save + Done
+            saveAndDoneButtons
+                .padding(.horizontal)
+                .padding(.bottom, 12)
         }
         .padding(.top, 10)
         .background(.ultraThinMaterial)
@@ -426,6 +415,112 @@ struct ReviewView: View {
                     .foregroundColor(.red)
                 }
                 .padding(.horizontal)
+            }
+        }
+    }
+
+    // MARK: - Save & Done
+
+    private var saveAndDoneButtons: some View {
+        VStack(spacing: 8) {
+            // Save options row
+            if step == .done {
+                HStack(spacing: 10) {
+                    Button {
+                        saveClip(kind: .releaseToEnd)
+                    } label: {
+                        saveLabel("Clip & Save", icon: "scissors")
+                    }
+
+                    Button {
+                        saveClip(kind: .full)
+                    } label: {
+                        saveLabel("Save Full", icon: "film")
+                    }
+                }
+                .disabled(isSaving)
+
+                if case .saved = clipSaveState {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                        Text("Saved to Photos & Clips")
+                            .font(.caption)
+                            .foregroundColor(.green)
+                    }
+                }
+                if case .failed(let msg) = clipSaveState {
+                    Text(msg)
+                        .font(.caption)
+                        .foregroundColor(.red)
+                }
+            }
+
+            // Done button
+            Button {
+                dismissDistanceEditor()
+                if let r = releaseFrame, let a = arrivalFrame {
+                    onSave(r, a, distanceMeters)
+                }
+                onDismiss()
+            } label: {
+                Text("Done")
+                    .font(.headline)
+                    .foregroundColor(.black)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color(red: 0, green: 0.427, blue: 0.467))
+                    .cornerRadius(10)
+            }
+        }
+    }
+
+    private var isSaving: Bool {
+        if case .saving = clipSaveState { return true }
+        return false
+    }
+
+    private func saveLabel(_ text: String, icon: String) -> some View {
+        HStack(spacing: 4) {
+            if isSaving {
+                ProgressView().tint(.white).scaleEffect(0.7)
+            } else {
+                Image(systemName: icon)
+            }
+            Text(text)
+        }
+        .font(.system(size: 14, weight: .semibold))
+        .foregroundColor(.white)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .background(Color.white.opacity(0.12))
+        .cornerRadius(10)
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+        )
+    }
+
+    private func saveClip(kind: SavedClip.ClipKind) {
+        guard !isSaving else { return }
+        // Build a delivery with current state
+        var d = delivery
+        d.releaseFrame = releaseFrame
+        d.arrivalFrame = arrivalFrame
+        d.distanceMeters = distanceMeters
+
+        clipSaveState = .saving
+        Task {
+            do {
+                switch kind {
+                case .releaseToEnd:
+                    _ = try await ClipStore.shared.saveReleaseClip(from: delivery.videoURL, delivery: d)
+                case .full:
+                    _ = try await ClipStore.shared.saveFullVideo(from: delivery.videoURL, delivery: d)
+                }
+                await MainActor.run { clipSaveState = .saved }
+            } catch {
+                await MainActor.run { clipSaveState = .failed(error.localizedDescription) }
             }
         }
     }
