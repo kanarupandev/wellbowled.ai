@@ -9,45 +9,45 @@ struct HomeView: View {
 
     var body: some View {
         NavigationStack {
-        ZStack {
-            Color.black.ignoresSafeArea()
+            ZStack {
+                Color.black.ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                // Header
-                header
-                    .padding(.top, 16)
-
-                // Stats bar
-                if !deliveries.isEmpty {
-                    statsBar
+                VStack(spacing: 0) {
+                    // Header
+                    header
                         .padding(.top, 16)
-                }
 
-                // Delivery list
-                if deliveries.isEmpty {
-                    emptyState
-                } else {
-                    deliveryList
-                }
+                    // Stats bar
+                    if !deliveries.isEmpty {
+                        statsBar
+                            .padding(.top, 16)
+                    }
 
-                Spacer()
+                    // Delivery list
+                    if deliveries.isEmpty {
+                        emptyState
+                    } else {
+                        deliveryList
+                    }
 
-                // Action buttons
-                actionButtons
-                    .padding(.bottom, 30)
-            }
-        }
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink {
-                    ClipsView()
-                } label: {
-                    Image(systemName: "film.stack")
-                        .foregroundColor(Color(red: 0, green: 0.427, blue: 0.467))
+                    Spacer()
+
+                    // Action buttons
+                    actionButtons
+                        .padding(.bottom, 30)
                 }
             }
-        }
-        .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink {
+                        ClipsView()
+                    } label: {
+                        Image(systemName: "film.stack")
+                            .foregroundColor(Color(red: 0, green: 0.427, blue: 0.467))
+                    }
+                }
+            }
+            .toolbarColorScheme(.dark, for: .navigationBar)
         }
         .fullScreenCover(isPresented: $showRecord) {
             RecordView { delivery in

@@ -16,6 +16,8 @@ struct SavedClip: Identifiable, Codable {
     let speedKMH: Double?
     let releaseFrame: Int?
     let arrivalFrame: Int?
+    let releaseTimeInClip: Double?   // seconds into clip where release happens
+    let arrivalTimeInClip: Double?   // seconds into clip where arrival happens
 
     enum ClipKind: String, Codable {
         case releaseToEnd
@@ -95,23 +97,31 @@ final class ClipStore {
     // MARK: - Save release-to-end clip
 
     func saveReleaseClip(from videoURL: URL, delivery: Delivery) async throws -> SavedClip {
-        guard let releaseFrame = delivery.releaseFrame else {
+        guard let releaseFrame = delivery.releaseFrame,
+              let arrivalFrame = delivery.arrivalFrame else {
             throw ClipSaveError.noReleaseFrame
         }
 
         let asset = AVURLAsset(url: videoURL)
         let duration = try await asset.load(.duration)
+        let totalDuration = CMTimeGetSeconds(duration)
 
         let releaseTime = Double(releaseFrame) / delivery.fps
-        let startTime = max(0, releaseTime - 0.3)  // tiny pre-roll
-        let endTime = CMTimeGetSeconds(duration)
+        let arrivalTime = Double(arrivalFrame) / delivery.fps
+        let startTime = max(0, releaseTime - 0.5)
+        let endTime = min(totalDuration, arrivalTime + 0.5)
+
+        let releaseInClip = releaseTime - startTime
+        let arrivalInClip = arrivalTime - startTime
 
         return try await exportClip(
             asset: asset,
             startSeconds: startTime,
             endSeconds: endTime,
             delivery: delivery,
-            kind: .releaseToEnd
+            kind: .releaseToEnd,
+            releaseTimeInClip: releaseInClip,
+            arrivalTimeInClip: arrivalInClip
         )
     }
 
@@ -121,12 +131,17 @@ final class ClipStore {
         let asset = AVURLAsset(url: videoURL)
         let duration = try await asset.load(.duration)
 
+        let releaseInClip = delivery.releaseFrame.map { Double($0) / delivery.fps }
+        let arrivalInClip = delivery.arrivalFrame.map { Double($0) / delivery.fps }
+
         return try await exportClip(
             asset: asset,
             startSeconds: 0,
             endSeconds: CMTimeGetSeconds(duration),
             delivery: delivery,
-            kind: .full
+            kind: .full,
+            releaseTimeInClip: releaseInClip,
+            arrivalTimeInClip: arrivalInClip
         )
     }
 
@@ -137,7 +152,9 @@ final class ClipStore {
         startSeconds: Double,
         endSeconds: Double,
         delivery: Delivery,
-        kind: SavedClip.ClipKind
+        kind: SavedClip.ClipKind,
+        releaseTimeInClip: Double? = nil,
+        arrivalTimeInClip: Double? = nil
     ) async throws -> SavedClip {
         let clipID = UUID()
         let fileName = "\(kind.rawValue)_\(clipID.uuidString).mp4"
@@ -174,7 +191,9 @@ final class ClipStore {
             kind: kind,
             speedKMH: delivery.speedKMH,
             releaseFrame: delivery.releaseFrame,
-            arrivalFrame: delivery.arrivalFrame
+            arrivalFrame: delivery.arrivalFrame,
+            releaseTimeInClip: releaseTimeInClip,
+            arrivalTimeInClip: arrivalTimeInClip
         )
         append(clip)
         log.debug("Saved \(kind.rawValue) clip: \(fileName)")
@@ -225,5 +244,47 @@ enum ClipSaveError: LocalizedError {
         case .noReleaseFrame: return "No release frame marked"
         case .exportFailed: return "Export failed"
         }
+    }
+}
+
+// MARK: - Frame Marker Store
+
+struct FrameMarkers: Codable {
+    let releaseFrame: Int
+    let arrivalFrame: Int
+    let distanceMeters: Double
+}
+
+final class FrameMarkerStore {
+    static let shared = FrameMarkerStore()
+
+    private var storeURL: URL {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        return docs.appendingPathComponent("frame_markers.json")
+    }
+
+    private func loadMap() -> [String: FrameMarkers] {
+        guard FileManager.default.fileExists(atPath: storeURL.path),
+              let data = try? Data(contentsOf: storeURL),
+              let map = try? JSONDecoder().decode([String: FrameMarkers].self, from: data) else { return [:] }
+        return map
+    }
+
+    private func saveMap(_ map: [String: FrameMarkers]) {
+        let enc = JSONEncoder()
+        enc.outputFormatting = .prettyPrinted
+        try? enc.encode(map).write(to: storeURL)
+    }
+
+    func save(videoURL: URL, releaseFrame: Int, arrivalFrame: Int, distanceMeters: Double) {
+        var map = loadMap()
+        map[videoURL.lastPathComponent] = FrameMarkers(
+            releaseFrame: releaseFrame, arrivalFrame: arrivalFrame, distanceMeters: distanceMeters
+        )
+        saveMap(map)
+    }
+
+    func lookup(videoURL: URL) -> FrameMarkers? {
+        loadMap()[videoURL.lastPathComponent]
     }
 }

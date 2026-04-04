@@ -25,11 +25,23 @@ struct ReviewView: View {
             url: delivery.videoURL, fps: delivery.fps,
             duration: delivery.duration, totalFrames: delivery.totalFrames
         ))
-        self._releaseFrame = State(initialValue: delivery.releaseFrame)
-        self._arrivalFrame = State(initialValue: delivery.arrivalFrame)
-        // Use saved distance for new deliveries, keep existing for re-reviews
-        let dist = delivery.releaseFrame != nil ? delivery.distanceMeters :
-            UserDefaults.standard.double(forKey: "savedDistance").nonZero ?? SpeedCalc.defaultDistanceMeters
+
+        // Auto-populate from saved markers if this video was reviewed before
+        let saved = FrameMarkerStore.shared.lookup(videoURL: delivery.videoURL)
+        let r = delivery.releaseFrame ?? saved?.releaseFrame
+        let a = delivery.arrivalFrame ?? saved?.arrivalFrame
+
+        self._releaseFrame = State(initialValue: r)
+        self._arrivalFrame = State(initialValue: a)
+
+        let dist: Double
+        if delivery.releaseFrame != nil {
+            dist = delivery.distanceMeters
+        } else if let savedDist = saved?.distanceMeters {
+            dist = savedDist
+        } else {
+            dist = UserDefaults.standard.double(forKey: "savedDistance").nonZero ?? SpeedCalc.defaultDistanceMeters
+        }
         self._distanceMeters = State(initialValue: dist)
         self._distanceText = State(initialValue: Self.formattedDistanceText(for: dist))
     }
@@ -207,37 +219,12 @@ struct ReviewView: View {
             .foregroundColor(.white)
             .padding(.horizontal)
 
-            // Action area
-            switch step {
-            case .scrubbing:
-                actionButton("Mark Release Frame", color: .orange) {
-                    releaseFrame = extractor.currentFrameIndex
-                }
+            // Marker controls
+            markerRow
+                .padding(.horizontal)
 
-            case .pickArrival:
-                VStack(spacing: 8) {
-                    HStack {
-                        badge("Release @ \(releaseFrame! + 1)", color: .orange)
-                        Spacer()
-                        Button("Reset") {
-                            releaseFrame = nil
-                            arrivalFrame = nil
-                        }
-                        .font(.caption)
-                        .foregroundColor(.red)
-                    }
-                    .padding(.horizontal)
-
-                    actionButton("Mark Arrival Frame", color: .green) {
-                        arrivalFrame = extractor.currentFrameIndex
-                        // Save back to parent
-                        if let r = releaseFrame, let a = arrivalFrame {
-                            onSave(r, a, distanceMeters)
-                        }
-                    }
-                }
-
-            case .done:
+            // Speed result
+            if step == .done {
                 speedResultView
             }
 
@@ -338,9 +325,8 @@ struct ReviewView: View {
     }
 
     private var speedResultView: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 6) {
             if let kmh = speedKMH, let cat = category {
-                // Main speed display
                 HStack(spacing: 16) {
                     VStack(spacing: 2) {
                         Text(String(format: "%.1f", kmh))
@@ -350,7 +336,6 @@ struct ReviewView: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
-
                     VStack(spacing: 2) {
                         Text(String(format: "%.1f", speedMPH ?? 0))
                             .font(.system(size: 20, weight: .semibold, design: .monospaced))
@@ -358,31 +343,26 @@ struct ReviewView: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
-
                     VStack(spacing: 2) {
                         Text(cat.rawValue)
                             .font(.system(size: 14, weight: .bold))
                             .foregroundColor(cat.color)
-                        Text("\(frameDiff ?? 0) frames")
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(.secondary)
-                        Text("\(Int(delivery.fps)) fps")
+                        Text("\(frameDiff ?? 0)f \u{2022} \(Int(delivery.fps))fps")
                             .font(.system(size: 10, design: .monospaced))
                             .foregroundColor(.secondary)
                     }
                 }
-                .padding(.vertical, 10)
+                .padding(.vertical, 8)
                 .padding(.horizontal)
                 .background(cat.color.opacity(0.1))
                 .cornerRadius(12)
 
-                // Target comparison
                 if let target = targetFrames, let diff = frameDiff {
                     HStack(spacing: 6) {
                         Image(systemName: diff <= target ? "checkmark.circle.fill" : "arrow.down.circle.fill")
                             .foregroundColor(diff <= target ? .green : .orange)
                             .font(.caption)
-                        Text("Target: \(target) frames (\(Int(Self.targetKMH)) km/h)")
+                        Text("Target: \(target)f (\(Int(Self.targetKMH))km/h)")
                             .font(.system(size: 11, design: .monospaced))
                             .foregroundColor(.secondary)
                         if diff > target {
@@ -397,24 +377,6 @@ struct ReviewView: View {
                     }
                     .padding(.horizontal)
                 }
-
-                // Frame markers + redo
-                HStack(spacing: 12) {
-                    Button { extractor.seekToFrame(releaseFrame!) } label: {
-                        badge("Release @ \(releaseFrame! + 1)", color: .orange)
-                    }
-                    Button { extractor.seekToFrame(arrivalFrame!) } label: {
-                        badge("Arrival @ \(arrivalFrame! + 1)", color: .green)
-                    }
-                    Spacer()
-                    Button("Redo") {
-                        releaseFrame = nil
-                        arrivalFrame = nil
-                    }
-                    .font(.caption)
-                    .foregroundColor(.red)
-                }
-                .padding(.horizontal)
             }
         }
     }
@@ -461,6 +423,11 @@ struct ReviewView: View {
                 dismissDistanceEditor()
                 if let r = releaseFrame, let a = arrivalFrame {
                     onSave(r, a, distanceMeters)
+                    FrameMarkerStore.shared.save(
+                        videoURL: delivery.videoURL,
+                        releaseFrame: r, arrivalFrame: a,
+                        distanceMeters: distanceMeters
+                    )
                 }
                 onDismiss()
             } label: {
@@ -525,6 +492,100 @@ struct ReviewView: View {
         }
     }
 
+    // MARK: - Marker Controls
+
+    private var markerRow: some View {
+        HStack(spacing: 8) {
+            markerButton(
+                title: "Release",
+                frame: releaseFrame,
+                color: .orange,
+                enabled: true
+            ) {
+                releaseFrame = extractor.currentFrameIndex
+                if let a = arrivalFrame, a <= extractor.currentFrameIndex {
+                    arrivalFrame = nil
+                }
+                persistMarkersIfComplete()
+            } onJump: {
+                if let f = releaseFrame { extractor.seekToFrame(f) }
+            } onClear: {
+                releaseFrame = nil
+                arrivalFrame = nil
+            }
+
+            markerButton(
+                title: "Arrival",
+                frame: arrivalFrame,
+                color: .green,
+                enabled: releaseFrame != nil
+            ) {
+                guard releaseFrame != nil else { return }
+                arrivalFrame = extractor.currentFrameIndex
+                persistMarkersIfComplete()
+            } onJump: {
+                if let f = arrivalFrame { extractor.seekToFrame(f) }
+            } onClear: {
+                arrivalFrame = nil
+            }
+        }
+    }
+
+    private func markerButton(
+        title: String,
+        frame: Int?,
+        color: Color,
+        enabled: Bool,
+        onSet: @escaping () -> Void,
+        onJump: @escaping () -> Void,
+        onClear: @escaping () -> Void
+    ) -> some View {
+        Button(action: onSet) {
+            HStack(spacing: 4) {
+                Circle().fill(color).frame(width: 6, height: 6)
+                if let f = frame {
+                    Text("\(title) F\(f + 1)")
+                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                } else {
+                    Text("Set \(title)")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+            }
+            .foregroundColor(frame != nil ? color : .white.opacity(0.6))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(frame != nil ? color.opacity(0.15) : Color.white.opacity(0.08))
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(frame != nil ? color.opacity(0.3) : Color.clear, lineWidth: 1)
+            )
+        }
+        .opacity(enabled ? 1 : 0.35)
+        .disabled(!enabled)
+        .contextMenu {
+            if frame != nil {
+                Button { onJump() } label: {
+                    Label("Jump to frame", systemImage: "arrow.right.circle")
+                }
+                Button(role: .destructive) { onClear() } label: {
+                    Label("Clear", systemImage: "xmark.circle")
+                }
+            }
+        }
+    }
+
+    private func persistMarkersIfComplete() {
+        if let r = releaseFrame, let a = arrivalFrame {
+            onSave(r, a, distanceMeters)
+            FrameMarkerStore.shared.save(
+                videoURL: delivery.videoURL,
+                releaseFrame: r, arrivalFrame: a,
+                distanceMeters: distanceMeters
+            )
+        }
+    }
+
     // MARK: - Helpers
 
     private func badge(_ text: String, color: Color) -> some View {
@@ -535,19 +596,6 @@ struct ReviewView: View {
             .padding(.vertical, 4)
             .background(color)
             .cornerRadius(4)
-    }
-
-    private func actionButton(_ title: String, color: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.headline)
-                .foregroundColor(.black)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(color)
-                .cornerRadius(10)
-        }
-        .padding(.horizontal)
     }
 
     private func presentDistanceEditor() {
