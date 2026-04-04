@@ -297,7 +297,7 @@ struct ReviewView: View {
             } label: {
                 Text("\(String(format: "%.2f", draft.distanceMeters))m")
                     .font(.system(size: 16, weight: .bold, design: .monospaced))
-                    .foregroundColor(draft.isComplete ? .white : .secondary)
+                    .foregroundColor(.white)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
                     .background(.ultraThinMaterial)
@@ -305,13 +305,12 @@ struct ReviewView: View {
                     .overlay(
                         Capsule()
                             .stroke(
-                                draft.activeField == .distance && draft.isComplete ? Color(red: 0, green: 0.427, blue: 0.467) : Color.white.opacity(0.12),
+                                draft.activeField == .distance && showDistanceEditor ? Color(red: 0, green: 0.427, blue: 0.467) : Color.white.opacity(0.12),
                                 lineWidth: 1
                             )
                     )
             }
             .buttonStyle(.plain)
-            .disabled(!draft.isComplete)
 
             Spacer()
 
@@ -467,28 +466,37 @@ struct ReviewView: View {
             }
 
             HStack(spacing: 10) {
-                Text("Goal")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.secondary)
-
-                smallStepperButton(systemName: "minus") {
-                    goalSpeedKMH = max(1, goalSpeedKMH - 1)
+                Button {
+                    openDistanceEditor()
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Distance")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(.secondary)
+                        Text("\(String(format: "%.2f", draft.distanceMeters))m")
+                            .font(.system(size: 18, weight: .bold, design: .monospaced))
+                            .foregroundColor(.white)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.white.opacity(0.08))
+                    .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(showDistanceEditor ? Color(red: 0, green: 0.427, blue: 0.467) : Color.white.opacity(0.12), lineWidth: 1)
+                    )
                 }
+                .buttonStyle(.plain)
 
-                Text("\(Int(goalSpeedKMH)) km/h")
-                    .font(.system(size: 16, weight: .bold, design: .monospaced))
-                    .foregroundColor(.white)
-                    .frame(minWidth: 90)
-
-                smallStepperButton(systemName: "plus") {
-                    goalSpeedKMH += 1
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("Goal \(Int(goalSpeedKMH)) km/h")
+                        .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                        .foregroundColor(.secondary)
+                    Text(goalDeltaText)
+                        .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                        .foregroundColor(goalDeltaSeconds ?? 0 > 0 ? .orange : .green)
                 }
-
-                Spacer()
-
-                Text(goalDeltaText)
-                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                    .foregroundColor(goalDeltaSeconds ?? 0 > 0 ? .orange : .green)
             }
 
             HStack(spacing: 10) {
@@ -546,15 +554,6 @@ struct ReviewView: View {
                     .font(.system(size: 15, weight: .bold))
                     .foregroundColor(.white)
                 Spacer()
-                Button("Default") {
-                    distanceInput.replace(with: savedDistance)
-                    draft.setDistance(savedDistance)
-                    persistIfComplete()
-                    replaceDistanceOnNextDigit = false
-                }
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(Color(red: 0.996, green: 0.784, blue: 0.2))
-
                 Button("Done") {
                     dismissDistanceEditor()
                 }
@@ -566,7 +565,7 @@ struct ReviewView: View {
                 .font(.system(size: 30, weight: .bold, design: .monospaced))
                 .foregroundColor(.white)
 
-            Text(distanceInput.digitCount == 4 ? "4 digits set" : "Clear and type 4 digits: xy.ab")
+            Text(distanceInput.digitCount == 4 ? "Saved as the default for the next videos" : "Clear and type 4 digits: xy.ab")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(.secondary)
 
@@ -609,8 +608,7 @@ struct ReviewView: View {
                 replaceDistanceOnNextDigit = false
             }
             if distanceInput.append(digit), distanceInput.digitCount == 4 {
-                draft.setDistance(distanceInput.value)
-                persistIfComplete()
+                applyDistanceValue(distanceInput.value)
             }
         } label: {
             Text(digit)
@@ -751,7 +749,6 @@ struct ReviewView: View {
     }
 
     private func openDistanceEditor() {
-        guard draft.isComplete else { return }
         draft.select(.distance)
         distanceInput.replace(with: draft.distanceMeters)
         replaceDistanceOnNextDigit = true
@@ -776,6 +773,12 @@ struct ReviewView: View {
             break
         }
 
+        persistIfComplete()
+    }
+
+    private func applyDistanceValue(_ value: Double) {
+        draft.setDistance(value)
+        savedDistance = value
         persistIfComplete()
     }
 

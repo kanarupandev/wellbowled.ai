@@ -4,6 +4,11 @@
 
 `wellBowled_v2` uses a video-first review flow for marking bowling clips and estimating pace from frame timing.
 
+Global settings:
+
+- `Goal speed` is edited on the home screen and reused in review
+- `Distance` is editable in review per clip, and the last chosen value becomes the default for the next clips
+
 ## First Pass
 
 1. Set `Release`
@@ -19,13 +24,13 @@ After the first pass, these can be adjusted independently at any time:
 - `Release`
 - `End`
 - `Distance`
-- `Goal speed`
 
 Rules:
 
 - `End` cannot be set before `Release`
 - moving `Release` past `End` clears `End`
 - calculations refresh from the current markers and distance
+- editing distance updates the global default used for subsequent videos
 
 ## Displayed Metrics
 
@@ -34,7 +39,7 @@ The result panel intentionally stays narrow:
 - `Time diff` in seconds, formatted as `xx.xx s`
 - `Estimated speed` in km/h
 - `Frame-pick variance` as `± km/h`
-- `Goal speed`
+- `Goal speed` from the home screen
 - `Time delta vs goal` in seconds
 
 The review screen does not show preview thumbnails. Navigation is handled through:

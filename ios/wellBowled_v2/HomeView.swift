@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct HomeView: View {
+    @AppStorage("goalSpeedKMH") private var goalSpeedKMH: Double = SpeedCalc.defaultGoalSpeedKMH
+    @AppStorage("savedDistance") private var savedDistance: Double = SpeedCalc.defaultDistanceMeters
     @State private var deliveries: [Delivery] = []
     @State private var showRecord = false
     @State private var showPicker = false
@@ -22,6 +24,9 @@ struct HomeView: View {
                         statsBar
                             .padding(.top, 16)
                     }
+
+                    goalSpeedBar
+                        .padding(.top, 12)
 
                     // Delivery list
                     if deliveries.isEmpty {
@@ -123,6 +128,44 @@ struct HomeView: View {
         .padding(.horizontal)
     }
 
+    private var goalSpeedBar: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Goal speed")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.secondary)
+                Text("\(Int(goalSpeedKMH)) km/h")
+                    .font(.system(size: 22, weight: .bold, design: .monospaced))
+                    .foregroundColor(.white)
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 3) {
+                Text("Target time")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.secondary)
+                Text(targetFlightTimeText)
+                    .font(.system(size: 16, weight: .bold, design: .monospaced))
+                    .foregroundColor(Color(red: 0.996, green: 0.784, blue: 0.2))
+            }
+
+            HStack(spacing: 8) {
+                goalAdjustButton(systemName: "minus") {
+                    goalSpeedKMH = max(1, goalSpeedKMH - 1)
+                }
+                goalAdjustButton(systemName: "plus") {
+                    goalSpeedKMH += 1
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Color.white.opacity(0.05))
+        .cornerRadius(12)
+        .padding(.horizontal)
+    }
+
     private func statItem(_ title: String, value: String, unit: String, color: Color) -> some View {
         VStack(spacing: 2) {
             Text(title).font(.system(size: 10)).foregroundColor(.secondary)
@@ -135,6 +178,18 @@ struct HomeView: View {
                 }
             }
         }
+    }
+
+    private func goalAdjustButton(systemName: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(.white)
+                .frame(width: 30, height: 30)
+                .background(Color.white.opacity(0.08))
+                .clipShape(Circle())
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Empty State
@@ -270,5 +325,15 @@ struct HomeView: View {
         let speeds = deliveries.compactMap(\.speedKMH)
         guard !speeds.isEmpty else { return nil }
         return speeds.reduce(0, +) / Double(speeds.count)
+    }
+
+    private var targetFlightTimeText: String {
+        guard let target = SpeedCalc.targetFlightTimeSeconds(
+            goalSpeedKMH: goalSpeedKMH,
+            distanceMeters: savedDistance
+        ) else {
+            return "--.--s"
+        }
+        return String(format: "%.2fs", target)
     }
 }
