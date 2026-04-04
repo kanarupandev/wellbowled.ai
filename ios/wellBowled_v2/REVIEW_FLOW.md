@@ -42,6 +42,9 @@ The review screen does not show preview thumbnails. Navigation is handled throug
 - swipe scrubbing on the video
 - frame slider
 - `±1` and `±10` seek buttons
+- pinch to zoom the frame
+- drag to pan while zoomed
+- double-tap to reset zoom
 
 The UI does not depend on the displayed rounded values for calculation. It calculates from:
 

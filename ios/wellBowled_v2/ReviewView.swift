@@ -12,6 +12,10 @@ struct ReviewView: View {
     @State private var replaceDistanceOnNextDigit = false
     @State private var clipSaveState: ClipSaveState = .idle
     @State private var dragStartFrame: Int?
+    @State private var dragStartOffset: CGSize = .zero
+    @State private var zoomScale: CGFloat = 1.0
+    @State private var lastZoomScale: CGFloat = 1.0
+    @State private var imageOffset: CGSize = .zero
     @AppStorage("savedDistance") private var savedDistance: Double = SpeedCalc.defaultDistanceMeters
     @AppStorage("goalSpeedKMH") private var goalSpeedKMH: Double = SpeedCalc.defaultGoalSpeedKMH
 
@@ -176,50 +180,103 @@ struct ReviewView: View {
     }
 
     private var frameView: some View {
-        Group {
-            if let image = extractor.currentFrame {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                ProgressView()
-                    .tint(.white)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-        }
-        .background(Color.black)
-        .contentShape(Rectangle())
-        .gesture(scrubGesture)
-        .onTapGesture {
-            dismissDistanceEditor()
-        }
-        .overlay(alignment: .topLeading) {
-            VStack(alignment: .leading, spacing: 4) {
-                if let release = draft.releaseFrame, extractor.currentFrameIndex == release {
-                    badge("RELEASE", color: .orange)
-                }
-                if let arrival = draft.arrivalFrame, extractor.currentFrameIndex == arrival {
-                    badge("END", color: .green)
+        GeometryReader { proxy in
+            Group {
+                if let image = extractor.currentFrame {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .scaleEffect(zoomScale)
+                        .offset(imageOffset)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ProgressView()
+                        .tint(.white)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .padding(.top, 72)
-            .padding(.leading, 12)
+            .background(Color.black)
+            .contentShape(Rectangle())
+            .gesture(scrubOrPanGesture(in: proxy.size))
+            .simultaneousGesture(zoomGesture(in: proxy.size))
+            .onTapGesture {
+                dismissDistanceEditor()
+            }
+            .onTapGesture(count: 2) {
+                resetZoom()
+            }
+            .overlay(alignment: .topLeading) {
+                VStack(alignment: .leading, spacing: 4) {
+                    if let release = draft.releaseFrame, extractor.currentFrameIndex == release {
+                        badge("RELEASE", color: .orange)
+                    }
+                    if let arrival = draft.arrivalFrame, extractor.currentFrameIndex == arrival {
+                        badge("END", color: .green)
+                    }
+                }
+                .padding(.top, 72)
+                .padding(.leading, 12)
+            }
+            .overlay(alignment: .topTrailing) {
+                if zoomScale > 1.01 {
+                    Button {
+                        resetZoom()
+                    } label: {
+                        Text("\(String(format: "%.1f", zoomScale))x")
+                            .font(.system(size: 12, weight: .bold, design: .monospaced))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 8)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 72)
+                    .padding(.trailing, 12)
+                }
+            }
         }
     }
 
-    private var scrubGesture: some Gesture {
+    private func scrubOrPanGesture(in size: CGSize) -> some Gesture {
         DragGesture(minimumDistance: 8)
             .onChanged { value in
-                if dragStartFrame == nil {
-                    dragStartFrame = extractor.currentFrameIndex
+                if zoomScale > 1.01 {
+                    let proposed = CGSize(
+                        width: dragStartOffset.width + value.translation.width,
+                        height: dragStartOffset.height + value.translation.height
+                    )
+                    imageOffset = clampedOffset(for: proposed, in: size)
+                } else {
+                    if dragStartFrame == nil {
+                        dragStartFrame = extractor.currentFrameIndex
+                    }
+                    let origin = dragStartFrame ?? extractor.currentFrameIndex
+                    let delta = Int((value.translation.width / 8).rounded())
+                    extractor.seekToFrame(origin + delta)
                 }
-                let origin = dragStartFrame ?? extractor.currentFrameIndex
-                let delta = Int((value.translation.width / 8).rounded())
-                extractor.seekToFrame(origin + delta)
             }
             .onEnded { _ in
                 dragStartFrame = nil
+                dragStartOffset = imageOffset
+            }
+    }
+
+    private func zoomGesture(in size: CGSize) -> some Gesture {
+        MagnificationGesture()
+            .onChanged { value in
+                let proposed = max(1.0, min(lastZoomScale * value, 6.0))
+                zoomScale = proposed
+                imageOffset = clampedOffset(for: imageOffset, in: size, scale: proposed)
+            }
+            .onEnded { _ in
+                lastZoomScale = zoomScale
+                if zoomScale <= 1.01 {
+                    resetZoom()
+                } else {
+                    imageOffset = clampedOffset(for: imageOffset, in: size)
+                    dragStartOffset = imageOffset
+                }
             }
     }
 
@@ -671,6 +728,26 @@ struct ReviewView: View {
             .padding(.vertical, 4)
             .background(color)
             .cornerRadius(6)
+    }
+
+    private func clampedOffset(for proposed: CGSize, in size: CGSize, scale: CGFloat? = nil) -> CGSize {
+        let activeScale = scale ?? zoomScale
+        guard activeScale > 1.0 else { return .zero }
+
+        let maxX = (size.width * (activeScale - 1.0)) / 2.0
+        let maxY = (size.height * (activeScale - 1.0)) / 2.0
+
+        return CGSize(
+            width: min(max(proposed.width, -maxX), maxX),
+            height: min(max(proposed.height, -maxY), maxY)
+        )
+    }
+
+    private func resetZoom() {
+        zoomScale = 1.0
+        lastZoomScale = 1.0
+        imageOffset = .zero
+        dragStartOffset = .zero
     }
 
     private func openDistanceEditor() {
