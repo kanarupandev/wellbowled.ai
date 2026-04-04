@@ -45,6 +45,37 @@ final class SpeedCalcTests: XCTestCase {
         XCTAssertEqual(speed!, 144.864, accuracy: 0.01)
     }
 
+    func test_frameVariance_usesWorstCaseOneFrameTimingError() {
+        let variance = SpeedCalc.kmhFrameVariance(releaseFrame: 0, arrivalFrame: 60, fps: 120, distanceMeters: dist)
+        XCTAssertEqual(variance!, 2.306, accuracy: 0.01)
+    }
+
+    func test_flightTimeSeconds_returnsFrameDeltaOverFPS() {
+        let seconds = SpeedCalc.flightTimeSeconds(releaseFrame: 42, arrivalFrame: 68, fps: 240)
+        XCTAssertEqual(seconds!, 26.0 / 240.0, accuracy: 0.0001)
+    }
+
+    func test_formattedFlightTime_usesTwoDecimals() {
+        let text = SpeedCalc.formattedFlightTime(releaseFrame: 42, arrivalFrame: 68, fps: 240)
+        XCTAssertEqual(text, "0.11s")
+    }
+
+    func test_targetFlightTimeSeconds_usesGoalSpeed() {
+        let seconds = SpeedCalc.targetFlightTimeSeconds(goalSpeedKMH: 140, distanceMeters: dist)
+        XCTAssertEqual(seconds!, (dist / (140.0 / 3.6)), accuracy: 0.0001)
+    }
+
+    func test_goalTimeDeltaSeconds_positiveWhenActualIsSlower() {
+        let delta = SpeedCalc.goalTimeDeltaSeconds(
+            releaseFrame: 0,
+            arrivalFrame: 60,
+            fps: 120,
+            distanceMeters: dist,
+            goalSpeedKMH: 145
+        )
+        XCTAssertGreaterThan(delta!, 0)
+    }
+
     func test_returnsNil_whenArrivalBeforeRelease() {
         XCTAssertNil(SpeedCalc.kmh(releaseFrame: 50, arrivalFrame: 30, fps: 120, distanceMeters: dist))
     }

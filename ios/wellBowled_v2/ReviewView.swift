@@ -2,203 +2,365 @@ import SwiftUI
 
 struct ReviewView: View {
     let delivery: Delivery
-    let onSave: (Int, Int, Double) -> Void   // (releaseFrame, arrivalFrame, distanceMeters)
+    let onSave: (Int, Int, Double) -> Void
     let onDismiss: () -> Void
 
     @StateObject private var extractor: FrameExtractor
-    @State private var releaseFrame: Int?
-    @State private var arrivalFrame: Int?
-    @State private var distanceMeters: Double
-    @State private var distanceText: String
+    @State private var draft: ReviewDraft
+    @State private var distanceInput: DistanceInput
     @State private var showDistanceEditor = false
+    @State private var replaceDistanceOnNextDigit = false
     @State private var clipSaveState: ClipSaveState = .idle
-    @FocusState private var distanceFieldFocused: Bool
+    @State private var dragStartFrame: Int?
     @AppStorage("savedDistance") private var savedDistance: Double = SpeedCalc.defaultDistanceMeters
+    @AppStorage("goalSpeedKMH") private var goalSpeedKMH: Double = SpeedCalc.defaultGoalSpeedKMH
 
-    private enum ClipSaveState { case idle, saving, saved, failed(String) }
+    private enum ClipSaveState {
+        case idle
+        case saving
+        case saved
+        case failed(String)
+    }
 
     init(delivery: Delivery, onSave: @escaping (Int, Int, Double) -> Void, onDismiss: @escaping () -> Void) {
         self.delivery = delivery
         self.onSave = onSave
         self.onDismiss = onDismiss
         self._extractor = StateObject(wrappedValue: FrameExtractor(
-            url: delivery.videoURL, fps: delivery.fps,
-            duration: delivery.duration, totalFrames: delivery.totalFrames
+            url: delivery.videoURL,
+            fps: delivery.fps,
+            duration: delivery.duration,
+            totalFrames: delivery.totalFrames
         ))
 
-        // Auto-populate from saved markers if this video was reviewed before
         let saved = FrameMarkerStore.shared.lookup(videoURL: delivery.videoURL)
-        let r = delivery.releaseFrame ?? saved?.releaseFrame
-        let a = delivery.arrivalFrame ?? saved?.arrivalFrame
-
-        self._releaseFrame = State(initialValue: r)
-        self._arrivalFrame = State(initialValue: a)
-
-        let dist: Double
-        if delivery.releaseFrame != nil {
-            dist = delivery.distanceMeters
-        } else if let savedDist = saved?.distanceMeters {
-            dist = savedDist
+        let release = delivery.releaseFrame ?? saved?.releaseFrame
+        let arrival = delivery.arrivalFrame ?? saved?.arrivalFrame
+        let distance: Double
+        if delivery.releaseFrame != nil || delivery.arrivalFrame != nil {
+            distance = delivery.distanceMeters
+        } else if let savedDistance = saved?.distanceMeters {
+            distance = savedDistance
         } else {
-            dist = UserDefaults.standard.double(forKey: "savedDistance").nonZero ?? SpeedCalc.defaultDistanceMeters
+            distance = UserDefaults.standard.double(forKey: "savedDistance").nonZero ?? SpeedCalc.defaultDistanceMeters
         }
-        self._distanceMeters = State(initialValue: dist)
-        self._distanceText = State(initialValue: Self.formattedDistanceText(for: dist))
+
+        let initialDraft = ReviewDraft(releaseFrame: release, arrivalFrame: arrival, distanceMeters: distance)
+        var initialInput = DistanceInput()
+        initialInput.replace(with: distance)
+
+        self._draft = State(initialValue: initialDraft)
+        self._distanceInput = State(initialValue: initialInput)
     }
 
-    private var step: Step {
-        if releaseFrame != nil && arrivalFrame != nil { return .done }
-        if releaseFrame != nil { return .pickArrival }
-        return .scrubbing
-    }
-
-    private enum Step { case scrubbing, pickArrival, done }
-
-    // Speed computed from local state using shared SpeedCalc
     private var speedKMH: Double? {
-        guard let r = releaseFrame, let a = arrivalFrame else { return nil }
-        return SpeedCalc.kmh(releaseFrame: r, arrivalFrame: a, fps: delivery.fps, distanceMeters: distanceMeters)
+        guard let release = draft.releaseFrame, let arrival = draft.arrivalFrame else { return nil }
+        return SpeedCalc.kmh(
+            releaseFrame: release,
+            arrivalFrame: arrival,
+            fps: delivery.fps,
+            distanceMeters: draft.distanceMeters
+        )
     }
 
-    private var speedMPH: Double? {
-        guard let kmh = speedKMH else { return nil }
-        return SpeedCalc.mph(kmh: kmh)
+    private var speedVarianceKMH: Double? {
+        guard let release = draft.releaseFrame, let arrival = draft.arrivalFrame else { return nil }
+        return SpeedCalc.kmhFrameVariance(
+            releaseFrame: release,
+            arrivalFrame: arrival,
+            fps: delivery.fps,
+            distanceMeters: draft.distanceMeters
+        )
     }
 
-    private var category: SpeedCategory? {
-        guard let kmh = speedKMH else { return nil }
-        return .from(kmh: kmh)
+    private var flightTimeText: String? {
+        guard let release = draft.releaseFrame, let arrival = draft.arrivalFrame else { return nil }
+        return SpeedCalc.formattedFlightTime(releaseFrame: release, arrivalFrame: arrival, fps: delivery.fps)
     }
 
-    private var frameDiff: Int? {
-        guard let r = releaseFrame, let a = arrivalFrame else { return nil }
-        return a - r
+    private var goalDeltaSeconds: Double? {
+        guard let release = draft.releaseFrame, let arrival = draft.arrivalFrame else { return nil }
+        return SpeedCalc.goalTimeDeltaSeconds(
+            releaseFrame: release,
+            arrivalFrame: arrival,
+            fps: delivery.fps,
+            distanceMeters: draft.distanceMeters,
+            goalSpeedKMH: goalSpeedKMH
+        )
+    }
+
+    private var primaryActionTitle: String? {
+        switch draft.activeField {
+        case .release:
+            return draft.releaseFrame == nil ? "Set Release Here" : "Move Release Here"
+        case .arrival:
+            return draft.arrivalFrame == nil ? "Set End Here" : "Move End Here"
+        case .distance:
+            return nil
+        }
+    }
+
+    private var canApplyCurrentFrame: Bool {
+        switch draft.activeField {
+        case .release:
+            return true
+        case .arrival:
+            guard let release = draft.releaseFrame else { return false }
+            return extractor.currentFrameIndex > release
+        case .distance:
+            return false
+        }
+    }
+
+    private var goalDeltaText: String {
+        guard let delta = goalDeltaSeconds else { return "Set markers to compare with goal" }
+        if abs(delta) < 0.005 {
+            return "On goal pace"
+        }
+        if delta > 0 {
+            return "Need \(String(format: "%.2f", delta))s less"
+        }
+        return "\(String(format: "%.2f", abs(delta)))s quicker than goal"
+    }
+
+    private var saveStateMessage: (text: String, color: Color)? {
+        switch clipSaveState {
+        case .idle, .saving:
+            return nil
+        case .saved:
+            return ("Saved to Photos and Clips", .green)
+        case .failed(let message):
+            return (message, .red)
+        }
+    }
+
+    private var isSaving: Bool {
+        if case .saving = clipSaveState {
+            return true
+        }
+        return false
     }
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                frameView
-                controlsView
-            }
-        }
-        .onAppear { extractor.loadFirstFrame() }
-        .onChange(of: distanceFieldFocused) { focused in
-            if !focused {
-                showDistanceEditor = false
-            }
-        }
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
+            frameView
+
+            VStack(spacing: 12) {
+                topOverlay
+
+                if showDistanceEditor {
+                    distanceEditor
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+
                 Spacer()
-                Button("Done") {
-                    dismissDistanceEditor()
+
+                VStack(spacing: 10) {
+                    if draft.isComplete {
+                        resultsPanel
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                    bottomOverlay
                 }
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if showDistanceEditor {
-                distanceEditor
-            }
+        .animation(.spring(response: 0.28, dampingFraction: 0.88), value: draft.isComplete)
+        .animation(.spring(response: 0.22, dampingFraction: 0.92), value: showDistanceEditor)
+        .onAppear {
+            extractor.loadFirstFrame()
         }
     }
-
-    // MARK: - Frame View
 
     private var frameView: some View {
         Group {
             if let image = extractor.currentFrame {
                 Image(uiImage: image)
                     .resizable()
-                    .aspectRatio(contentMode: .fit)
+                    .scaledToFit()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ProgressView()
+                    .tint(.white)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .background(Color.black)
         .contentShape(Rectangle())
+        .gesture(scrubGesture)
         .onTapGesture {
             dismissDistanceEditor()
         }
         .overlay(alignment: .topLeading) {
             VStack(alignment: .leading, spacing: 4) {
-                if let r = releaseFrame, extractor.currentFrameIndex == r {
+                if let release = draft.releaseFrame, extractor.currentFrameIndex == release {
                     badge("RELEASE", color: .orange)
                 }
-                if let a = arrivalFrame, extractor.currentFrameIndex == a {
-                    badge("ARRIVAL", color: .green)
+                if let arrival = draft.arrivalFrame, extractor.currentFrameIndex == arrival {
+                    badge("END", color: .green)
                 }
             }
-            .padding(8)
+            .padding(.top, 72)
+            .padding(.leading, 12)
         }
     }
 
-    // MARK: - Controls
-
-    private var controlsView: some View {
-        VStack(spacing: 10) {
-            // Distance + frame info
-            HStack(spacing: 8) {
-                Image(systemName: "ruler")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Button {
-                    presentDistanceEditor()
-                } label: {
-                    Text(distanceText)
-                        .font(.system(size: 18, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.white)
-                        .frame(minWidth: 92)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .background(Color.white.opacity(0.1))
-                        .cornerRadius(8)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(showDistanceEditor ? Color.white.opacity(0.35) : Color.clear, lineWidth: 1)
-                        )
+    private var scrubGesture: some Gesture {
+        DragGesture(minimumDistance: 8)
+            .onChanged { value in
+                if dragStartFrame == nil {
+                    dragStartFrame = extractor.currentFrameIndex
                 }
-                Text("m")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.secondary)
-
-                // Save as default button
-                Button {
-                    savedDistance = distanceMeters
-                } label: {
-                    Image(systemName: distanceMeters == savedDistance ? "checkmark.circle.fill" : "checkmark.circle")
-                        .font(.caption)
-                        .foregroundColor(distanceMeters == savedDistance ? .green : .secondary)
-                }
-
-                Spacer()
-
-                Text("F\(extractor.currentFrameIndex + 1)/\(extractor.totalFrames)")
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundColor(.gray)
-
-                Text(extractor.currentTimeString)
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundColor(.gray)
-
-                Text("\(Int(delivery.fps))fps")
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundColor(.secondary)
+                let origin = dragStartFrame ?? extractor.currentFrameIndex
+                let delta = Int((value.translation.width / 8).rounded())
+                extractor.seekToFrame(origin + delta)
             }
-            .padding(.horizontal)
+            .onEnded { _ in
+                dragStartFrame = nil
+            }
+    }
 
-            // Scrubber
-            HStack(spacing: 16) {
-                Button { extractor.advance(by: -10) } label: {
-                    Image(systemName: "gobackward.10")
+    private var topOverlay: some View {
+        HStack(spacing: 8) {
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 36, height: 36)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                openDistanceEditor()
+            } label: {
+                Text("\(String(format: "%.2f", draft.distanceMeters))m")
+                    .font(.system(size: 16, weight: .bold, design: .monospaced))
+                    .foregroundColor(draft.isComplete ? .white : .secondary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule()
+                            .stroke(
+                                draft.activeField == .distance && draft.isComplete ? Color(red: 0, green: 0.427, blue: 0.467) : Color.white.opacity(0.12),
+                                lineWidth: 1
+                            )
+                    )
+            }
+            .buttonStyle(.plain)
+            .disabled(!draft.isComplete)
+
+            Spacer()
+
+            HStack(spacing: 10) {
+                Text("F\(extractor.currentFrameIndex + 1)/\(extractor.totalFrames)")
+                Text(extractor.currentTimeString)
+                Text("\(Int(delivery.fps))fps")
+            }
+            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+            .foregroundColor(.white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(.ultraThinMaterial)
+            .clipShape(Capsule())
+        }
+    }
+
+    private var bottomOverlay: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 8) {
+                markerChip(title: "Release", frame: draft.releaseFrame, color: .orange, isActive: draft.activeField == .release) {
+                    draft.select(.release)
+                    dismissDistanceEditor()
+                    if let release = draft.releaseFrame {
+                        extractor.seekToFrame(release)
+                    }
                 }
-                Button { extractor.previousFrame() } label: {
-                    Image(systemName: "chevron.left").font(.title3.bold())
+
+                markerChip(title: "End", frame: draft.arrivalFrame, color: .green, isActive: draft.activeField == .arrival, enabled: draft.releaseFrame != nil) {
+                    guard draft.releaseFrame != nil else { return }
+                    draft.select(.arrival)
+                    dismissDistanceEditor()
+                    if let arrival = draft.arrivalFrame {
+                        extractor.seekToFrame(arrival)
+                    } else if let release = draft.releaseFrame {
+                        extractor.seekToFrame(min(release + 1, extractor.totalFrames - 1))
+                    }
                 }
+
+                Menu {
+                    if let release = draft.releaseFrame {
+                        Button {
+                            draft.select(.release)
+                            extractor.seekToFrame(release)
+                        } label: {
+                            Label("Go to Release", systemImage: "arrow.right.circle")
+                        }
+                        Button(role: .destructive) {
+                            draft.clearRelease()
+                            dismissDistanceEditor()
+                        } label: {
+                            Label("Clear Release", systemImage: "xmark.circle")
+                        }
+                    }
+
+                    if let arrival = draft.arrivalFrame {
+                        Button {
+                            draft.select(.arrival)
+                            extractor.seekToFrame(arrival)
+                        } label: {
+                            Label("Go to End", systemImage: "arrow.right.circle")
+                        }
+                        Button(role: .destructive) {
+                            draft.clearArrival()
+                            dismissDistanceEditor()
+                        } label: {
+                            Label("Clear End", systemImage: "xmark.circle")
+                        }
+                    }
+
+                    if draft.isComplete {
+                        Button {
+                            openDistanceEditor()
+                        } label: {
+                            Label("Edit Distance", systemImage: "ruler")
+                        }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(width: 40, height: 40)
+                        .background(.ultraThinMaterial)
+                        .clipShape(Circle())
+                }
+            }
+
+            if let title = primaryActionTitle {
+                Button {
+                    applyActiveSelection()
+                } label: {
+                    Text(title)
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.black)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(canApplyCurrentFrame ? Color(red: 0.996, green: 0.784, blue: 0.2) : Color.white.opacity(0.2))
+                        .cornerRadius(12)
+                }
+                .buttonStyle(.plain)
+                .disabled(!canApplyCurrentFrame)
+            }
+
+            HStack(spacing: 10) {
+                seekButton(systemName: "gobackward.10", action: { extractor.advance(by: -10) })
+                seekButton(systemName: "chevron.left", action: { extractor.previousFrame() })
 
                 Slider(
                     value: Binding(
@@ -208,93 +370,107 @@ struct ReviewView: View {
                     in: 0...Double(max(1, extractor.totalFrames - 1)),
                     step: 1
                 )
+                .tint(Color(red: 0, green: 0.427, blue: 0.467))
 
-                Button { extractor.nextFrame() } label: {
-                    Image(systemName: "chevron.right").font(.title3.bold())
-                }
-                Button { extractor.advance(by: 10) } label: {
-                    Image(systemName: "goforward.10")
-                }
+                seekButton(systemName: "chevron.right", action: { extractor.nextFrame() })
+                seekButton(systemName: "goforward.10", action: { extractor.advance(by: 10) })
             }
-            .foregroundColor(.white)
-            .padding(.horizontal)
-
-            // Marker controls
-            markerRow
-                .padding(.horizontal)
-
-            // Speed result
-            if step == .done {
-                speedResultView
-            }
-
-            // Save + Done
-            saveAndDoneButtons
-                .padding(.horizontal)
-                .padding(.bottom, 12)
         }
-        .padding(.top, 10)
+        .padding(12)
         .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18)
+                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+        )
     }
 
-    private var distanceEditor: some View {
+    private var resultsPanel: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Distance to impact")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(.white)
-
-            HStack(alignment: .center, spacing: 10) {
-                TextField("17.68", text: Binding(
-                    get: { distanceText },
-                    set: { applyDistanceInput($0) }
-                ))
-                    .font(.system(size: 28, weight: .bold, design: .monospaced))
-                    .foregroundColor(.white)
-                    .keyboardType(.numberPad)
-                    .focused($distanceFieldFocused)
-                    .frame(width: 150)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
-                    .background(Color.white.opacity(0.12))
-                    .cornerRadius(12)
-
-                Text("m")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.secondary)
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(flightTimeText ?? "--.--s")
+                        .font(.system(size: 34, weight: .bold, design: .monospaced))
+                        .foregroundColor(.white)
+                    Text("Time diff")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.secondary)
+                }
 
                 Spacer()
 
-                Button {
-                    dismissDistanceEditor()
-                } label: {
-                    Text("Done")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.black)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .background(Color.white)
-                        .cornerRadius(12)
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(speedKMH.map { String(format: "%.1f km/h", $0) } ?? "--.- km/h")
+                        .font(.system(size: 22, weight: .bold, design: .monospaced))
+                        .foregroundColor(.white)
+                    Text(speedVarianceKMH.map { "±\(String(format: "%.1f", $0)) km/h" } ?? "±--.- km/h")
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .foregroundColor(.secondary)
                 }
             }
 
             HStack(spacing: 10) {
-                Button {
-                    savedDistance = distanceMeters
-                } label: {
-                    Label(
-                        distanceMeters == savedDistance ? "Saved default" : "Save as default",
-                        systemImage: distanceMeters == savedDistance ? "checkmark.circle.fill" : "checkmark.circle"
-                    )
+                Text("Goal")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(distanceMeters == savedDistance ? .green : .white)
+                    .foregroundColor(.secondary)
+
+                smallStepperButton(systemName: "minus") {
+                    goalSpeedKMH = max(1, goalSpeedKMH - 1)
+                }
+
+                Text("\(Int(goalSpeedKMH)) km/h")
+                    .font(.system(size: 16, weight: .bold, design: .monospaced))
+                    .foregroundColor(.white)
+                    .frame(minWidth: 90)
+
+                smallStepperButton(systemName: "plus") {
+                    goalSpeedKMH += 1
                 }
 
                 Spacer()
 
-                Text("4 digits only. Dot is inserted automatically.")
-                    .font(.system(size: 12))
-                    .foregroundColor(.secondary)
+                Text(goalDeltaText)
+                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                    .foregroundColor(goalDeltaSeconds ?? 0 > 0 ? .orange : .green)
+            }
+
+            HStack(spacing: 10) {
+                Button {
+                    saveClip(kind: .releaseToEnd)
+                } label: {
+                    actionPill("Clip & Save", icon: "scissors")
+                }
+
+                Button {
+                    saveClip(kind: .full)
+                } label: {
+                    actionPill("Save Full", icon: "film")
+                }
+            }
+            .disabled(isSaving)
+
+            HStack(spacing: 10) {
+                if let message = saveStateMessage {
+                    Text(message.text)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(message.color)
+                }
+
+                Spacer()
+
+                Button {
+                    persistIfComplete()
+                    onDismiss()
+                } label: {
+                    Text("Done")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.black)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 10)
+                        .background(Color(red: 0, green: 0.427, blue: 0.467))
+                        .cornerRadius(12)
+                }
+                .buttonStyle(.plain)
             }
         }
         .padding(16)
@@ -304,289 +480,188 @@ struct ReviewView: View {
             RoundedRectangle(cornerRadius: 18)
                 .stroke(Color.white.opacity(0.12), lineWidth: 1)
         )
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .onAppear {
-            DispatchQueue.main.async {
-                distanceFieldFocused = true
-            }
-        }
     }
 
-    // MARK: - Speed Result
-
-    // Target speed baked in
-    private static let targetKMH: Double = 120.0
-
-    private var targetFrames: Int? {
-        guard delivery.fps > 0, distanceMeters > 0 else { return nil }
-        let seconds = distanceMeters / (Self.targetKMH / 3.6)
-        return Int(ceil(seconds * delivery.fps))
-    }
-
-    private var speedResultView: some View {
-        VStack(spacing: 6) {
-            if let kmh = speedKMH, let cat = category {
-                HStack(spacing: 16) {
-                    VStack(spacing: 2) {
-                        Text(String(format: "%.1f", kmh))
-                            .font(.system(size: 32, weight: .bold, design: .monospaced))
-                            .foregroundColor(cat.color)
-                        Text("km/h")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    VStack(spacing: 2) {
-                        Text(String(format: "%.1f", speedMPH ?? 0))
-                            .font(.system(size: 20, weight: .semibold, design: .monospaced))
-                        Text("mph")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    VStack(spacing: 2) {
-                        Text(cat.rawValue)
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundColor(cat.color)
-                        Text("\(frameDiff ?? 0)f \u{2022} \(Int(delivery.fps))fps")
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(.secondary)
-                    }
+    private var distanceEditor: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Distance")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(.white)
+                Spacer()
+                Button("Default") {
+                    distanceInput.replace(with: savedDistance)
+                    draft.setDistance(savedDistance)
+                    persistIfComplete()
+                    replaceDistanceOnNextDigit = false
                 }
-                .padding(.vertical, 8)
-                .padding(.horizontal)
-                .background(cat.color.opacity(0.1))
-                .cornerRadius(12)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(Color(red: 0.996, green: 0.784, blue: 0.2))
 
-                if let target = targetFrames, let diff = frameDiff {
-                    HStack(spacing: 6) {
-                        Image(systemName: diff <= target ? "checkmark.circle.fill" : "arrow.down.circle.fill")
-                            .foregroundColor(diff <= target ? .green : .orange)
-                            .font(.caption)
-                        Text("Target: \(target)f (\(Int(Self.targetKMH))km/h)")
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundColor(.secondary)
-                        if diff > target {
-                            Text("need \(diff - target) fewer")
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundColor(.orange)
-                        } else {
-                            Text("hit!")
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundColor(.green)
-                        }
+                Button("Done") {
+                    dismissDistanceEditor()
+                }
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(.white)
+            }
+
+            Text("\(distanceInput.text)m")
+                .font(.system(size: 30, weight: .bold, design: .monospaced))
+                .foregroundColor(.white)
+
+            Text(distanceInput.digitCount == 4 ? "4 digits set" : "Clear and type 4 digits: xy.ab")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.secondary)
+
+            VStack(spacing: 8) {
+                keypadRow(["1", "2", "3"])
+                keypadRow(["4", "5", "6"])
+                keypadRow(["7", "8", "9"])
+                HStack(spacing: 8) {
+                    keypadControlLabel("Clear") {
+                        distanceInput.clear()
                     }
-                    .padding(.horizontal)
+                    keypadDigit("0")
+                    keypadControlIcon("delete.left") {
+                        distanceInput.backspace()
+                    }
                 }
             }
         }
-    }
-
-    // MARK: - Save & Done
-
-    private var saveAndDoneButtons: some View {
-        VStack(spacing: 8) {
-            // Save options row
-            if step == .done {
-                HStack(spacing: 10) {
-                    Button {
-                        saveClip(kind: .releaseToEnd)
-                    } label: {
-                        saveLabel("Clip & Save", icon: "scissors")
-                    }
-
-                    Button {
-                        saveClip(kind: .full)
-                    } label: {
-                        saveLabel("Save Full", icon: "film")
-                    }
-                }
-                .disabled(isSaving)
-
-                if case .saved = clipSaveState {
-                    HStack(spacing: 4) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.green)
-                        Text("Saved to Photos & Clips")
-                            .font(.caption)
-                            .foregroundColor(.green)
-                    }
-                }
-                if case .failed(let msg) = clipSaveState {
-                    Text(msg)
-                        .font(.caption)
-                        .foregroundColor(.red)
-                }
-            }
-
-            // Done button
-            Button {
-                dismissDistanceEditor()
-                if let r = releaseFrame, let a = arrivalFrame {
-                    onSave(r, a, distanceMeters)
-                    FrameMarkerStore.shared.save(
-                        videoURL: delivery.videoURL,
-                        releaseFrame: r, arrivalFrame: a,
-                        distanceMeters: distanceMeters
-                    )
-                }
-                onDismiss()
-            } label: {
-                Text("Done")
-                    .font(.headline)
-                    .foregroundColor(.black)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(Color(red: 0, green: 0.427, blue: 0.467))
-                    .cornerRadius(10)
-            }
-        }
-    }
-
-    private var isSaving: Bool {
-        if case .saving = clipSaveState { return true }
-        return false
-    }
-
-    private func saveLabel(_ text: String, icon: String) -> some View {
-        HStack(spacing: 4) {
-            if isSaving {
-                ProgressView().tint(.white).scaleEffect(0.7)
-            } else {
-                Image(systemName: icon)
-            }
-            Text(text)
-        }
-        .font(.system(size: 14, weight: .semibold))
-        .foregroundColor(.white)
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
-        .background(Color.white.opacity(0.12))
-        .cornerRadius(10)
+        .padding(14)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 18))
         .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 18)
+                .stroke(Color.white.opacity(0.12), lineWidth: 1)
         )
     }
 
-    private func saveClip(kind: SavedClip.ClipKind) {
-        guard !isSaving else { return }
-        // Build a delivery with current state
-        var d = delivery
-        d.releaseFrame = releaseFrame
-        d.arrivalFrame = arrivalFrame
-        d.distanceMeters = distanceMeters
-
-        clipSaveState = .saving
-        Task {
-            do {
-                switch kind {
-                case .releaseToEnd:
-                    _ = try await ClipStore.shared.saveReleaseClip(from: delivery.videoURL, delivery: d)
-                case .full:
-                    _ = try await ClipStore.shared.saveFullVideo(from: delivery.videoURL, delivery: d)
-                }
-                await MainActor.run { clipSaveState = .saved }
-            } catch {
-                await MainActor.run { clipSaveState = .failed(error.localizedDescription) }
-            }
-        }
-    }
-
-    // MARK: - Marker Controls
-
-    private var markerRow: some View {
+    private func keypadRow(_ digits: [String]) -> some View {
         HStack(spacing: 8) {
-            markerButton(
-                title: "Release",
-                frame: releaseFrame,
-                color: .orange,
-                enabled: true
-            ) {
-                releaseFrame = extractor.currentFrameIndex
-                if let a = arrivalFrame, a <= extractor.currentFrameIndex {
-                    arrivalFrame = nil
-                }
-                persistMarkersIfComplete()
-            } onJump: {
-                if let f = releaseFrame { extractor.seekToFrame(f) }
-            } onClear: {
-                releaseFrame = nil
-                arrivalFrame = nil
-            }
-
-            markerButton(
-                title: "Arrival",
-                frame: arrivalFrame,
-                color: .green,
-                enabled: releaseFrame != nil
-            ) {
-                guard releaseFrame != nil else { return }
-                arrivalFrame = extractor.currentFrameIndex
-                persistMarkersIfComplete()
-            } onJump: {
-                if let f = arrivalFrame { extractor.seekToFrame(f) }
-            } onClear: {
-                arrivalFrame = nil
+            ForEach(digits, id: \.self) { digit in
+                keypadDigit(digit)
             }
         }
     }
 
-    private func markerButton(
-        title: String,
-        frame: Int?,
-        color: Color,
-        enabled: Bool,
-        onSet: @escaping () -> Void,
-        onJump: @escaping () -> Void,
-        onClear: @escaping () -> Void
-    ) -> some View {
-        Button(action: onSet) {
-            HStack(spacing: 4) {
-                Circle().fill(color).frame(width: 6, height: 6)
-                if let f = frame {
-                    Text("\(title) F\(f + 1)")
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
-                } else {
-                    Text("Set \(title)")
-                        .font(.system(size: 12, weight: .semibold))
-                }
+    private func keypadDigit(_ digit: String) -> some View {
+        Button {
+            if replaceDistanceOnNextDigit {
+                distanceInput.clear()
+                replaceDistanceOnNextDigit = false
             }
-            .foregroundColor(frame != nil ? color : .white.opacity(0.6))
+            if distanceInput.append(digit), distanceInput.digitCount == 4 {
+                draft.setDistance(distanceInput.value)
+                persistIfComplete()
+            }
+        } label: {
+            Text(digit)
+                .font(.system(size: 22, weight: .bold, design: .monospaced))
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 46)
+                .background(Color.white.opacity(0.08))
+                .cornerRadius(12)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func keypadControlLabel(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 15, weight: .bold))
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 46)
+                .background(Color.white.opacity(0.08))
+                .cornerRadius(12)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func keypadControlIcon(_ systemName: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 46)
+                .background(Color.white.opacity(0.08))
+                .cornerRadius(12)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func markerChip(title: String, frame: Int?, color: Color, isActive: Bool, enabled: Bool = true, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Circle().fill(color).frame(width: 7, height: 7)
+                Text(frame.map { "\(title) F\($0 + 1)" } ?? title)
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+            }
+            .foregroundColor(enabled ? .white : .secondary)
             .frame(maxWidth: .infinity)
+            .padding(.horizontal, 10)
             .padding(.vertical, 10)
-            .background(frame != nil ? color.opacity(0.15) : Color.white.opacity(0.08))
-            .cornerRadius(8)
+            .background(isActive ? color.opacity(0.22) : Color.white.opacity(0.06))
+            .cornerRadius(12)
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(frame != nil ? color.opacity(0.3) : Color.clear, lineWidth: 1)
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(isActive ? color : Color.white.opacity(0.08), lineWidth: 1.5)
             )
         }
-        .opacity(enabled ? 1 : 0.35)
+        .buttonStyle(.plain)
         .disabled(!enabled)
-        .contextMenu {
-            if frame != nil {
-                Button { onJump() } label: {
-                    Label("Jump to frame", systemImage: "arrow.right.circle")
-                }
-                Button(role: .destructive) { onClear() } label: {
-                    Label("Clear", systemImage: "xmark.circle")
-                }
+        .opacity(enabled ? 1.0 : 0.55)
+    }
+
+    private func seekButton(systemName: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 16, weight: .bold))
+                .foregroundColor(.white)
+                .frame(width: 34, height: 34)
+                .background(Color.white.opacity(0.08))
+                .cornerRadius(10)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func smallStepperButton(systemName: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(.white)
+                .frame(width: 28, height: 28)
+                .background(Color.white.opacity(0.08))
+                .clipShape(Circle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func actionPill(_ title: String, icon: String) -> some View {
+        HStack(spacing: 6) {
+            if isSaving {
+                ProgressView()
+                    .tint(.white)
+                    .scaleEffect(0.7)
+            } else {
+                Image(systemName: icon)
             }
+            Text(title)
         }
+        .font(.system(size: 14, weight: .bold))
+        .foregroundColor(.white)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .background(Color.white.opacity(0.08))
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+        )
     }
-
-    private func persistMarkersIfComplete() {
-        if let r = releaseFrame, let a = arrivalFrame {
-            onSave(r, a, distanceMeters)
-            FrameMarkerStore.shared.save(
-                videoURL: delivery.videoURL,
-                releaseFrame: r, arrivalFrame: a,
-                distanceMeters: distanceMeters
-            )
-        }
-    }
-
-    // MARK: - Helpers
 
     private func badge(_ text: String, color: Color) -> some View {
         Text(text)
@@ -595,42 +670,72 @@ struct ReviewView: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(color)
-            .cornerRadius(4)
+            .cornerRadius(6)
     }
 
-    private func presentDistanceEditor() {
+    private func openDistanceEditor() {
+        guard draft.isComplete else { return }
+        draft.select(.distance)
+        distanceInput.replace(with: draft.distanceMeters)
+        replaceDistanceOnNextDigit = true
         showDistanceEditor = true
-        DispatchQueue.main.async {
-            distanceFieldFocused = true
-        }
     }
 
     private func dismissDistanceEditor() {
-        distanceFieldFocused = false
         showDistanceEditor = false
+        replaceDistanceOnNextDigit = false
+        distanceInput.replace(with: draft.distanceMeters)
     }
 
-    private func applyDistanceInput(_ rawValue: String) {
-        let digits = String(rawValue.filter(\.isNumber).prefix(4))
-        let formatted = Self.formattedDistanceText(fromDigits: digits)
-        if distanceText != formatted {
-            distanceText = formatted
+    private func applyActiveSelection() {
+        dismissDistanceEditor()
+
+        switch draft.activeField {
+        case .release:
+            _ = draft.setRelease(extractor.currentFrameIndex)
+        case .arrival:
+            guard draft.setArrival(extractor.currentFrameIndex) else { return }
+        case .distance:
+            break
         }
-        if let value = Double(formatted), value > 0 {
-            distanceMeters = value
+
+        persistIfComplete()
+    }
+
+    private func persistIfComplete() {
+        guard let release = draft.releaseFrame, let arrival = draft.arrivalFrame else { return }
+        onSave(release, arrival, draft.distanceMeters)
+        FrameMarkerStore.shared.save(
+            videoURL: delivery.videoURL,
+            releaseFrame: release,
+            arrivalFrame: arrival,
+            distanceMeters: draft.distanceMeters,
+            fps: delivery.fps,
+            totalFrames: delivery.totalFrames,
+            duration: delivery.duration
+        )
+    }
+
+    private func saveClip(kind: SavedClip.ClipKind) {
+        guard !isSaving else { return }
+        var updated = delivery
+        updated.releaseFrame = draft.releaseFrame
+        updated.arrivalFrame = draft.arrivalFrame
+        updated.distanceMeters = draft.distanceMeters
+
+        clipSaveState = .saving
+        Task {
+            do {
+                switch kind {
+                case .releaseToEnd:
+                    _ = try await ClipStore.shared.saveReleaseClip(from: delivery.videoURL, delivery: updated)
+                case .full:
+                    _ = try await ClipStore.shared.saveFullVideo(from: delivery.videoURL, delivery: updated)
+                }
+                await MainActor.run { clipSaveState = .saved }
+            } catch {
+                await MainActor.run { clipSaveState = .failed(error.localizedDescription) }
+            }
         }
-    }
-
-    private static func formattedDistanceText(for distance: Double) -> String {
-        let scaled = max(0, min(Int((distance * 100).rounded()), 9999))
-        return formattedDistanceText(fromDigits: String(format: "%04d", scaled))
-    }
-
-    private static func formattedDistanceText(fromDigits digits: String) -> String {
-        let sanitized = String(digits.filter(\.isNumber).prefix(4))
-        let padded = String(repeating: "0", count: max(0, 4 - sanitized.count)) + sanitized
-        let whole = String(padded.prefix(2))
-        let fraction = String(padded.suffix(2))
-        return "\(whole).\(fraction)"
     }
 }

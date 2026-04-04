@@ -1,0 +1,66 @@
+# Review Flow
+
+## Purpose
+
+`wellBowled_v2` uses a video-first review flow for marking bowling clips and estimating pace from frame timing.
+
+## First Pass
+
+1. Set `Release`
+2. Set `End`
+3. Keep the default distance or edit it
+
+Once both markers exist, the result panel appears automatically.
+
+## Editable Fields
+
+After the first pass, these can be adjusted independently at any time:
+
+- `Release`
+- `End`
+- `Distance`
+- `Goal speed`
+
+Rules:
+
+- `End` cannot be set before `Release`
+- moving `Release` past `End` clears `End`
+- calculations refresh from the current markers and distance
+
+## Displayed Metrics
+
+The result panel intentionally stays narrow:
+
+- `Time diff` in seconds, formatted as `xx.xx s`
+- `Estimated speed` in km/h
+- `Frame-pick variance` as `± km/h`
+- `Goal speed`
+- `Time delta vs goal` in seconds
+
+The review screen does not show preview thumbnails. Navigation is handled through:
+
+- swipe scrubbing on the video
+- frame slider
+- `±1` and `±10` seek buttons
+
+The UI does not depend on the displayed rounded values for calculation. It calculates from:
+
+- `releaseFrame`
+- `arrivalFrame`
+- `fps`
+- `distanceMeters`
+
+## Cached Metadata
+
+The frame marker store keeps enough clip metadata for quick reuse:
+
+- file name
+- release frame
+- end frame
+- distance
+- fps
+- total frames
+- duration
+- saved timestamp
+
+Current lookup key is the file name. Saved clips exported by the app already use UUID-based file names.

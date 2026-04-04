@@ -253,6 +253,11 @@ struct FrameMarkers: Codable {
     let releaseFrame: Int
     let arrivalFrame: Int
     let distanceMeters: Double
+    let fps: Double?
+    let totalFrames: Int?
+    let duration: Double?
+    let savedAt: Date?
+    let sourceName: String?
 }
 
 final class FrameMarkerStore {
@@ -276,15 +281,22 @@ final class FrameMarkerStore {
         try? enc.encode(map).write(to: storeURL)
     }
 
-    func save(videoURL: URL, releaseFrame: Int, arrivalFrame: Int, distanceMeters: Double) {
+    func save(videoURL: URL, releaseFrame: Int, arrivalFrame: Int, distanceMeters: Double, fps: Double? = nil, totalFrames: Int? = nil, duration: Double? = nil) {
         var map = loadMap()
         map[videoURL.lastPathComponent] = FrameMarkers(
-            releaseFrame: releaseFrame, arrivalFrame: arrivalFrame, distanceMeters: distanceMeters
+            releaseFrame: releaseFrame,
+            arrivalFrame: arrivalFrame,
+            distanceMeters: distanceMeters,
+            fps: fps,
+            totalFrames: totalFrames,
+            duration: duration,
+            savedAt: Date(),
+            sourceName: videoURL.lastPathComponent
         )
         saveMap(map)
     }
 
-    func lookup(videoURL: URL) -> FrameMarkers? {
+    func lookup(videoURL: URL, fps: Double? = nil, duration: Double? = nil, totalFrames: Int? = nil) -> FrameMarkers? {
         loadMap()[videoURL.lastPathComponent]
     }
 }

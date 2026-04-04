@@ -41,8 +41,9 @@ enum SpeedCategory: String {
 // MARK: - Speed Calculation (pure, testable)
 
 enum SpeedCalc {
-    /// Bowling crease to batting stumps (58 ft / 17.68m)
+    /// Default training distance used in the app, editable per clip.
     static let defaultDistanceMeters: Double = 18.90
+    static let defaultGoalSpeedKMH: Double = 120.0
 
     static func kmh(releaseFrame: Int, arrivalFrame: Int, fps: Double, distanceMeters: Double) -> Double? {
         guard arrivalFrame > releaseFrame, fps > 0, distanceMeters > 0 else { return nil }
@@ -52,12 +53,192 @@ enum SpeedCalc {
 
     static func mph(kmh: Double) -> Double { kmh / 1.609 }
 
+    static func kmhFrameVariance(releaseFrame: Int, arrivalFrame: Int, fps: Double, distanceMeters: Double) -> Double? {
+        guard let selected = kmh(releaseFrame: releaseFrame, arrivalFrame: arrivalFrame, fps: fps, distanceMeters: distanceMeters) else {
+            return nil
+        }
+        let previous = kmh(releaseFrame: releaseFrame, arrivalFrame: arrivalFrame - 1, fps: fps, distanceMeters: distanceMeters)
+        let next = kmh(releaseFrame: releaseFrame, arrivalFrame: arrivalFrame + 1, fps: fps, distanceMeters: distanceMeters)
+        return [previous, next]
+            .compactMap { $0.map { abs($0 - selected) } }
+            .max()
+    }
+
     static func clampedIndex(_ index: Int, total: Int) -> Int {
         max(0, min(index, total - 1))
     }
 
     static func timeSeconds(frame: Int, fps: Double) -> Double {
         Double(frame) / fps
+    }
+
+    static func flightTimeSeconds(releaseFrame: Int, arrivalFrame: Int, fps: Double) -> Double? {
+        guard arrivalFrame > releaseFrame, fps > 0 else { return nil }
+        return Double(arrivalFrame - releaseFrame) / fps
+    }
+
+    static func formattedFlightTime(releaseFrame: Int, arrivalFrame: Int, fps: Double) -> String? {
+        guard let seconds = flightTimeSeconds(releaseFrame: releaseFrame, arrivalFrame: arrivalFrame, fps: fps) else {
+            return nil
+        }
+        return String(format: "%.2fs", seconds)
+    }
+
+    static func targetFlightTimeSeconds(goalSpeedKMH: Double, distanceMeters: Double) -> Double? {
+        guard goalSpeedKMH > 0, distanceMeters > 0 else { return nil }
+        return distanceMeters / (goalSpeedKMH / 3.6)
+    }
+
+    static func goalTimeDeltaSeconds(
+        releaseFrame: Int,
+        arrivalFrame: Int,
+        fps: Double,
+        distanceMeters: Double,
+        goalSpeedKMH: Double
+    ) -> Double? {
+        guard let actual = flightTimeSeconds(releaseFrame: releaseFrame, arrivalFrame: arrivalFrame, fps: fps),
+              let target = targetFlightTimeSeconds(goalSpeedKMH: goalSpeedKMH, distanceMeters: distanceMeters) else {
+            return nil
+        }
+        return actual - target
+    }
+}
+
+enum ReviewField: Equatable {
+    case release
+    case arrival
+    case distance
+}
+
+struct ReviewDraft: Equatable {
+    var releaseFrame: Int?
+    var arrivalFrame: Int?
+    var distanceMeters: Double
+    private(set) var selectedField: ReviewField
+
+    init(
+        releaseFrame: Int? = nil,
+        arrivalFrame: Int? = nil,
+        distanceMeters: Double = SpeedCalc.defaultDistanceMeters,
+        selectedField: ReviewField? = nil
+    ) {
+        self.releaseFrame = releaseFrame
+        self.arrivalFrame = arrivalFrame
+        self.distanceMeters = distanceMeters
+
+        if let selectedField {
+            self.selectedField = selectedField
+        } else if releaseFrame == nil {
+            self.selectedField = .release
+        } else if arrivalFrame == nil {
+            self.selectedField = .arrival
+        } else {
+            self.selectedField = .distance
+        }
+    }
+
+    var activeField: ReviewField {
+        switch selectedField {
+        case .release:
+            return .release
+        case .arrival:
+            return releaseFrame == nil ? .release : .arrival
+        case .distance:
+            if releaseFrame == nil { return .release }
+            if arrivalFrame == nil { return .arrival }
+            return .distance
+        }
+    }
+
+    var isComplete: Bool {
+        releaseFrame != nil && arrivalFrame != nil
+    }
+
+    mutating func select(_ field: ReviewField) {
+        selectedField = field
+    }
+
+    @discardableResult
+    mutating func setRelease(_ frame: Int) -> Bool {
+        let invalidatedArrival = arrivalFrame.map { $0 <= frame } ?? false
+        releaseFrame = frame
+        if invalidatedArrival {
+            arrivalFrame = nil
+        }
+        selectedField = arrivalFrame == nil ? .arrival : .release
+        return invalidatedArrival
+    }
+
+    @discardableResult
+    mutating func setArrival(_ frame: Int) -> Bool {
+        guard let releaseFrame, frame > releaseFrame else {
+            selectedField = .arrival
+            return false
+        }
+        arrivalFrame = frame
+        selectedField = .distance
+        return true
+    }
+
+    mutating func clearRelease() {
+        releaseFrame = nil
+        arrivalFrame = nil
+        selectedField = .release
+    }
+
+    mutating func clearArrival() {
+        arrivalFrame = nil
+        selectedField = .arrival
+    }
+
+    mutating func setDistance(_ meters: Double) {
+        guard meters > 0 else { return }
+        distanceMeters = meters
+        selectedField = .distance
+    }
+}
+
+struct DistanceInput: Equatable {
+    private(set) var digits: String
+
+    init(digits: String = "") {
+        self.digits = String(digits.filter(\.isNumber).prefix(4))
+    }
+
+    var digitCount: Int { digits.count }
+
+    var text: String {
+        let padded = Self.paddedDigits(from: digits)
+        return "\(padded.prefix(2)).\(padded.suffix(2))"
+    }
+
+    var value: Double {
+        (Double(Self.paddedDigits(from: digits)) ?? 0) / 100
+    }
+
+    mutating func replace(with distanceMeters: Double) {
+        digits = String(format: "%04d", max(0, min(Int((distanceMeters * 100).rounded()), 9999)))
+    }
+
+    @discardableResult
+    mutating func append(_ digit: String) -> Bool {
+        guard digit.count == 1, digit.first?.isNumber == true, digits.count < 4 else { return false }
+        digits.append(digit)
+        return true
+    }
+
+    mutating func backspace() {
+        guard !digits.isEmpty else { return }
+        digits.removeLast()
+    }
+
+    mutating func clear() {
+        digits = ""
+    }
+
+    private static func paddedDigits(from digits: String) -> String {
+        let sanitized = String(digits.filter(\.isNumber).prefix(4))
+        return String(repeating: "0", count: max(0, 4 - sanitized.count)) + sanitized
     }
 }
 
@@ -91,6 +272,21 @@ struct Delivery: Identifiable {
     var frameDiff: Int? {
         guard let r = releaseFrame, let a = arrivalFrame else { return nil }
         return a - r
+    }
+
+    var flightTimeSeconds: Double? {
+        guard let r = releaseFrame, let a = arrivalFrame else { return nil }
+        return SpeedCalc.flightTimeSeconds(releaseFrame: r, arrivalFrame: a, fps: fps)
+    }
+
+    var formattedFlightTime: String? {
+        guard let r = releaseFrame, let a = arrivalFrame else { return nil }
+        return SpeedCalc.formattedFlightTime(releaseFrame: r, arrivalFrame: a, fps: fps)
+    }
+
+    var speedErrorKMH: Double? {
+        guard let r = releaseFrame, let a = arrivalFrame else { return nil }
+        return SpeedCalc.kmhFrameVariance(releaseFrame: r, arrivalFrame: a, fps: fps, distanceMeters: distanceMeters)
     }
 
     static func from(url: URL) async -> Delivery? {
