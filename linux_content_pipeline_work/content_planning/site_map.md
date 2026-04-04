@@ -25,13 +25,16 @@ Reading order:
 7. `bleeding_edge_bowling_research_opportunities_2026.md`
    Deeper 2026 cutting-edge opportunity scan across pace, injury, women’s bowling, context, spin, sensing, and media implications.
 
-8. `bumrah_vs_steyn_flagship.md`
+8. `bowling_research_reference_memo_2026.md`
+   Source-dense reference memo that follows the same categorization logic and ties specific current research signals to content and product implications.
+
+9. `bumrah_vs_steyn_flagship.md`
    The selected first flagship concept and its core positioning.
 
-9. `bumrah_vs_steyn_what.md`
+10. `bumrah_vs_steyn_what.md`
    Defines exactly what the first video is, what it must show, and what it must avoid.
 
-10. `bumrah_vs_steyn_duration.md`
+11. `bumrah_vs_steyn_duration.md`
    Defines the recommended runtime and why the short-form version is the strongest first release.
 
 Purpose:
